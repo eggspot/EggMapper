@@ -1,33 +1,150 @@
 name: Benchmarks
 
+# Runs the full benchmark suite and:
+#   • On pull_request  → posts a detailed sticky comment on the PR
+#   • On push to main  → updates the Performance section in README.md and
+#                        commits the result back (with [skip ci] so CI doesn't loop)
+#   • workflow_dispatch → full manual run (no README commit, no PR comment)
+#
+# Export format: GitHub-flavoured markdown + JSON for all five benchmark classes.
+# Each class already has [MemoryDiagnoser] and [RankColumn]; Program.cs adds
+# Min / Median / Max columns, giving the maximum available per-run detail.
+
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write        # needed to push README updates on main
+  pull-requests: write   # needed to post PR comments
+
 jobs:
-  benchmarks:
+  benchmark:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Use a token so we can push the README update back to main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Release
+      - name: Build benchmarks (Release)
         run: dotnet build src/EggMapper.Benchmarks/EggMapper.Benchmarks.csproj --configuration Release --no-restore
 
-      - name: Run Benchmarks
+      # ── Run all benchmarks ──────────────────────────────────────────────
+      # Exports:
+      #   markdown → *-report-github.md  (GH-flavoured tables, all columns)
+      #   json     → *-report-full.json  (machine-readable, includes host env)
+      - name: Run benchmarks
         run: |
           cd src/EggMapper.Benchmarks
-          dotnet run --configuration Release -- --filter * --exporters json
+          dotnet run --configuration Release -- \
+            --filter '*' \
+            --exporters markdown json
 
-      - name: Upload Benchmark Results
+      # ── Build the detailed combined report ──────────────────────────────
+      - name: Generate detailed benchmark report
+        id: report
+        run: |
+          python3 scripts/parse-benchmarks.py \
+            src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
+            benchmark-report.md
+          echo "size=$(wc -c < benchmark-report.md)" >> "$GITHUB_OUTPUT"
+
+      # ── Upload every artifact ────────────────────────────────────────────
+      - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
-          path: src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
+          name: benchmark-results-${{ github.run_number }}
+          path: |
+            src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
+            benchmark-report.md
+
+      # ── Post detailed comment on PRs ────────────────────────────────────
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = fs.readFileSync('benchmark-report.md', 'utf8');
+
+            // GitHub PR comments are capped at 65,536 bytes.
+            const MAX = 65000;
+            if (Buffer.byteLength(report, 'utf8') > MAX) {
+              const truncNote = '\n\n> ⚠️ Report truncated — download the full artifact for all details.';
+              while (Buffer.byteLength(report + truncNote, 'utf8') > MAX) {
+                report = report.slice(0, report.lastIndexOf('\n'));
+              }
+              report += truncNote;
+            }
+
+            const HEADER_MARKER = '<!-- benchmark-results -->';
+            const body = HEADER_MARKER + '\n' + report;
+
+            // Update existing bot comment if present, otherwise create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes(HEADER_MARKER)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              console.log('Updated existing benchmark comment.');
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              console.log('Created new benchmark comment.');
+            }
+
+      # ── Update README on push to main ───────────────────────────────────
+      - name: Update README performance section
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python3 scripts/update-readme-benchmarks.py \
+            src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
+            README.md
+
+      - name: Commit README update
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          # Only commit if the file actually changed
+          git diff --cached --quiet \
+            || git commit -m "chore: update benchmark results in README [skip ci]"
+          git push
+

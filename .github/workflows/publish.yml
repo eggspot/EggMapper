@@ -1,0 +1,107 @@
+name: Publish NuGet
+
+# Publishes both EggMapper and EggMapper.DependencyInjection to NuGet.org.
+#
+# Versioning strategy
+# ───────────────────
+# • Push to main (no tag)  → preview package:  <base>-preview.<run_number>
+#   e.g.  1.0.0-preview.42
+# • Tag push  v*.*.*       → stable package:   <tag without 'v'>
+#   e.g.  1.2.3
+# • workflow_dispatch      → explicit version via input (stable)
+#
+# Required secret: NUGET_API_KEY  (repository → Settings → Secrets)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Explicit package version (e.g. 1.2.3). Overrides auto-versioning.'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed so git describe / tag detection works
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # ── Determine the version to publish ──────────────────────────────────
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            # Stable release: strip the leading 'v'
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            # Pre-release on every main commit: base + preview suffix
+            BASE=$(grep -oP '(?<=<Version>)[^<]+' src/EggMapper/EggMapper.csproj)
+            VERSION="${BASE}-preview.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${VERSION}"
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test --configuration Release --no-build --verbosity minimal
+
+      # ── Pack ───────────────────────────────────────────────────────────────
+      - name: Pack EggMapper
+        run: |
+          dotnet pack src/EggMapper/EggMapper.csproj \
+            --configuration Release \
+            --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./artifacts
+
+      - name: Pack EggMapper.DependencyInjection
+        run: |
+          dotnet pack src/EggMapper.DependencyInjection/EggMapper.DependencyInjection.csproj \
+            --configuration Release \
+            --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./artifacts
+
+      # ── Inspect packages ──────────────────────────────────────────────────
+      - name: List packages
+        run: ls -lh ./artifacts/
+
+      # ── Upload as CI artifact (always) ────────────────────────────────────
+      - name: Upload packages as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-${{ steps.version.outputs.VERSION }}
+          path: ./artifacts/*.nupkg
+
+      # ── Push to NuGet.org ─────────────────────────────────────────────────
+      - name: Push to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg \
+            --api-key "${NUGET_API_KEY}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

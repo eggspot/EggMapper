@@ -5,12 +5,16 @@
 Sponsored by [eggspot.app](https://eggspot.app)
 
 [![CI](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml)
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Benchmarks](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)
 [![NuGet](https://img.shields.io/nuget/v/EggMapper.svg)](https://www.nuget.org/packages/EggMapper)
+[![NuGet DI](https://img.shields.io/nuget/v/EggMapper.DependencyInjection.svg?label=nuget%20DI)](https://www.nuget.org/packages/EggMapper.DependencyInjection)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## Overview
 
 EggMapper is a **faster-than-AutoMapper** .NET object-to-object mapping library with a familiar, ergonomic API. It uses compiled expression trees cached at configuration time — **zero reflection at map-time**.
+
+📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
 
 ## Quick Start
 
@@ -54,14 +58,18 @@ public class MyService(IMapper mapper) { ... }
 
 ## Performance
 
-| Mapper | Simple Flat | Deep Object | Collection (1000) |
-|--------|------------|-------------|-------------------|
-| Manual | 1x (baseline) | 1x | 1x |
-| **EggMapper** | **~1.1x** | **~1.2x** | **~1.1x** |
-| AutoMapper | ~3x | ~4x | ~3x |
-| Mapster | ~1.3x | ~1.5x | ~1.2x |
+<!-- BENCHMARK_RESULTS_START -->
 
-*Slower ratio = better performance*
+> ⏱ **Last updated:** 2026-03-18 05:52 UTC
+
+> **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
+
+*Benchmark results not yet available — run the [Benchmarks workflow](../../actions/workflows/benchmarks.yml).*
+---
+
+*Benchmarks run automatically on every push to `main`. [See workflow](../../actions/workflows/benchmarks.yml)*
+
+<!-- BENCHMARK_RESULTS_END -->
 
 ## Features
 
@@ -84,6 +92,18 @@ public class MyService(IMapper mapper) { ... }
 - ✅ .NET 8 Dependency Injection integration
 - ✅ Configuration validation
 
+## Documentation
+
+| Page | Description |
+|------|-------------|
+| [Getting Started](https://github.com/eggspot/EggMapper/wiki/Getting-Started) | Installation and your first mapping |
+| [Configuration](https://github.com/eggspot/EggMapper/wiki/Configuration) | `MapperConfiguration` options |
+| [Profiles](https://github.com/eggspot/EggMapper/wiki/Profiles) | Organising maps with `Profile` |
+| [Dependency Injection](https://github.com/eggspot/EggMapper/wiki/Dependency-Injection) | ASP.NET Core / DI integration |
+| [Advanced Features](https://github.com/eggspot/EggMapper/wiki/Advanced-Features) | `ForMember`, conditions, hooks, etc. |
+| [Performance](https://github.com/eggspot/EggMapper/wiki/Performance) | Benchmark methodology & tips |
+| [API Reference](https://github.com/eggspot/EggMapper/wiki/API-Reference) | Full public API surface |
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or pull request.
@@ -91,3 +111,4 @@ Contributions are welcome! Please open an issue or pull request.
 ---
 
 *Powered by [Eggspot](https://eggspot.app)*
+
