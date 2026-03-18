@@ -60,7 +60,6 @@ public class MyService(IMapper mapper) { ... }
 | **EggMapper** | **~1.1x** | **~1.2x** | **~1.1x** |
 | AutoMapper | ~3x | ~4x | ~3x |
 | Mapster | ~1.3x | ~1.5x | ~1.2x |
-| Mapperly | ~1.05x | ~1.1x | ~1.05x |
 
 *Slower ratio = better performance*
 
