@@ -17,6 +17,14 @@ internal readonly struct TypePair : IEquatable<TypePair>
     public override bool Equals(object? obj) =>
         obj is TypePair other && Equals(other);
 
-    public override int GetHashCode() =>
-        HashCode.Combine(SourceType, DestinationType);
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (SourceType?.GetHashCode() ?? 0);
+            hash = hash * 31 + (DestinationType?.GetHashCode() ?? 0);
+            return hash;
+        }
+    }
 }

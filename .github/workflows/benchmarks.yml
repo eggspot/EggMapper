@@ -6,14 +6,17 @@ on:
 jobs:
   benchmarks:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['8.0.x', '9.0.x', '10.0.x']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET ${{ matrix.dotnet-version }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: ${{ matrix.dotnet-version }}
 
       - name: Restore dependencies
         run: dotnet restore
@@ -23,11 +26,14 @@ jobs:
 
       - name: Run Benchmarks
         run: |
+          # Derive the TFM label from the matrix version (e.g. "8.0.x" -> "net8.0")
+          MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
+          TFM="net${MAJOR}.0"
           cd src/EggMapper.Benchmarks
-          dotnet run --configuration Release -- --filter * --exporters json
+          dotnet run --configuration Release --framework "${TFM}" -- --filter * --exporters json
 
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results
+          name: benchmark-results-dotnet-${{ matrix.dotnet-version }}
           path: src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/

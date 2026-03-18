@@ -326,7 +326,7 @@ internal static class ExpressionBuilder
         foreach (var srcProp in srcDetails.ReadableProperties)
         {
             if (!destName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            var remainder = destName[srcProp.Name.Length..];
+            var remainder = destName.Substring(srcProp.Name.Length);
             if (string.IsNullOrEmpty(remainder)) continue;
 
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
