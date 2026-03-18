@@ -229,6 +229,11 @@ internal static class ExpressionBuilder
         var nullSub = propMap?.NullSubstitute;
         var hasNullSub = propMap?.HasNullSubstitute ?? false;
 
+        // Detect at compile time whether any runtime guards are needed.
+        // Convention mappings (propMap == null) always take the fast path; configured
+        // mappings without conditions/null-substitution do too.
+        bool noGuards = condition == null && fullCondition == null && preCondition == null && !hasNullSub;
+
         if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
         {
             var srcElemType = ReflectionHelper.GetCollectionElementType(srcType);
@@ -239,6 +244,17 @@ internal static class ExpressionBuilder
                 var capturedMaps = compiledMaps;
                 var elemPair = new TypePair(srcElemType, destElemType);
                 var capturedDestType = destType;
+
+                if (noGuards)
+                {
+                    return (src, dest, ctx) =>
+                    {
+                        var srcVal = getter(src);
+                        if (srcVal == null) return;
+                        setter(dest, MapCollectionInternal(
+                            (IEnumerable)srcVal, capturedDestType, srcElemType, destElemType, elemPair, capturedMaps, ctx));
+                    };
+                }
 
                 return (src, dest, ctx) =>
                 {
@@ -261,6 +277,9 @@ internal static class ExpressionBuilder
 
         if (destType.IsAssignableFrom(srcType))
         {
+            if (noGuards)
+                return (src, dest, ctx) => setter(dest, getter(src));
+
             return (src, dest, ctx) =>
             {
                 if (preCondition != null && !preCondition(src)) return;
@@ -277,6 +296,23 @@ internal static class ExpressionBuilder
         {
             var capturedMaps = compiledMaps;
             var typePair = new TypePair(srcType, destType);
+
+            if (noGuards)
+            {
+                return (src, dest, ctx) =>
+                {
+                    var srcVal = getter(src);
+                    if (srcVal == null) return;
+
+                    if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                    {
+                        setter(dest, nestedDel(srcVal, null, ctx));
+                        return;
+                    }
+
+                    setter(dest, ConvertValue(srcVal, destType));
+                };
+            }
 
             return (src, dest, ctx) =>
             {
@@ -303,6 +339,10 @@ internal static class ExpressionBuilder
 
         {
             var capturedDestType = destType;
+
+            if (noGuards)
+                return (src, dest, ctx) => setter(dest, ConvertValue(getter(src), capturedDestType));
+
             return (src, dest, ctx) =>
             {
                 if (preCondition != null && !preCondition(src)) return;

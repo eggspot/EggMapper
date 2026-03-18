@@ -4,7 +4,12 @@ public sealed class ResolutionContext
 {
     public int Depth { get; internal set; }
     public int MaxDepth { get; internal set; }
-    internal Dictionary<object, object> InstanceCache { get; } = new Dictionary<object, object>(ReferenceEqualityObjectComparer.Instance);
+
+    // Allocated only when cycle-detection is actually needed; most simple mappings
+    // never touch this dictionary, so we avoid the allocation on every Map call.
+    private Dictionary<object, object>? _instanceCache;
+    internal Dictionary<object, object> InstanceCache =>
+        _instanceCache ??= new Dictionary<object, object>(ReferenceEqualityObjectComparer.Instance);
 }
 
 // Portable reference-equality comparer — works on all target frameworks including

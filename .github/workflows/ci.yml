@@ -32,7 +32,7 @@ jobs:
       - name: Build (all target frameworks)
         run: dotnet build --configuration Release --no-restore
 
-      - name: Test (net${{ matrix.dotnet-version }})
+      - name: Test (.NET ${{ matrix.dotnet-version }})
         run: |
           MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
           dotnet test --configuration Release --no-build --framework "net${MAJOR}.0" --verbosity normal
