@@ -196,7 +196,14 @@ internal static class ExpressionBuilder
 
             var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
                 string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
-            if (srcProp == null) continue;
+            if (srcProp == null)
+            {
+                // No direct match — if there's a flattened source we cannot express it
+                // as an inline expression tree; let the flexible path handle the whole map.
+                if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
+                    return false;
+                continue;
+            }
 
             var assignExpr = TryBuildTypedAssign(
                 sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam);
@@ -293,18 +300,34 @@ internal static class ExpressionBuilder
         }
 
         // ── Registered nested TypeMap (reference type source) ─────────────────
-        // The nested compiled delegate lives in compiledMaps and is resolved at
-        // map-time (after all maps are compiled).  Reference-type casts cost
-        // nothing; only the one boxing of the outer object→typed cast matters.
+        // When the child map is already compiled (guaranteed when the caller uses
+        // TopologicalOrder), embed its delegate directly as a constant — zero
+        // runtime dictionary lookup in the hot path.
         var typePair = new TypePair(srcType, destType);
         if (allTypeMaps.ContainsKey(typePair) && !srcType.IsValueType)
         {
-            var callExpr = Expression.Call(
-                _mapNestedHelperMethod,
-                Expression.Convert(srcAccess, typeof(object)),
-                Expression.Constant(compiledMaps),
-                Expression.Constant(typePair),
-                ctxParam);
+            Expression callExpr;
+
+            if (compiledMaps.TryGetValue(typePair, out var childDel))
+            {
+                // Direct embed: Expression.Invoke on a constant delegate — no lookup.
+                callExpr = Expression.Invoke(
+                    Expression.Constant(childDel),
+                    Expression.Convert(srcAccess, typeof(object)),
+                    Expression.Constant(null, typeof(object)),
+                    ctxParam);
+            }
+            else
+            {
+                // Child not yet compiled (should not happen with topological order),
+                // fall back to runtime lookup via the ConcurrentDictionary.
+                callExpr = Expression.Call(
+                    _mapNestedHelperMethod,
+                    Expression.Convert(srcAccess, typeof(object)),
+                    Expression.Constant(compiledMaps),
+                    Expression.Constant(typePair),
+                    ctxParam);
+            }
 
             return Expression.IfThen(
                 Expression.ReferenceNotEqual(
