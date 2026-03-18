@@ -106,6 +106,13 @@ src/EggMapper.Benchmarks/        ← BenchmarkDotNet (EggMapper vs AutoMapper vs
 
 ---
 
+## 🔖 Working Style
+
+- **Break complex or long-running tasks into smaller incremental commits.** Commit and push after each verified, self-contained unit of work rather than in one large batch. This avoids timeouts and makes the PR easier to review.
+- A single PR should focus on one logical change. If a task naturally splits into independent pieces (e.g. feature + docs + benchmarks), deliver them in separate commits with clear messages.
+
+---
+
 ## ✅ Definition of Done
 
 - All unit tests pass: `dotnet test --configuration Release` exits 0
