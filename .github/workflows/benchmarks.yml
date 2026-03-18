@@ -27,9 +27,14 @@ jobs:
     runs-on: ubuntu-latest
     # Skip if triggered by the bot's own README-update commit to prevent loops
     if: github.actor != 'github-actions[bot]'
+    # Hard cap: BenchmarkDotNet can run long; this prevents the 59-min GitHub limit
+    timeout-minutes: 50
     strategy:
+      fail-fast: false
       matrix:
-        dotnet-version: ['8.0.x', '9.0.x', '10.0.x']
+        # On PRs run only net8.0 (LTS) to keep CI fast.
+        # Full multi-TFM matrix runs on push to main and workflow_dispatch.
+        dotnet-version: ${{ github.event_name == 'pull_request' && fromJson('["8.0.x"]') || fromJson('["8.0.x","9.0.x","10.0.x"]') }}
 
     steps:
       - name: Checkout
@@ -60,16 +65,23 @@ jobs:
         run: dotnet build src/EggMapper.Benchmarks/EggMapper.Benchmarks.csproj --configuration Release --no-restore
 
       # ── Run benchmarks for this matrix TFM ──────────────────────────────
+      # PRs use --job Short (LaunchCount=1, WarmupCount=1, IterationCount=3) so
+      # the whole suite completes in ~5 minutes instead of 45+ minutes.
+      # Full jobs run on push to main and workflow_dispatch.
       # Exports:
       #   markdown → *-report-github.md  (GH-flavoured tables, all columns)
       #   json     → *-report-full.json  (machine-readable, includes host env)
       - name: Run benchmarks
+        env:
+          # Pass --job Short on PRs to avoid hitting the 59-min GitHub Actions limit
+          BENCH_JOB_ARG: ${{ github.event_name == 'pull_request' && '--job Short' || '' }}
         run: |
           MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
           TFM="net${MAJOR}.0"
           cd src/EggMapper.Benchmarks
           dotnet run --configuration Release --framework "${TFM}" -- \
             --filter '*' \
+            ${BENCH_JOB_ARG} \
             --exporters markdown json
 
       # ── Build the detailed combined report ──────────────────────────────
