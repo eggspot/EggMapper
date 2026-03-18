@@ -1,15 +1,15 @@
 name: Benchmarks
 
 # Runs the full benchmark suite and:
-#   • On pull_request  → posts a detailed sticky comment on the PR (net8.0 job only)
+#   • On pull_request  → posts a detailed sticky comment on the PR (net10.0 job only)
 #   • On push to main  → updates the Performance section in README.md and
 #                        commits the result back (with [skip ci] so CI doesn't loop)
-#                        (net8.0 job only — it is the canonical LTS reference)
+#                        (net10.0 job only — it is the canonical latest reference)
 #   • workflow_dispatch → full manual run across all .NET versions
 #
 # The matrix runs benchmarks on net8.0, net9.0, and net10.0 in parallel.
 # All three SDKs are installed in every job so the multi-TFM project builds cleanly.
-# PR comments and README updates come only from the net8.0 job.
+# PR comments and README updates come only from the net10.0 job.
 
 on:
   push:
@@ -32,9 +32,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # On PRs run only net8.0 (LTS) to keep CI fast.
+        # On PRs run only net10.0 (latest) to keep CI fast.
         # Full multi-TFM matrix runs on push to main and workflow_dispatch.
-        dotnet-version: ${{ github.event_name == 'pull_request' && fromJson('["8.0.x"]') || fromJson('["8.0.x","9.0.x","10.0.x"]') }}
+        dotnet-version: ${{ github.event_name == 'pull_request' && fromJson('["10.0.x"]') || fromJson('["8.0.x","9.0.x","10.0.x"]') }}
 
     steps:
       - name: Checkout
@@ -102,9 +102,9 @@ jobs:
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
             benchmark-report.md
 
-      # ── Post detailed comment on PRs (net8.0 only — canonical LTS) ──────
+      # ── Post detailed comment on PRs (net10.0 only — canonical latest) ──────
       - name: Post PR comment
-        if: github.event_name == 'pull_request' && matrix.dotnet-version == '8.0.x'
+        if: github.event_name == 'pull_request' && matrix.dotnet-version == '10.0.x'
         uses: actions/github-script@v7
         with:
           script: |
@@ -154,16 +154,16 @@ jobs:
               console.log('Created new benchmark comment.');
             }
 
-      # ── Update README on push to main (net8.0 only — canonical LTS) ────
+      # ── Update README on push to main (net10.0 only — canonical latest) ────
       - name: Update README performance section
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '8.0.x'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '10.0.x'
         run: |
           python3 scripts/update-readme-benchmarks.py \
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
             README.md
 
       - name: Commit README update
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '8.0.x'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '10.0.x'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
