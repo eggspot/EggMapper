@@ -10,6 +10,8 @@ Sponsored by [eggspot.app](https://eggspot.app)
 [![NuGet DI](https://img.shields.io/nuget/v/EggMapper.DependencyInjection.svg?label=nuget%20DI)](https://www.nuget.org/packages/EggMapper.DependencyInjection)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
+
 ## Overview
 
 **EggMapper** is a high-performance .NET object-to-object mapping library that is significantly faster than AutoMapper while keeping the same familiar, ergonomic API. It achieves this by compiling expression-tree delegates once at configuration time and caching them — resulting in **zero reflection at map-time** and near-manual mapping speed.
@@ -20,8 +22,6 @@ Sponsored by [eggspot.app](https://eggspot.app)
 - 🔁 **Drop-in replacement** — same fluent API you already know
 - 🧩 **Full feature set** — profiles, `ForMember`, `ReverseMap`, nested types, collections, DI, and more
 - 🪶 **Lightweight** — no runtime reflection, no unnecessary allocations
-
-📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
 
 ## Installation
 
@@ -79,12 +79,6 @@ public class MyService(IMapper mapper) { ... }
 
 All benchmarks run on .NET 8, BenchmarkDotNet. Lower is better.
 
-<!-- BENCHMARK_RESULTS_START -->
-
-> ⏱ **Last updated:** 2026-03-18 05:52 UTC
-
-> **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
-
 | Mapper | Simple Flat | Deep Object | Collection (1000) |
 |--------|------------|-------------|-------------------|
 | Manual | 1× (baseline) | 1× | 1× |
@@ -93,12 +87,6 @@ All benchmarks run on .NET 8, BenchmarkDotNet. Lower is better.
 | AutoMapper | ~3× | ~4× | ~3× |
 
 *Multiplier relative to manual mapping — lower ratio = faster.*
-
----
-
-*Benchmarks run automatically on every push to `main`. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
-
-<!-- BENCHMARK_RESULTS_END -->
 
 Run the benchmarks yourself:
 
@@ -127,6 +115,18 @@ dotnet run --configuration Release -- --filter * --exporters json markdown
 - ✅ `ForPath` for nested destination properties
 - ✅ .NET 8 Dependency Injection integration
 - ✅ Configuration validation
+
+<!-- BENCHMARK_RESULTS_START -->
+
+> **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
+
+*Benchmark results not yet available — run the [Benchmarks workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).*
+
+---
+
+*Benchmarks run automatically on every push to `main`. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
+
+<!-- BENCHMARK_RESULTS_END -->
 
 ## Documentation
 
