@@ -1,7 +1,7 @@
 # EggMapper — AI Coding Instructions
 
 ## Project Purpose
-EggMapper is a high-performance **.NET 8** object-to-object mapping library. The goal is to be **faster than AutoMapper** while maintaining a familiar API. All code changes must follow the two development loops below.
+EggMapper is a high-performance .NET object-to-object mapping library. The goal is to be **faster than AutoMapper** while maintaining a familiar API. All code changes must follow the two development loops below.
 
 ---
 
