@@ -1,7 +1,7 @@
 # EggMapper — AI Coding Instructions
 
 ## Project Purpose
-EggMapper is a high-performance .NET object-to-object mapping library. The goal is to be **faster than AutoMapper** while maintaining a familiar API. All code changes must follow the two development loops below.
+EggMapper is a high-performance .NET object-to-object mapping library. The goal is to be **faster than any other mapper library** (AutoMapper, Mapster, etc.) while maintaining a familiar API. All code changes must follow the two development loops below.
 
 ---
 
@@ -55,10 +55,10 @@ public void Feature_Condition_Expected()
    cd src/EggMapper.Benchmarks
    dotnet run --configuration Release -- --filter *FlatMapping* --join
    ```
-2. **Identify which benchmark is slower than AutoMapper**
+2. **Identify which benchmark is slower than any competing mapper**
 3. **Optimize the relevant code** in `src/EggMapper/Execution/ExpressionBuilder.cs` or `src/EggMapper/Mapper.cs`
 4. **Re-run the benchmark** — compare against the recorded baseline
-5. **If still slower → profile → fix → re-benchmark → repeat until EggMapper beats AutoMapper**
+5. **If still slower → profile → fix → re-benchmark → repeat until EggMapper beats all mappers**
 
 ### Running all benchmarks
 ```bash
@@ -72,14 +72,14 @@ dotnet run --configuration Release -- --filter *FlatMappingBenchmark*
 ```
 
 ### Performance targets
-| Scenario | Target vs AutoMapper |
+| Scenario | Target |
 |---|---|
-| Flat mapping | ≤ 0.4× AutoMapper time (2.5× faster) |
-| Deep/nested mapping | ≤ 0.5× AutoMapper time (2× faster) |
-| Collection (100 items) | ≤ 0.5× AutoMapper time (2× faster) |
-| Startup / config | ≤ 1× AutoMapper time (at least as fast) |
+| Flat mapping | Fastest among AutoMapper, Mapster, and Manual |
+| Deep/nested mapping | Fastest among AutoMapper, Mapster, and Manual |
+| Collection (100 items) | Fastest among AutoMapper, Mapster, and Manual |
+| Startup / config | At least as fast as AutoMapper and Mapster |
 
-> **NEVER accept a benchmark result where EggMapper is slower than AutoMapper.**
+> **NEVER accept a benchmark result where EggMapper is not the fastest mapper.**
 > If a benchmark regresses, revert or fix before merging.
 
 ---
@@ -116,6 +116,6 @@ src/EggMapper.Benchmarks/        ← BenchmarkDotNet (EggMapper vs AutoMapper vs
 ## ✅ Definition of Done
 
 - All unit tests pass: `dotnet test --configuration Release` exits 0
-- EggMapper is faster than AutoMapper on every benchmark scenario
+- EggMapper is faster than all competing mappers (AutoMapper, Mapster) on every benchmark scenario
 - No runtime reflection (`PropertyInfo.GetValue/SetValue`) in hot paths
 - New features have corresponding tests before merging
