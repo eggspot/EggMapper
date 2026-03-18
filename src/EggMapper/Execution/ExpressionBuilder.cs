@@ -946,6 +946,9 @@ internal static class ExpressionBuilder
     {
         compiledMaps.TryGetValue(elementTypePair, out var elemMapper);
 
+        // Determine count upfront for pre-sizing when possible
+        int count = source is ICollection col ? col.Count : -1;
+
         object? MapElement(object? elem)
         {
             if (elem == null) return null;
@@ -956,19 +959,39 @@ internal static class ExpressionBuilder
 
         if (destCollectionType.IsArray)
         {
-            var items = new List<object?>();
+            // When source is IList, we can pre-size the array and avoid the intermediate list
+            if (source is IList srcList)
+            {
+                var arr = Array.CreateInstance(destElemType, srcList.Count);
+                for (int i = 0; i < srcList.Count; i++)
+                    arr.SetValue(MapElement(srcList[i]), i);
+                return arr;
+            }
+
+            var items = count >= 0 ? new List<object?>(count) : new List<object?>();
             foreach (var item in source)
                 items.Add(MapElement(item));
-            var arr = Array.CreateInstance(destElemType, items.Count);
+            var arr2 = Array.CreateInstance(destElemType, items.Count);
             for (int i = 0; i < items.Count; i++)
-                arr.SetValue(items[i], i);
-            return arr;
+                arr2.SetValue(items[i], i);
+            return arr2;
         }
 
         var listType = typeof(List<>).MakeGenericType(destElemType);
         if (destCollectionType.IsAssignableFrom(listType))
         {
-            var list = (IList)Activator.CreateInstance(listType)!;
+            var list = count >= 0
+                ? (IList)Activator.CreateInstance(listType, count)!
+                : (IList)Activator.CreateInstance(listType)!;
+
+            // Use index-based loop for IList sources to avoid enumerator allocation
+            if (source is IList srcList)
+            {
+                for (int i = 0; i < srcList.Count; i++)
+                    list.Add(MapElement(srcList[i]));
+                return list;
+            }
+
             foreach (var item in source)
                 list.Add(MapElement(item));
             return list;
@@ -991,7 +1014,9 @@ internal static class ExpressionBuilder
         }
 
         {
-            var list = (IList)Activator.CreateInstance(listType)!;
+            var list = count >= 0
+                ? (IList)Activator.CreateInstance(listType, count)!
+                : (IList)Activator.CreateInstance(listType)!;
             foreach (var item in source)
                 list.Add(MapElement(item));
             return list;

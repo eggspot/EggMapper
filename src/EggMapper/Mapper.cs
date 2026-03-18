@@ -59,8 +59,9 @@ public sealed class Mapper : IMapper
             // Use index-based loop when possible (avoids enumerator overhead)
             if (source is IList<TSource> lst)
             {
-                var r = new List<TDestination>(lst.Count);
-                for (int i = 0; i < lst.Count; i++)
+                var count = lst.Count;
+                var r = new List<TDestination>(count);
+                for (int i = 0; i < count; i++)
                 {
                     var item = lst[i];
                     r.Add(item == null ? default! : typedDel(item));
@@ -84,16 +85,34 @@ public sealed class Mapper : IMapper
         var ctx = _sharedCtx ??= new ResolutionContext();
         ctx.Depth = 0;
 
-        var resultList = source is ICollection<TSource> col2
-            ? new List<TDestination>(col2.Count)
-            : new List<TDestination>();
-
-        foreach (var item in source)
+        // Use index-based loop for IList<T> to avoid enumerator allocation
+        if (source is IList<TSource> list)
         {
-            if (item == null) { resultList.Add(default!); continue; }
-            resultList.Add((TDestination)del(item, null, ctx));
+            var count = list.Count;
+            var resultList = new List<TDestination>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var item = list[i];
+                if (item == null) { resultList.Add(default!); continue; }
+                ctx.Depth = 0;
+                resultList.Add((TDestination)del(item, null, ctx));
+            }
+            return resultList;
         }
-        return resultList;
+
+        {
+            var resultList = source is ICollection<TSource> col2
+                ? new List<TDestination>(col2.Count)
+                : new List<TDestination>();
+
+            foreach (var item in source)
+            {
+                if (item == null) { resultList.Add(default!); continue; }
+                ctx.Depth = 0;
+                resultList.Add((TDestination)del(item, null, ctx));
+            }
+            return resultList;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -111,7 +130,11 @@ public sealed class Mapper : IMapper
     {
         var key = new TypePair(sourceType, destinationType);
         if (_config.FrozenMaps.TryGetValue(key, out var del))
-            return del(source, destination, new ResolutionContext());
+        {
+            var ctx = _sharedCtx ??= new ResolutionContext();
+            ctx.Depth = 0;
+            return del(source, destination, ctx);
+        }
         throw new InvalidOperationException(
             $"No mapping configured for {sourceType.Name} -> {destinationType.Name}. " +
             $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");

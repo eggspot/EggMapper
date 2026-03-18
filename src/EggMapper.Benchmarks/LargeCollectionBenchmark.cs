@@ -7,7 +7,7 @@ namespace EggMapper.Benchmarks;
 
 [MemoryDiagnoser]
 [RankColumn]
-public class CollectionBenchmark
+public class LargeCollectionBenchmark
 {
     private List<ModelObject> _source = null!;
 
@@ -15,7 +15,7 @@ public class CollectionBenchmark
     public void Setup()
     {
         MapsterConfig.Configure();
-        _source = Enumerable.Range(1, 100).Select(i => new ModelObject
+        _source = Enumerable.Range(1, 1000).Select(i => new ModelObject
         {
             Id = i,
             Name = $"User {i}",
