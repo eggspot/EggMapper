@@ -113,9 +113,53 @@ dotnet run --configuration Release -- --filter * --exporters json markdown
 
 <!-- BENCHMARK_RESULTS_START -->
 
+> ⏱ **Last updated:** 2026-03-18 14:42 UTC
+
 > **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
 
-*Benchmark results not yet available — run the [Benchmarks workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).*
+#### 🔵 Flat Mapping
+
+| Method     | Mean     | Error    | StdDev   | Min      | Median   | Max      | Ratio | RatioSD | Rank | Gen0   | Allocated | Alloc Ratio |
+|----------- |---------:|---------:|---------:|---------:|---------:|---------:|------:|--------:|-----:|-------:|----------:|------------:|
+| Manual     | 16.58 ns | 0.361 ns | 0.338 ns | 15.96 ns | 16.61 ns | 17.08 ns |  1.00 |    0.03 |    1 | 0.0048 |      80 B |        1.00 |
+| EggMapper  | 42.27 ns | 0.237 ns | 0.210 ns | 41.93 ns | 42.24 ns | 42.65 ns |  2.55 |    0.05 |    3 | 0.0048 |      80 B |        1.00 |
+| AutoMapper | 49.07 ns | 0.933 ns | 1.180 ns | 47.32 ns | 48.96 ns | 51.44 ns |  2.96 |    0.09 |    4 | 0.0067 |     112 B |        1.40 |
+| Mapster    | 29.23 ns | 0.419 ns | 0.327 ns | 28.65 ns | 29.25 ns | 29.58 ns |  1.76 |    0.04 |    2 | 0.0048 |      80 B |        1.00 |
+
+#### 🟣 Deep Mapping (nested)
+
+| Method     | Mean     | Error    | StdDev   | Min      | Median   | Max      | Ratio | RatioSD | Rank | Gen0   | Allocated | Alloc Ratio |
+|----------- |---------:|---------:|---------:|---------:|---------:|---------:|------:|--------:|-----:|-------:|----------:|------------:|
+| Manual     | 56.28 ns | 1.178 ns | 1.868 ns | 53.03 ns | 56.12 ns | 60.18 ns |  1.00 |    0.05 |    1 | 0.0162 |     272 B |        1.00 |
+| EggMapper  | 88.62 ns | 1.158 ns | 1.027 ns | 87.05 ns | 88.68 ns | 90.36 ns |  1.58 |    0.05 |    3 | 0.0162 |     272 B |        1.00 |
+| AutoMapper | 93.84 ns | 1.327 ns | 1.177 ns | 91.66 ns | 93.94 ns | 96.00 ns |  1.67 |    0.06 |    4 | 0.0181 |     304 B |        1.12 |
+| Mapster    | 75.13 ns | 1.319 ns | 1.234 ns | 73.54 ns | 74.94 ns | 77.57 ns |  1.34 |    0.05 |    2 | 0.0162 |     272 B |        1.00 |
+
+#### 🟠 Collection (100 items)
+
+| Method     | Mean     | Error     | StdDev    | Min      | Median   | Max      | Ratio | RatioSD | Rank | Gen0   | Gen1   | Allocated | Alloc Ratio |
+|----------- |---------:|----------:|----------:|---------:|---------:|---------:|------:|--------:|-----:|-------:|-------:|----------:|------------:|
+| Manual     | 2.008 μs | 0.0402 μs | 0.0649 μs | 1.900 μs | 2.017 μs | 2.175 μs |  1.00 |    0.05 |    1 | 0.5302 | 0.0153 |   8.72 KB |        1.00 |
+| EggMapper  | 2.086 μs | 0.0414 μs | 0.0692 μs | 1.903 μs | 2.088 μs | 2.184 μs |  1.04 |    0.05 |    1 | 0.5264 | 0.0153 |   8.65 KB |        0.99 |
+| AutoMapper |       NA |        NA |        NA |       NA |       NA |       NA |     ? |       ? |    ? |     NA |     NA |        NA |           ? |
+| Mapster    | 1.961 μs | 0.0392 μs | 0.0496 μs | 1.832 μs | 1.953 μs | 2.068 μs |  0.98 |    0.04 |    1 | 0.5283 | 0.0172 |   8.65 KB |        0.99 |
+
+#### 🟢 Complex Mapping
+
+| Method     | Mean      | Error    | StdDev   | Min       | Median    | Max      | Ratio | RatioSD | Rank | Gen0   | Allocated | Alloc Ratio |
+|----------- |----------:|---------:|---------:|----------:|----------:|---------:|------:|--------:|-----:|-------:|----------:|------------:|
+| Manual     | 101.52 ns | 2.034 ns | 3.284 ns |  95.68 ns | 101.89 ns | 107.1 ns |  1.00 |    0.05 |    1 | 0.0234 |     392 B |        1.00 |
+| EggMapper  | 419.63 ns | 1.619 ns | 1.436 ns | 415.42 ns | 419.57 ns | 421.6 ns |  4.14 |    0.13 |    2 | 0.0257 |     432 B |        1.10 |
+| AutoMapper | 423.74 ns | 3.848 ns | 3.411 ns | 418.81 ns | 423.89 ns | 431.2 ns |  4.18 |    0.14 |    2 | 0.0277 |     464 B |        1.18 |
+| Mapster    |  95.89 ns | 1.882 ns | 2.817 ns |  90.86 ns |  96.24 ns | 100.5 ns |  0.95 |    0.04 |    1 | 0.0191 |     320 B |        0.82 |
+
+#### ⚪ Startup / Config
+
+| Method            | Mean         | Error      | StdDev     | Min          | Median       | Max          | Ratio | Rank | Gen0   | Gen1   | Allocated | Alloc Ratio |
+|------------------ |-------------:|-----------:|-----------:|-------------:|-------------:|-------------:|------:|-----:|-------:|-------:|----------:|------------:|
+| EggMapperStartup  | 2,293.554 μs | 10.7218 μs |  9.5046 μs | 2,278.392 μs | 2,291.443 μs | 2,312.696 μs | 1.000 |    2 | 3.9063 |      - | 103.17 KB |        1.00 |
+| AutoMapperStartup | 2,322.241 μs | 20.4594 μs | 18.1368 μs | 2,294.306 μs | 2,320.243 μs | 2,355.208 μs | 1.013 |    2 | 3.9063 |      - | 102.97 KB |        1.00 |
+| MapsterStartup    |     2.673 μs |  0.0521 μs |  0.0714 μs |     2.521 μs |     2.685 μs |     2.787 μs | 0.001 |    1 | 0.7019 | 0.0267 |  11.51 KB |        0.11 |
 
 ---
 
