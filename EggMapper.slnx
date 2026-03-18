@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EggMapper.Benchmarks/EggMapper.Benchmarks.csproj" />
+    <Project Path="src/EggMapper.DependencyInjection/EggMapper.DependencyInjection.csproj" />
+    <Project Path="src/EggMapper.UnitTests/EggMapper.UnitTests.csproj" />
+    <Project Path="src/EggMapper/EggMapper.csproj" />
+  </Folder>
+</Solution>
