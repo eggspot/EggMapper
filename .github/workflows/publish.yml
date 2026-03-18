@@ -1,29 +1,33 @@
 name: Publish NuGet
 
-# Publishes both EggMapper and EggMapper.DependencyInjection to NuGet.org.
+# Every push to main produces a STABLE NuGet release.
 #
 # Versioning strategy
 # ───────────────────
-# • Push to main (no tag)  → preview package:  <base>-preview.<run_number>
-#   e.g.  1.0.0-preview.42
-# • Tag push  v*.*.*       → stable package:   <tag without 'v'>
-#   e.g.  1.2.3
-# • workflow_dispatch      → explicit version via input (stable)
+# • Push to main → reads <Version> from EggMapper.csproj → stable package
+#                  → automatically creates and pushes git tag  v<version>
+#                  → if the tag already exists the job is a no-op (same
+#                    version committed twice without bumping csproj)
+# • workflow_dispatch → optional explicit version override (stable)
 #
 # Required secret: NUGET_API_KEY  (repository → Settings → Secrets)
+#
+# To release a new version:
+#   1. Update <Version> in src/EggMapper/EggMapper.csproj  (and DI csproj)
+#   2. Push / merge to main
+#   → workflow publishes the stable package and tags the commit automatically
 
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       version:
-        description: 'Explicit package version (e.g. 1.2.3). Overrides auto-versioning.'
+        description: 'Explicit package version (e.g. 1.2.3). Overrides the version in EggMapper.csproj.'
         required: false
 
 permissions:
-  contents: read
+  contents: write   # needed to create and push git tags
 
 jobs:
   publish:
@@ -33,43 +37,57 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # needed so git describe / tag detection works
+          fetch-depth: 0   # full history so tag existence checks work
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      # ── Determine the version to publish ──────────────────────────────────
+      # ── Determine the stable version to publish ────────────────────────────
       - name: Determine version
         id: version
         shell: bash
         run: |
           if [[ -n "${{ github.event.inputs.version }}" ]]; then
             VERSION="${{ github.event.inputs.version }}"
-          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            # Stable release: strip the leading 'v'
-            VERSION="${GITHUB_REF_NAME#v}"
           else
-            # Pre-release on every main commit: base + preview suffix
-            BASE=$(grep -oP '(?<=<Version>)[^<]+' src/EggMapper/EggMapper.csproj)
-            VERSION="${BASE}-preview.${GITHUB_RUN_NUMBER}"
+            # Read the version declared in the project file — always stable
+            VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/EggMapper/EggMapper.csproj)
           fi
           echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Publishing version: ${VERSION}"
+          echo "Resolved version: ${VERSION}"
 
-      # ── Build ──────────────────────────────────────────────────────────────
+      # ── Skip if this version was already published (tag exists) ───────────
+      - name: Check for existing tag
+        id: tag_check
+        shell: bash
+        run: |
+          TAG="v${{ steps.version.outputs.VERSION }}"
+          if git rev-parse --verify "refs/tags/${TAG}" > /dev/null 2>&1; then
+            echo "Tag ${TAG} already exists — version unchanged, skipping publish."
+            echo "ALREADY_TAGGED=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} does not exist — will publish."
+            echo "ALREADY_TAGGED=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Build & test ───────────────────────────────────────────────────────
       - name: Restore dependencies
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet restore
 
       - name: Build (Release)
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet build --configuration Release --no-restore
 
       - name: Run tests
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet test --configuration Release --no-build --verbosity minimal
 
       # ── Pack ───────────────────────────────────────────────────────────────
       - name: Pack EggMapper
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: |
           dotnet pack src/EggMapper/EggMapper.csproj \
             --configuration Release \
@@ -78,6 +96,7 @@ jobs:
             --output ./artifacts
 
       - name: Pack EggMapper.DependencyInjection
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: |
           dotnet pack src/EggMapper.DependencyInjection/EggMapper.DependencyInjection.csproj \
             --configuration Release \
@@ -87,10 +106,12 @@ jobs:
 
       # ── Inspect packages ──────────────────────────────────────────────────
       - name: List packages
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: ls -lh ./artifacts/
 
-      # ── Upload as CI artifact (always) ────────────────────────────────────
+      # ── Upload as CI artifact (always, for traceability) ──────────────────
       - name: Upload packages as artifact
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages-${{ steps.version.outputs.VERSION }}
@@ -98,6 +119,7 @@ jobs:
 
       # ── Push to NuGet.org ─────────────────────────────────────────────────
       - name: Push to NuGet.org
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
@@ -105,3 +127,15 @@ jobs:
             --api-key "${NUGET_API_KEY}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
+
+      # ── Auto-tag the commit ────────────────────────────────────────────────
+      - name: Create and push git tag
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.VERSION }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
+          echo "✅ Created and pushed tag ${TAG}"
+
