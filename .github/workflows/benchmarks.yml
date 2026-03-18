@@ -1,0 +1,33 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build Release
+        run: dotnet build src/EggMapper.Benchmarks/EggMapper.Benchmarks.csproj --configuration Release --no-restore
+
+      - name: Run Benchmarks
+        run: |
+          cd src/EggMapper.Benchmarks
+          dotnet run --configuration Release -- --filter * --exporters json
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
