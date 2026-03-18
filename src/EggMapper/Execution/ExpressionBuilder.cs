@@ -78,6 +78,189 @@ internal static class ExpressionBuilder
         return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps);
     }
 
+    /// <summary>
+    /// Attempts to compile a strongly-typed <c>Func&lt;TSource, TDestination&gt;</c>
+    /// for maps where no <see cref="ResolutionContext"/> is needed at call time
+    /// (i.e. flat maps with only directly-assignable properties and no nested
+    /// registered type maps, collection properties, conditions, or hooks).
+    /// When successful, the returned delegate eliminates all boxing/unboxing and
+    /// the ResolutionContext parameter from the per-item call in
+    /// <see cref="Mapper.Map{TSource,TDestination}(TSource)"/> and
+    /// <see cref="Mapper.MapList{TSource,TDestination}"/>.
+    /// Returns <c>null</c> when the ctx-free path is not applicable.
+    /// </summary>
+    public static Delegate? TryBuildCtxFreeDelegate(TypeMap typeMap)
+    {
+        // Same bailout conditions as TryBuildTypedDelegate
+        if (typeMap.BeforeMapAction != null) return null;
+        if (typeMap.AfterMapAction  != null) return null;
+        if (typeMap.MaxDepth > 0) return null;
+        if (typeMap.BaseMapTypePair.HasValue) return null;
+        if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return null;
+        if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return null;
+
+        var srcType  = typeMap.SourceType;
+        var destType = typeMap.DestinationType;
+
+        var defaultCtor = destType.GetConstructor(Type.EmptyTypes);
+        if (defaultCtor == null && typeMap.CustomConstructor == null) return null;
+
+        var srcDetails  = TypeDetails.Get(srcType);
+        var destDetails = TypeDetails.Get(destType);
+
+        // Expression parameters: (TSource src)  — no dest, no ctx
+        var srcParam = Expression.Parameter(srcType, "src");
+        var dVar     = Expression.Variable(destType, "d");
+
+        var stmts = new List<Expression>();
+
+        // d = new TDest()  (ctx-free path always creates a new destination)
+        Expression newDestExpr = typeMap.CustomConstructor != null
+            ? Expression.Convert(
+                Expression.Invoke(Expression.Constant(typeMap.CustomConstructor),
+                    Expression.Convert(srcParam, typeof(object))),
+                destType)
+            : (Expression)Expression.New(defaultCtor!);
+
+        stmts.Add(Expression.Assign(dVar, newDestExpr));
+
+        var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // ── Explicit PropertyMaps ────────────────────────────────────────────
+        foreach (var propMap in typeMap.PropertyMaps)
+        {
+            processedDestProps.Add(propMap.DestinationProperty.Name);
+            if (propMap.Ignored) continue;
+
+            // Runtime guards cannot be expressed without ctx → bail out
+            if (propMap.Condition      != null
+                || propMap.FullCondition != null
+                || propMap.PreCondition  != null
+                || propMap.HasNullSubstitute)
+                return null;
+
+            if (propMap.CustomResolver != null) return null;
+
+            if (propMap.HasUseValue)
+            {
+                try
+                {
+                    stmts.Add(Expression.Assign(
+                        Expression.Property(dVar, propMap.DestinationProperty),
+                        Expression.Convert(
+                            Expression.Constant(propMap.UseValue),
+                            propMap.DestinationProperty.PropertyType)));
+                }
+                catch { return null; }
+                continue;
+            }
+
+            if (propMap.SourceMemberName != null)
+            {
+                var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, propMap.SourceMemberName, StringComparison.OrdinalIgnoreCase));
+                if (srcProp == null) continue;
+
+                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty);
+                if (assignExpr == null) return null;
+                stmts.Add(assignExpr);
+            }
+        }
+
+        // ── Convention mapping for remaining writable destination properties ──
+        foreach (var destProp in destDetails.WritableProperties)
+        {
+            if (processedDestProps.Contains(destProp.Name)) continue;
+            processedDestProps.Add(destProp.Name);
+
+            var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
+                string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
+            if (srcProp == null)
+            {
+                // Flattened source properties need ctx at runtime → bail out
+                if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
+                    return null;
+                continue;
+            }
+
+            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp);
+            if (assignExpr == null) return null;
+            stmts.Add(assignExpr);
+        }
+
+        // return d
+        stmts.Add(dVar);
+
+        var body     = Expression.Block(new[] { dVar }, stmts);
+        var funcType = typeof(Func<,>).MakeGenericType(srcType, destType);
+        return Expression.Lambda(funcType, body, srcParam).Compile();
+    }
+
+    /// <summary>
+    /// Builds a typed assignment expression for a property pair without needing
+    /// a <see cref="ResolutionContext"/> parameter.  Returns <c>null</c> when the
+    /// assignment would require runtime context (nested registered maps, collection
+    /// elements that require mapping, etc.).
+    /// </summary>
+    private static Expression? TryBuildCtxFreeAssign(
+        ParameterExpression srcParam,
+        ParameterExpression dVar,
+        PropertyInfo srcProp,
+        PropertyInfo destProp)
+    {
+        var srcType    = srcProp.PropertyType;
+        var destType   = destProp.PropertyType;
+        var srcAccess  = Expression.Property(srcParam, srcProp);
+        var destAccess = Expression.Property(dVar, destProp);
+
+        // Collection properties require ctx to map elements → bail out
+        if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
+            return null;
+
+        // Same type: direct assignment (no boxing, no conversion)
+        if (srcType == destType)
+            return Expression.Assign(destAccess, srcAccess);
+
+        // Directly assignable (subclass → base, etc.)
+        if (destType.IsAssignableFrom(srcType))
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        // Nullable<T> → T
+        var srcUnderlying  = Nullable.GetUnderlyingType(srcType);
+        var destUnderlying = Nullable.GetUnderlyingType(destType);
+
+        if (srcUnderlying != null
+            && (destType == srcUnderlying || destType.IsAssignableFrom(srcUnderlying)))
+        {
+            return Expression.Assign(destAccess,
+                Expression.Condition(
+                    Expression.Property(srcAccess, "HasValue"),
+                    Expression.Convert(Expression.Property(srcAccess, "Value"), destType),
+                    Expression.Default(destType)));
+        }
+
+        // T → Nullable<T>
+        if (destUnderlying != null
+            && (srcType == destUnderlying || destUnderlying.IsAssignableFrom(srcType)))
+        {
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+        }
+
+        // Nested reference-type registered maps require ctx → bail out for ctx-free path
+        // (The caller will fall through to the ctx-aware delegate.)
+        if (!srcType.IsValueType)
+            return null;
+
+        // Value-type numeric conversion (int → long, float → double, etc.)
+        if (destType.IsValueType)
+        {
+            try   { return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType)); }
+            catch { return null; }
+        }
+
+        return null;
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Typed Expression-tree path  (fast, no boxing for value types)
     // ══════════════════════════════════════════════════════════════════════════

@@ -49,20 +49,51 @@ public sealed class Mapper : IMapper
     public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
-        var del = GetDelegate<TSource, TDestination>();
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+        // Ctx-free fast path: Func<TSource,TDestination> — zero boxing, no ctx overhead
+        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+        {
+            var typedDel = (Func<TSource, TDestination>)ctxFreeDel;
+
+            // Use index-based loop when possible (avoids enumerator overhead)
+            if (source is IList<TSource> lst)
+            {
+                var r = new List<TDestination>(lst.Count);
+                for (int i = 0; i < lst.Count; i++)
+                {
+                    var item = lst[i];
+                    r.Add(item == null ? default! : typedDel(item));
+                }
+                return r;
+            }
+
+            var result = source is ICollection<TSource> col
+                ? new List<TDestination>(col.Count)
+                : new List<TDestination>();
+            foreach (var item in source)
+                result.Add(item == null ? default! : typedDel(item));
+            return result;
+        }
+
+        // Fallback: ctx-aware boxed delegate
+        if (!_config.FrozenMaps.TryGetValue(key, out var del))
+            throw new InvalidOperationException(
+                $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
+                $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
         var ctx = _sharedCtx ??= new ResolutionContext();
         ctx.Depth = 0;
 
-        var result = source is ICollection<TSource> col
-            ? new List<TDestination>(col.Count)
+        var resultList = source is ICollection<TSource> col2
+            ? new List<TDestination>(col2.Count)
             : new List<TDestination>();
 
         foreach (var item in source)
         {
-            if (item == null) { result.Add(default!); continue; }
-            result.Add((TDestination)del(item, null, ctx));
+            if (item == null) { resultList.Add(default!); continue; }
+            resultList.Add((TDestination)del(item, null, ctx));
         }
-        return result;
+        return resultList;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

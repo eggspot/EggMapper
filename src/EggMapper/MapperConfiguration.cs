@@ -13,6 +13,11 @@ public sealed class MapperConfiguration
     // because they require no volatile loads or atomic operations.
     internal Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> FrozenMaps = null!;
 
+    // Ctx-free typed delegates (Func<TSource, TDestination>) for flat maps that do
+    // not need a ResolutionContext at call time.  These eliminate all boxing and the
+    // ctx/dest parameters from the per-item call in Map<> and MapList<>.
+    internal Dictionary<TypePair, Delegate> FrozenCtxFreeMaps = null!;
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
@@ -29,6 +34,16 @@ public sealed class MapperConfiguration
 
         // Snapshot: no further writes will occur to _compiledMaps after construction.
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
+
+        // Build ctx-free typed delegates for eligible maps.
+        var ctxFree = new Dictionary<TypePair, Delegate>();
+        foreach (var kvp in _typeMaps)
+        {
+            var del = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(kvp.Value);
+            if (del != null)
+                ctxFree[kvp.Key] = del;
+        }
+        FrozenCtxFreeMaps = ctxFree;
     }
 
     private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)
