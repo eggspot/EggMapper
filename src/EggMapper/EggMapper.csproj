@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>EggMapper</AssemblyName>
+    <RootNamespace>EggMapper</RootNamespace>
+    <PackageId>EggMapper</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Eggspot</Authors>
+    <Description>High-performance .NET object-to-object mapper with compiled expression trees</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://eggspot.app</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
+  </PropertyGroup>
+</Project>

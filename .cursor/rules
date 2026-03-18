@@ -1,0 +1,96 @@
+# EggMapper — Cursor AI Rules
+
+## Identity
+You are working on **EggMapper**, a high-performance .NET object-to-object mapper. The core goal is to be **faster than AutoMapper** while offering the same ergonomic API. Every change must follow one of the two loops below.
+
+---
+
+## 🔁 Loop 1 — Correctness
+
+```
+write code → run tests → fix failures → run tests again → repeat until 100% green
+```
+
+### Rules
+- **Never skip writing tests.** Every new public API or behaviour change needs a corresponding test in `src/EggMapper.UnitTests/`.
+- **Run tests after every code change:**
+  ```bash
+  dotnet test src/EggMapper.UnitTests/EggMapper.UnitTests.csproj --configuration Release
+  ```
+- **Do not move on to the next feature if any test is red.**
+- Tests use **xUnit** + **FluentAssertions**. Match the style of existing test files.
+- Follow the AAA pattern: Arrange / Act / Assert.
+- Name tests: `Feature_Condition_ExpectedBehavior`.
+
+---
+
+## 🔁 Loop 2 — Performance
+
+```
+run benchmark (baseline) → optimize code → run benchmark again → compare → repeat until faster than AutoMapper
+```
+
+### Rules
+- **Always record the baseline before changing any performance-sensitive code.**
+- Run individual benchmarks to iterate quickly:
+  ```bash
+  cd src/EggMapper.Benchmarks
+  dotnet run -c Release -- --filter *FlatMapping*
+  ```
+- Run all benchmarks for a full picture:
+  ```bash
+  dotnet run -c Release -- --filter * --exporters markdown
+  ```
+- **EggMapper must be faster than AutoMapper on every benchmark.** If a change makes EggMapper slower, revert or fix it before committing.
+- Performance targets: flat mapping ≥ 2.5× faster than AutoMapper, nested/collection ≥ 2× faster.
+
+---
+
+## Architecture Rules
+
+1. **No `PropertyInfo.GetValue` or `PropertyInfo.SetValue` at map time** — compile everything in `MapperConfiguration` constructor.
+2. **Cache compiled delegates** in `ConcurrentDictionary<TypePair, Func<object,object?,ResolutionContext,object>>`.
+3. **No LINQ in hot paths** — use `for` loops and pre-sized `List<T>`.
+4. **Apply `[MethodImpl(MethodImplOptions.AggressiveInlining)]`** to `Map<S,D>()` and delegate-lookup methods.
+5. **`TypePair` is a value type** (`readonly struct`) for zero-allocation dictionary keys.
+
+---
+
+## Project Layout
+
+| Path | Purpose |
+|---|---|
+| `src/EggMapper/` | Core library — compiled expression tree delegates |
+| `src/EggMapper.DependencyInjection/` | `AddEggMapper()` DI extension |
+| `src/EggMapper.UnitTests/` | xUnit tests (keep 100% green) |
+| `src/EggMapper.Benchmarks/` | BenchmarkDotNet comparisons |
+
+---
+
+## Commands Reference
+
+```bash
+# Build everything
+dotnet build --configuration Release
+
+# Run all unit tests
+dotnet test --configuration Release
+
+# Run all benchmarks (takes several minutes)
+cd src/EggMapper.Benchmarks && dotnet run -c Release -- --filter *
+
+# Run one benchmark class
+cd src/EggMapper.Benchmarks && dotnet run -c Release -- --filter *FlatMappingBenchmark*
+
+# Quick smoke-test a benchmark (short runs, not accurate for perf)
+cd src/EggMapper.Benchmarks && dotnet run -c Release -- --filter *FlatMappingBenchmark* --job short
+```
+
+---
+
+## Definition of Done
+
+- [ ] All unit tests pass (`dotnet test` exits 0)
+- [ ] EggMapper is faster than AutoMapper on every benchmark
+- [ ] No runtime reflection in mapping hot path
+- [ ] New code has tests covering happy path, null inputs, and edge cases
