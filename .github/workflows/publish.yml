@@ -115,7 +115,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages-${{ steps.version.outputs.VERSION }}
-          path: ./artifacts/*.nupkg
+          path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
 
       # ── Push to NuGet.org ─────────────────────────────────────────────────
       - name: Push to NuGet.org
@@ -127,6 +129,13 @@ jobs:
             --api-key "${NUGET_API_KEY}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
+          # Push symbol packages if any were produced
+          if ls ./artifacts/*.snupkg 1>/dev/null 2>&1; then
+            dotnet nuget push ./artifacts/*.snupkg \
+              --api-key "${NUGET_API_KEY}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          fi
 
       # ── Auto-tag the commit ────────────────────────────────────────────────
       - name: Create and push git tag

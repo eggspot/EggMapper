@@ -53,6 +53,10 @@ COLUMN_LEGEND = (
     "`Allocated` = heap / op"
 )
 
+# Absolute URL — works from README, NuGet, and anywhere else
+_REPO_URL = "https://github.com/eggspot/EggMapper"
+_WORKFLOW_URL = f"{_REPO_URL}/actions/workflows/benchmarks.yml"
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -80,20 +84,33 @@ def _extract_table(filepath: str) -> str:
 # ── Section builder ────────────────────────────────────────────────────────
 
 def build_performance_section(artifacts_dir: str) -> str:
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     md_files = _find_md_files(artifacts_dir)
+    has_results = bool(md_files)
 
     parts: list[str] = [
         START_MARKER,
         "",
-        f"> ⏱ **Last updated:** {timestamp}",
-        "",
+    ]
+
+    # Only include a timestamp when there are real benchmark results so that
+    # no-op runs (benchmarks unchanged) don't produce a spurious diff/commit.
+    if has_results:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        parts += [
+            f"> ⏱ **Last updated:** {timestamp}",
+            "",
+        ]
+
+    parts += [
         COLUMN_LEGEND,
         "",
     ]
 
-    if not md_files:
-        parts.append("*Benchmark results not yet available — run the [Benchmarks workflow](../../actions/workflows/benchmarks.yml).*")
+    if not has_results:
+        parts.append(
+            f"*Benchmark results not yet available — run the "
+            f"[Benchmarks workflow]({_WORKFLOW_URL}).*"
+        )
     else:
         for md_file in md_files:
             label = Path(md_file).stem  # fallback
@@ -115,8 +132,7 @@ def build_performance_section(artifacts_dir: str) -> str:
         "---",
         "",
         f"*Benchmarks run automatically on every push to `main`. "
-        f"[See workflow]"
-        f"(../../actions/workflows/benchmarks.yml)*",
+        f"[See workflow]({_WORKFLOW_URL})*",
         "",
         END_MARKER,
     ]

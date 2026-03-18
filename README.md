@@ -96,7 +96,7 @@ All benchmarks run on .NET 8, BenchmarkDotNet. Lower is better.
 
 ---
 
-*Benchmarks run automatically on every push to `main`. [See workflow](../../actions/workflows/benchmarks.yml)*
+*Benchmarks run automatically on every push to `main`. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
 
 <!-- BENCHMARK_RESULTS_END -->
 

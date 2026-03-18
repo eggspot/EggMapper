@@ -24,6 +24,8 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    # Skip if triggered by the bot's own README-update commit to prevent loops
+    if: github.actor != 'github-actions[bot]'
 
     steps:
       - name: Checkout
