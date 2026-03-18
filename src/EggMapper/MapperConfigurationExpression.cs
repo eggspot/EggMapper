@@ -23,7 +23,8 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     private void RegisterTypeMap(TypeMap typeMap)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-        _typeMaps.TryAdd(key, typeMap);
+        if (!_typeMaps.ContainsKey(key))
+            _typeMaps[key] = typeMap;
     }
 
     public void AddProfile<TProfile>() where TProfile : Profile, new()

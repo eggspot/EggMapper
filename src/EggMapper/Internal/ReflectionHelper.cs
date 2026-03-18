@@ -52,7 +52,7 @@ internal static class ReflectionHelper
         foreach (var srcProp in srcDetails.ReadableProperties)
         {
             if (!destPropName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            var remainder = destPropName[srcProp.Name.Length..];
+            var remainder = destPropName.Substring(srcProp.Name.Length);
             if (string.IsNullOrEmpty(remainder)) continue;
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
             if (nestedDetails.ReadableProperties.Any(p =>

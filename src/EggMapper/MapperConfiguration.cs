@@ -8,6 +8,16 @@ public sealed class MapperConfiguration
     private readonly ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> _compiledMaps = new();
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
 
+    // Frozen (read-only) snapshot built after all maps are compiled.
+    // Regular Dictionary reads are significantly faster than ConcurrentDictionary
+    // because they require no volatile loads or atomic operations.
+    internal Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> FrozenMaps = null!;
+
+    // Ctx-free typed delegates (Func<TSource, TDestination>) for flat maps that do
+    // not need a ResolutionContext at call time.  These eliminate all boxing and the
+    // ctx/dest parameters from the per-item call in Map<> and MapList<>.
+    internal Dictionary<TypePair, Delegate> FrozenCtxFreeMaps = null!;
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
@@ -19,8 +29,52 @@ public sealed class MapperConfiguration
             _typeMaps[key] = typeMap;
         }
 
+        foreach (var typeMap in TopologicalOrder(_typeMaps))
+            CompileMap(typeMap);
+
+        // Snapshot: no further writes will occur to _compiledMaps after construction.
+        FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
+
+        // Build ctx-free typed delegates for eligible maps.
+        var ctxFree = new Dictionary<TypePair, Delegate>();
         foreach (var kvp in _typeMaps)
-            CompileMap(kvp.Value);
+        {
+            var del = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(kvp.Value);
+            if (del != null)
+                ctxFree[kvp.Key] = del;
+        }
+        FrozenCtxFreeMaps = ctxFree;
+    }
+
+    private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)
+    {
+        var visited = new HashSet<TypePair>();
+        var result  = new List<TypeMap>(typeMaps.Count);
+
+        void Visit(TypeMap map)
+        {
+            var key = new TypePair(map.SourceType, map.DestinationType);
+            if (!visited.Add(key)) return;
+
+            var srcDetails  = TypeDetails.Get(map.SourceType);
+            var destDetails = TypeDetails.Get(map.DestinationType);
+
+            foreach (var destProp in destDetails.WritableProperties)
+            {
+                var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
+                if (srcProp == null) continue;
+
+                var nestedPair = new TypePair(srcProp.PropertyType, destProp.PropertyType);
+                if (typeMaps.TryGetValue(nestedPair, out var nestedMap))
+                    Visit(nestedMap);
+            }
+
+            result.Add(map);
+        }
+
+        foreach (var kvp in typeMaps) Visit(kvp.Value);
+        return result;
     }
 
     private void CompileMap(TypeMap typeMap)
@@ -37,7 +91,7 @@ public sealed class MapperConfiguration
 
     internal Func<object, object?, ResolutionContext, object>? GetMapDelegate(TypePair typePair)
     {
-        _compiledMaps.TryGetValue(typePair, out var del);
+        FrozenMaps.TryGetValue(typePair, out var del);
         return del;
     }
 

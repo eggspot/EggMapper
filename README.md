@@ -7,7 +7,6 @@ Sponsored by [eggspot.app](https://eggspot.app)
 [![CI](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml)
 [![Benchmarks](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)
 [![NuGet](https://img.shields.io/nuget/v/EggMapper.svg)](https://www.nuget.org/packages/EggMapper)
-[![NuGet DI](https://img.shields.io/nuget/v/EggMapper.DependencyInjection.svg?label=nuget%20DI)](https://www.nuget.org/packages/EggMapper.DependencyInjection)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
@@ -29,11 +28,7 @@ Sponsored by [eggspot.app](https://eggspot.app)
 dotnet add package EggMapper
 ```
 
-For .NET Dependency Injection support:
-
-```bash
-dotnet add package EggMapper.DependencyInjection
-```
+DI support (`AddEggMapper`) is included in the main package — no separate package needed.
 
 ## Quick Start
 
@@ -77,7 +72,7 @@ public class MyService(IMapper mapper) { ... }
 
 ## Performance
 
-All benchmarks run on .NET 8, BenchmarkDotNet. Lower is better.
+All benchmarks run on BenchmarkDotNet across .NET 8, 9, and 10. Lower is better.
 
 | Mapper | Simple Flat | Deep Object | Collection (1000) |
 |--------|------------|-------------|-------------------|
@@ -113,7 +108,7 @@ dotnet run --configuration Release -- --filter * --exporters json markdown
 - ✅ Inheritance mapping
 - ✅ Enum mapping
 - ✅ `ForPath` for nested destination properties
-- ✅ .NET 8 Dependency Injection integration
+- ✅ .NET Dependency Injection integration (built-in, no extra package)
 - ✅ Configuration validation
 
 <!-- BENCHMARK_RESULTS_START -->

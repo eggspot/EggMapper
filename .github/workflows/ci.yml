@@ -9,20 +9,32 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet-version: ['8.0.x', '9.0.x', '10.0.x']
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET
+      # Install all required SDKs so every TFM (including net10.0) can be compiled
+      # regardless of which runtime version the matrix is currently testing.
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
 
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build
+      - name: Build (all target frameworks)
         run: dotnet build --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test --configuration Release --no-build --verbosity normal
+      - name: Test (.NET ${{ matrix.dotnet-version }})
+        run: |
+          MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
+          dotnet test --configuration Release --no-build --framework "net${MAJOR}.0" --verbosity normal

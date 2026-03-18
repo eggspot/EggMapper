@@ -1,11 +1,11 @@
 # Dependency Injection
 
-EggMapper ships a dedicated integration package for `Microsoft.Extensions.DependencyInjection` (used by ASP.NET Core and the generic host).
+DI support is built into the main `EggMapper` package — no separate package needed.
 
 ## Installation
 
 ```bash
-dotnet add package EggMapper.DependencyInjection
+dotnet add package EggMapper
 ```
 
 ---

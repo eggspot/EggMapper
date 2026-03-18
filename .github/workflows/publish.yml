@@ -13,9 +13,9 @@ name: Publish NuGet
 # Required secret: NUGET_API_KEY  (repository → Settings → Secrets)
 #
 # To release a new version:
-#   1. Update <Version> in src/EggMapper/EggMapper.csproj  (and DI csproj)
+#   1. Update <Version> in src/EggMapper/EggMapper.csproj
 #   2. Push / merge to main
-#   → workflow publishes the stable package and tags the commit automatically
+#   → workflow publishes the single EggMapper package and tags the commit automatically
 
 on:
   push:
@@ -39,10 +39,14 @@ jobs:
         with:
           fetch-depth: 0   # full history so tag existence checks work
 
-      - name: Setup .NET
+      # Install all required SDKs so every TFM in the library builds cleanly.
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
 
       # ── Determine the stable version to publish ────────────────────────────
       - name: Determine version
@@ -85,20 +89,11 @@ jobs:
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet test --configuration Release --no-build --verbosity minimal
 
-      # ── Pack ───────────────────────────────────────────────────────────────
+      # ── Pack (single package — DI is bundled into EggMapper) ──────────────
       - name: Pack EggMapper
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: |
           dotnet pack src/EggMapper/EggMapper.csproj \
-            --configuration Release \
-            --no-build \
-            -p:Version=${{ steps.version.outputs.VERSION }} \
-            --output ./artifacts
-
-      - name: Pack EggMapper.DependencyInjection
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        run: |
-          dotnet pack src/EggMapper.DependencyInjection/EggMapper.DependencyInjection.csproj \
             --configuration Release \
             --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \

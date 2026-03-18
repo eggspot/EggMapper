@@ -46,9 +46,8 @@ public class CollectionBenchmark
     }).ToList();
 
     [Benchmark]
-    public List<ModelDto> EggMapper() => _source
-        .Select(s => EggMapperConfig.Mapper.Map<ModelObject, ModelDto>(s))
-        .ToList();
+    public List<ModelDto> EggMapper() =>
+        EggMapperConfig.Mapper.MapList<ModelObject, ModelDto>(_source);
 
     [Benchmark]
     public List<ModelDto> AutoMapper() => AutoMapperConfig.Mapper.Map<List<ModelDto>>(_source);
