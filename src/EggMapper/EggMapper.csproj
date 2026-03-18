@@ -5,13 +5,27 @@
     <PackageId>EggMapper</PackageId>
     <Version>1.0.0</Version>
     <Authors>Eggspot</Authors>
-    <Description>High-performance .NET object-to-object mapper with compiled expression trees</Description>
+    <Company>Eggspot</Company>
+    <Product>EggMapper</Product>
+    <Description>High-performance .NET object-to-object mapper with compiled expression trees. Faster than AutoMapper with zero runtime reflection.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://eggspot.app</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mapper;automapper;object-mapper;expression-trees;performance;mapping;dto;di;dependencyinjection</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright © Eggspot</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591</NoWarn>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <TargetFrameworks>netstandard2.0;net462;net8.0;net9.0;net10.0</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Condition="Exists('..\..\README.md')" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="2.1.0" />
   </ItemGroup>
 </Project>
+

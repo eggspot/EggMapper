@@ -5,8 +5,11 @@
 Sponsored by [eggspot.app](https://eggspot.app)
 
 [![CI](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml)
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Benchmarks](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)
 [![NuGet](https://img.shields.io/nuget/v/EggMapper.svg)](https://www.nuget.org/packages/EggMapper)
+[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
 
 ## Overview
 
@@ -25,11 +28,7 @@ Sponsored by [eggspot.app](https://eggspot.app)
 dotnet add package EggMapper
 ```
 
-For .NET Dependency Injection support:
-
-```bash
-dotnet add package EggMapper.DependencyInjection
-```
+DI support (`AddEggMapper`) is included in the main package — no separate package needed.
 
 ## Quick Start
 
@@ -73,7 +72,7 @@ public class MyService(IMapper mapper) { ... }
 
 ## Performance
 
-All benchmarks run on .NET 8, BenchmarkDotNet. Lower is better.
+All benchmarks run on BenchmarkDotNet across .NET 8, 9, and 10. Lower is better.
 
 | Mapper | Simple Flat | Deep Object | Collection (1000) |
 |--------|------------|-------------|-------------------|
@@ -109,8 +108,32 @@ dotnet run --configuration Release -- --filter * --exporters json markdown
 - ✅ Inheritance mapping
 - ✅ Enum mapping
 - ✅ `ForPath` for nested destination properties
-- ✅ .NET 8 Dependency Injection integration
+- ✅ .NET Dependency Injection integration (built-in, no extra package)
 - ✅ Configuration validation
+
+<!-- BENCHMARK_RESULTS_START -->
+
+> **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
+
+*Benchmark results not yet available — run the [Benchmarks workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).*
+
+---
+
+*Benchmarks run automatically on every push to `main`. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
+
+<!-- BENCHMARK_RESULTS_END -->
+
+## Documentation
+
+| Page | Description |
+|------|-------------|
+| [Getting Started](https://github.com/eggspot/EggMapper/wiki/Getting-Started) | Installation and your first mapping |
+| [Configuration](https://github.com/eggspot/EggMapper/wiki/Configuration) | `MapperConfiguration` options |
+| [Profiles](https://github.com/eggspot/EggMapper/wiki/Profiles) | Organising maps with `Profile` |
+| [Dependency Injection](https://github.com/eggspot/EggMapper/wiki/Dependency-Injection) | ASP.NET Core / DI integration |
+| [Advanced Features](https://github.com/eggspot/EggMapper/wiki/Advanced-Features) | `ForMember`, conditions, hooks, etc. |
+| [Performance](https://github.com/eggspot/EggMapper/wiki/Performance) | Benchmark methodology & tips |
+| [API Reference](https://github.com/eggspot/EggMapper/wiki/API-Reference) | Full public API surface |
 
 ## Contributing
 
@@ -119,3 +142,4 @@ Contributions are welcome! Please open an issue or pull request on [GitHub](http
 ---
 
 *Powered by [Eggspot](https://eggspot.app)*
+
