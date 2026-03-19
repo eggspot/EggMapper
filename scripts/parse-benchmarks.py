@@ -35,11 +35,14 @@ from pathlib import Path
 
 # ── Canonical benchmark class → display title ──────────────────────────────
 BENCHMARK_ORDER: list[tuple[str, str]] = [
-    ("FlatMappingBenchmark",  "🔵 Flat Mapping — simple property copy"),
-    ("DeepTypeBenchmark",     "🟣 Deep Mapping — nested objects (2 levels)"),
-    ("CollectionBenchmark",   "🟠 Collection Mapping — 100-item `List<T>`"),
-    ("ComplexTypeBenchmark",  "🟢 Complex Mapping — nested objects + collections"),
-    ("StartupBenchmark",      "⚪ Startup / Configuration time"),
+    ("FlatMappingBenchmark",      "🔵 Flat Mapping — 10-property object"),
+    ("FlatteningBenchmark",       "🟡 Flattening — 2 nested objects → 8 flat properties"),
+    ("DeepTypeBenchmark",         "🟣 Deep Mapping — 2 nested address objects"),
+    ("ComplexTypeBenchmark",      "🟢 Complex Mapping — nested object + collection"),
+    ("CollectionBenchmark",       "🟠 Collection — 100-item `List<T>`"),
+    ("DeepCollectionBenchmark",   "🔴 Deep Collection — 100 items with nested objects"),
+    ("LargeCollectionBenchmark",  "⚫ Large Collection — 1,000-item `List<T>`"),
+    ("StartupBenchmark",          "⚪ Startup / Configuration time"),
 ]
 
 COLUMN_LEGEND = (

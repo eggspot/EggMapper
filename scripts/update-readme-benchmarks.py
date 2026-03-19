@@ -35,11 +35,14 @@ END_MARKER   = "<!-- BENCHMARK_RESULTS_END -->"
 
 # Canonical order and short labels for the README summary
 BENCHMARK_ORDER: list[tuple[str, str]] = [
-    ("FlatMappingBenchmark",  "🔵 Flat Mapping"),
-    ("DeepTypeBenchmark",     "🟣 Deep Mapping (nested)"),
-    ("CollectionBenchmark",   "🟠 Collection (100 items)"),
-    ("ComplexTypeBenchmark",  "🟢 Complex Mapping"),
-    ("StartupBenchmark",      "⚪ Startup / Config"),
+    ("FlatMappingBenchmark",      "🔵 Flat Mapping (10 properties)"),
+    ("FlatteningBenchmark",       "🟡 Flattening"),
+    ("DeepTypeBenchmark",         "🟣 Deep Mapping (2 nested objects)"),
+    ("ComplexTypeBenchmark",      "🟢 Complex Mapping (nested + collection)"),
+    ("CollectionBenchmark",       "🟠 Collection (100 items)"),
+    ("DeepCollectionBenchmark",   "🔴 Deep Collection (100 items, nested)"),
+    ("LargeCollectionBenchmark",  "⚫ Large Collection (1,000 items)"),
+    ("StartupBenchmark",          "⚪ Startup / Config"),
 ]
 
 COLUMN_LEGEND = (
@@ -51,6 +54,11 @@ COLUMN_LEGEND = (
     "`Ratio` = vs Manual baseline · "
     "`Rank` = 1 is fastest · "
     "`Allocated` = heap / op"
+)
+
+COMPETITORS_NOTE = (
+    "> **Competitors tested:** EggMapper, AutoMapper, Mapster, "
+    "Mapperly (source-gen), AgileMapper"
 )
 
 # Absolute URL — works from README, NuGet, and anywhere else
@@ -102,6 +110,8 @@ def build_performance_section(artifacts_dir: str) -> str:
         ]
 
     parts += [
+        COMPETITORS_NOTE,
+        "",
         COLUMN_LEGEND,
         "",
     ]
@@ -131,7 +141,7 @@ def build_performance_section(artifacts_dir: str) -> str:
     parts += [
         "---",
         "",
-        f"*Benchmarks run automatically on every push to `main`. "
+        f"*Benchmarks run automatically on every push to `main` with .NET 10. "
         f"[See workflow]({_WORKFLOW_URL})*",
         "",
         END_MARKER,

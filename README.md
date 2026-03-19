@@ -130,7 +130,13 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Configuration validation
 
 <!-- BENCHMARK_RESULTS_START -->
-<!-- Auto-updated by CI on push to main. See .github/workflows/benchmarks.yml -->
+
+> **Competitors tested:** EggMapper, AutoMapper, Mapster, Mapperly (source-gen), AgileMapper
+
+> **Column guide:** `Mean` = avg time · `Error` = ½ CI · `StdDev` = std dev · `Min`/`Median`/`Max` = range · `Ratio` = vs Manual baseline · `Rank` = 1 is fastest · `Allocated` = heap / op
+
+*Detailed benchmark tables are auto-generated on every push to `main`. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
+
 <!-- BENCHMARK_RESULTS_END -->
 
 ## Documentation
