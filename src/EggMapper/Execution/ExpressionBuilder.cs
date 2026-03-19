@@ -301,47 +301,41 @@ internal static class ExpressionBuilder
 
         elemStmts.Add(elemDestVar);
 
-        // Now build the list mapping: (IList<TSrc> source) => { var list = new List<TDst>(count); for (...) { inline map } return list; }
-        var ilistSrcType = typeof(IList<>).MakeGenericType(srcElem);
+        // Build the list mapping using array-based construction for maximum speed:
+        // (List<TSrc> source) => { var arr = new TDst[count]; for (...) arr[i] = map(source[i]); return new List<TDst>(arr); }
+        // Using List<T> (not IList<T>) allows JIT to devirtualize Count and indexer.
+        var listSrcType = typeof(List<>).MakeGenericType(srcElem);
         var listDestType = typeof(List<>).MakeGenericType(destElem);
-        var srcListParam = Expression.Parameter(ilistSrcType, "source");
+        var arrDestType = destElem.MakeArrayType();
+        var srcListParam = Expression.Parameter(listSrcType, "source");
 
-        var listVar = Expression.Variable(listDestType, "result");
+        var arrVar = Expression.Variable(arrDestType, "arr");
         var iVar = Expression.Variable(typeof(int), "i");
         var countVar = Expression.Variable(typeof(int), "count");
         var breakLabel = Expression.Label("brk");
 
-        var icolType = typeof(ICollection<>).MakeGenericType(srcElem);
-        var countProp = icolType.GetProperty("Count")!;
-        var itemProp = ilistSrcType.GetProperties()
-            .FirstOrDefault(p => p.GetIndexParameters().Length == 1
-                && p.GetIndexParameters()[0].ParameterType == typeof(int));
-        if (itemProp == null) return null;
+        var countProp = listSrcType.GetProperty("Count")!;
+        var itemProp = listSrcType.GetProperty("Item")!; // List<T>.this[int]
 
-        var listCtor = listDestType.GetConstructor(new[] { typeof(int) })!;
-        var addMethod = listDestType.GetMethod("Add")!;
+        // new List<TDst>(TDst[]) — use the IEnumerable<T> constructor
+        var listCtor = listDestType.GetConstructor(new[] { typeof(IEnumerable<>).MakeGenericType(destElem) })!;
 
-        // Substitute elemSrcParam with source[i] in the element body
-        var elemBody = Expression.Block(new[] { elemDestVar }, elemStmts);
-
-        // Build loop: for (int i = 0; i < count; i++) { es = source[i]; ... list.Add(ed); }
+        // Build: arr[i] = mapped_element
         var indexAccess = Expression.MakeIndex(srcListParam, itemProp, new[] { (Expression)iVar });
+        var arrAccess = Expression.ArrayAccess(arrVar, iVar);
 
-        // Replace elemSrcParam references by using a let-binding
         var loopBodyStmts = new List<Expression>();
-        // Assign es = source[i]
         loopBodyStmts.Add(Expression.Assign(elemSrcParam, indexAccess));
-        // Inline element mapping statements (skip the first Assign to elemDestVar — we add it)
-        for (int idx = 0; idx < elemStmts.Count - 1; idx++) // -1 to skip the final "elemDestVar" return
+        for (int idx = 0; idx < elemStmts.Count - 1; idx++)
             loopBodyStmts.Add(elemStmts[idx]);
-        // list.Add(ed)
-        loopBodyStmts.Add(Expression.Call(listVar, addMethod, elemDestVar));
+        // arr[i] = ed  (direct array write — no bounds check in JIT-optimized loops)
+        loopBodyStmts.Add(Expression.Assign(arrAccess, elemDestVar));
         loopBodyStmts.Add(Expression.PostIncrementAssign(iVar));
 
         var fullBody = Expression.Block(
-            new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar },
-            Expression.Assign(countVar, Expression.Property(Expression.Convert(srcListParam, icolType), countProp)),
-            Expression.Assign(listVar, Expression.New(listCtor, countVar)),
+            new[] { arrVar, iVar, countVar, elemSrcParam, elemDestVar },
+            Expression.Assign(countVar, Expression.Property(srcListParam, countProp)),
+            Expression.Assign(arrVar, Expression.NewArrayBounds(destElem, countVar)),
             Expression.Assign(iVar, Expression.Constant(0)),
             Expression.Loop(
                 Expression.IfThenElse(
@@ -349,9 +343,9 @@ internal static class ExpressionBuilder
                     Expression.Block(loopBodyStmts),
                     Expression.Break(breakLabel)),
                 breakLabel),
-            listVar);
+            Expression.New(listCtor, arrVar));
 
-        var funcType = typeof(Func<,>).MakeGenericType(ilistSrcType, listDestType);
+        var funcType = typeof(Func<,>).MakeGenericType(listSrcType, listDestType);
         return Expression.Lambda(funcType, fullBody, srcListParam).Compile();
     }
 

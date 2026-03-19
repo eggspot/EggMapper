@@ -102,22 +102,22 @@ public sealed class Mapper : IMapper
         if (source == null) throw new ArgumentNullException(nameof(source));
 
         // Ultra-fast path: check per-mapper list cache first (zero dict lookups after warm-up)
-        if (source is IList<TSource> ilist)
+        if (source is List<TSource> directList)
         {
             var cachedListDel = ListCache<TSource, TDestination>.GetCached(this);
             if (cachedListDel != null)
-                return cachedListDel(ilist);
+                return cachedListDel(directList);
+
+            var key0 = new TypePair(typeof(TSource), typeof(TDestination));
+            if (_config.FrozenCtxFreeListMaps.TryGetValue(key0, out var listDel0))
+            {
+                var typedListDel = (Func<List<TSource>, List<TDestination>>)listDel0;
+                ListCache<TSource, TDestination>.SetCached(this, typedListDel);
+                return typedListDel(directList);
+            }
         }
 
         var key = new TypePair(typeof(TSource), typeof(TDestination));
-
-        // Ctx-free list delegate: entire collection mapping compiled as single expression tree
-        if (source is IList<TSource> lst2 && _config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDel))
-        {
-            var typedListDel = (Func<IList<TSource>, List<TDestination>>)listDel;
-            ListCache<TSource, TDestination>.SetCached(this, typedListDel);
-            return typedListDel(lst2);
-        }
 
         // Ctx-free element delegate: per-element typed delegate
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
@@ -200,10 +200,10 @@ public sealed class Mapper : IMapper
     private static class ListCache<TSource, TDestination>
     {
         private static Mapper? _cachedMapper;
-        private static Func<IList<TSource>, List<TDestination>>? _cachedDelegate;
+        private static Func<List<TSource>, List<TDestination>>? _cachedDelegate;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Func<IList<TSource>, List<TDestination>>? GetCached(Mapper mapper)
+        public static Func<List<TSource>, List<TDestination>>? GetCached(Mapper mapper)
         {
             if (ReferenceEquals(_cachedMapper, mapper))
                 return _cachedDelegate;
@@ -211,7 +211,7 @@ public sealed class Mapper : IMapper
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void SetCached(Mapper mapper, Func<IList<TSource>, List<TDestination>> del)
+        public static void SetCached(Mapper mapper, Func<List<TSource>, List<TDestination>> del)
         {
             _cachedDelegate = del;
             _cachedMapper = mapper;
