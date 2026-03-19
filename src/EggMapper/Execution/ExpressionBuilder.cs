@@ -89,7 +89,9 @@ internal static class ExpressionBuilder
     /// <see cref="Mapper.MapList{TSource,TDestination}"/>.
     /// Returns <c>null</c> when the ctx-free path is not applicable.
     /// </summary>
-    public static Delegate? TryBuildCtxFreeDelegate(TypeMap typeMap)
+    public static Delegate? TryBuildCtxFreeDelegate(
+        TypeMap typeMap,
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
     {
         // Same bailout conditions as TryBuildTypedDelegate
         if (typeMap.BeforeMapAction != null) return null;
@@ -161,7 +163,7 @@ internal static class ExpressionBuilder
                     string.Equals(p.Name, propMap.SourceMemberName, StringComparison.OrdinalIgnoreCase));
                 if (srcProp == null) continue;
 
-                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty);
+                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty, allTypeMaps);
                 if (assignExpr == null) return null;
                 stmts.Add(assignExpr);
             }
@@ -177,13 +179,20 @@ internal static class ExpressionBuilder
                 string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
             if (srcProp == null)
             {
-                // Flattened source properties need ctx at runtime → bail out
+                // Try inline flattened assignment
+                var flatExpr = TryBuildTypedFlattenedAssign(srcParam, dVar, destProp, srcDetails);
+                if (flatExpr != null)
+                {
+                    stmts.Add(flatExpr);
+                    continue;
+                }
+
                 if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
                     return null;
                 continue;
             }
 
-            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp);
+            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
             if (assignExpr == null) return null;
             stmts.Add(assignExpr);
         }
@@ -197,6 +206,153 @@ internal static class ExpressionBuilder
     }
 
     /// <summary>
+    /// Builds a compiled <c>Func&lt;IList&lt;TSource&gt;, List&lt;TDestination&gt;&gt;</c>
+    /// that maps an entire collection in a single expression tree — no per-element
+    /// delegate call overhead. The element mapping is inlined into the loop body.
+    /// Returns null when the element mapping can't be fully inlined.
+    /// </summary>
+    public static Delegate? TryBuildCtxFreeListDelegate(
+        TypeMap elemTypeMap,
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
+    {
+        var srcElem = elemTypeMap.SourceType;
+        var destElem = elemTypeMap.DestinationType;
+
+        // Try building the single-element ctx-free body first
+        if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
+        if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
+        if (ReflectionHelper.IsCollectionType(srcElem) || ReflectionHelper.IsCollectionType(destElem)) return null;
+
+        var destCtor = destElem.GetConstructor(Type.EmptyTypes);
+        if (destCtor == null && elemTypeMap.CustomConstructor == null) return null;
+
+        var srcDetails = TypeDetails.Get(srcElem);
+        var destDetails = TypeDetails.Get(destElem);
+
+        // Build element mapping body inline
+        var elemSrcParam = Expression.Parameter(srcElem, "es");
+        var elemDestVar = Expression.Variable(destElem, "ed");
+        var elemStmts = new List<Expression>();
+
+        Expression newDestExpr = elemTypeMap.CustomConstructor != null
+            ? Expression.Convert(
+                Expression.Invoke(Expression.Constant(elemTypeMap.CustomConstructor),
+                    Expression.Convert(elemSrcParam, typeof(object))),
+                destElem)
+            : (Expression)Expression.New(destCtor!);
+        elemStmts.Add(Expression.Assign(elemDestVar, newDestExpr));
+
+        var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var propMap in elemTypeMap.PropertyMaps)
+        {
+            processedProps.Add(propMap.DestinationProperty.Name);
+            if (propMap.Ignored) continue;
+            if (propMap.Condition != null || propMap.FullCondition != null
+                || propMap.PreCondition != null || propMap.HasNullSubstitute
+                || propMap.CustomResolver != null)
+                return null;
+
+            if (propMap.HasUseValue)
+            {
+                try
+                {
+                    elemStmts.Add(Expression.Assign(
+                        Expression.Property(elemDestVar, propMap.DestinationProperty),
+                        Expression.Convert(Expression.Constant(propMap.UseValue), propMap.DestinationProperty.PropertyType)));
+                }
+                catch { return null; }
+                continue;
+            }
+
+            if (propMap.SourceMemberName != null)
+            {
+                var sp = srcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, propMap.SourceMemberName, StringComparison.OrdinalIgnoreCase));
+                if (sp == null) continue;
+                var a = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, sp, propMap.DestinationProperty, allTypeMaps);
+                if (a == null) return null;
+                elemStmts.Add(a);
+            }
+        }
+
+        foreach (var destProp in destDetails.WritableProperties)
+        {
+            if (processedProps.Contains(destProp.Name)) continue;
+            processedProps.Add(destProp.Name);
+
+            var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
+                string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
+            if (srcProp == null)
+            {
+                var flatExpr = TryBuildTypedFlattenedAssign(elemSrcParam, elemDestVar, destProp, srcDetails);
+                if (flatExpr != null) { elemStmts.Add(flatExpr); continue; }
+                if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails)) return null;
+                continue;
+            }
+
+            var assign = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, srcProp, destProp, allTypeMaps);
+            if (assign == null) return null;
+            elemStmts.Add(assign);
+        }
+
+        elemStmts.Add(elemDestVar);
+
+        // Now build the list mapping: (IList<TSrc> source) => { var list = new List<TDst>(count); for (...) { inline map } return list; }
+        var ilistSrcType = typeof(IList<>).MakeGenericType(srcElem);
+        var listDestType = typeof(List<>).MakeGenericType(destElem);
+        var srcListParam = Expression.Parameter(ilistSrcType, "source");
+
+        var listVar = Expression.Variable(listDestType, "result");
+        var iVar = Expression.Variable(typeof(int), "i");
+        var countVar = Expression.Variable(typeof(int), "count");
+        var breakLabel = Expression.Label("brk");
+
+        var icolType = typeof(ICollection<>).MakeGenericType(srcElem);
+        var countProp = icolType.GetProperty("Count")!;
+        var itemProp = ilistSrcType.GetProperties()
+            .FirstOrDefault(p => p.GetIndexParameters().Length == 1
+                && p.GetIndexParameters()[0].ParameterType == typeof(int));
+        if (itemProp == null) return null;
+
+        var listCtor = listDestType.GetConstructor(new[] { typeof(int) })!;
+        var addMethod = listDestType.GetMethod("Add")!;
+
+        // Substitute elemSrcParam with source[i] in the element body
+        var elemBody = Expression.Block(new[] { elemDestVar }, elemStmts);
+
+        // Build loop: for (int i = 0; i < count; i++) { es = source[i]; ... list.Add(ed); }
+        var indexAccess = Expression.MakeIndex(srcListParam, itemProp, new[] { (Expression)iVar });
+
+        // Replace elemSrcParam references by using a let-binding
+        var loopBodyStmts = new List<Expression>();
+        // Assign es = source[i]
+        loopBodyStmts.Add(Expression.Assign(elemSrcParam, indexAccess));
+        // Inline element mapping statements (skip the first Assign to elemDestVar — we add it)
+        for (int idx = 0; idx < elemStmts.Count - 1; idx++) // -1 to skip the final "elemDestVar" return
+            loopBodyStmts.Add(elemStmts[idx]);
+        // list.Add(ed)
+        loopBodyStmts.Add(Expression.Call(listVar, addMethod, elemDestVar));
+        loopBodyStmts.Add(Expression.PostIncrementAssign(iVar));
+
+        var fullBody = Expression.Block(
+            new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar },
+            Expression.Assign(countVar, Expression.Property(Expression.Convert(srcListParam, icolType), countProp)),
+            Expression.Assign(listVar, Expression.New(listCtor, countVar)),
+            Expression.Assign(iVar, Expression.Constant(0)),
+            Expression.Loop(
+                Expression.IfThenElse(
+                    Expression.LessThan(iVar, countVar),
+                    Expression.Block(loopBodyStmts),
+                    Expression.Break(breakLabel)),
+                breakLabel),
+            listVar);
+
+        var funcType = typeof(Func<,>).MakeGenericType(ilistSrcType, listDestType);
+        return Expression.Lambda(funcType, fullBody, srcListParam).Compile();
+    }
+
+    /// <summary>
     /// Builds a typed assignment expression for a property pair without needing
     /// a <see cref="ResolutionContext"/> parameter.  Returns <c>null</c> when the
     /// assignment would require runtime context (nested registered maps, collection
@@ -206,14 +362,20 @@ internal static class ExpressionBuilder
         ParameterExpression srcParam,
         ParameterExpression dVar,
         PropertyInfo srcProp,
-        PropertyInfo destProp)
+        PropertyInfo destProp,
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
     {
         var srcType    = srcProp.PropertyType;
         var destType   = destProp.PropertyType;
         var srcAccess  = Expression.Property(srcParam, srcProp);
         var destAccess = Expression.Property(dVar, destProp);
 
-        // Collection properties require ctx to map elements → bail out
+        // ── Collection property — try to inline element mapping ──────────────
+        if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
+        {
+            if (allTypeMaps == null) return null;
+            return TryBuildCtxFreeCollectionAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
+        }
         if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
             return null;
 
@@ -246,8 +408,13 @@ internal static class ExpressionBuilder
             return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
         }
 
-        // Nested reference-type registered maps require ctx → bail out for ctx-free path
-        // (The caller will fall through to the ctx-aware delegate.)
+        // ── Nested reference type — try to inline child map ──────────────────
+        if (!srcType.IsValueType && allTypeMaps != null)
+        {
+            var nested = TryBuildCtxFreeNestedAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
+            if (nested != null) return nested;
+        }
+
         if (!srcType.IsValueType)
             return null;
 
@@ -259,6 +426,258 @@ internal static class ExpressionBuilder
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Builds an inlined nested object mapping for the ctx-free path.
+    /// Emits: if (src.Prop != null) { var cd = new TDest(); cd.X = src.Prop.X; ... d.Prop = cd; }
+    /// </summary>
+    private static Expression? TryBuildCtxFreeNestedAssign(
+        ParameterExpression srcParam,
+        ParameterExpression dVar,
+        PropertyInfo srcProp,
+        PropertyInfo destProp,
+        Dictionary<TypePair, TypeMap> allTypeMaps)
+    {
+        var srcType = srcProp.PropertyType;
+        var destType = destProp.PropertyType;
+        var typePair = new TypePair(srcType, destType);
+
+        if (!allTypeMaps.TryGetValue(typePair, out var childTypeMap))
+            return null;
+
+        // Only inline simple child maps
+        if (childTypeMap.BeforeMapAction != null || childTypeMap.AfterMapAction != null) return null;
+        if (childTypeMap.MaxDepth > 0 || childTypeMap.BaseMapTypePair.HasValue) return null;
+        if (childTypeMap.PropertyMaps.Any(pm =>
+            pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+            || pm.HasNullSubstitute || pm.CustomResolver != null))
+            return null;
+
+        // Self-referencing guard
+        if (srcType == destType) return null;
+
+        var childDestCtor = destType.GetConstructor(Type.EmptyTypes);
+        if (childDestCtor == null && childTypeMap.CustomConstructor == null) return null;
+
+        var childSrcDetails = TypeDetails.Get(srcType);
+        var childDestDetails = TypeDetails.Get(destType);
+
+        var srcAccess = Expression.Property(srcParam, srcProp);
+        var childSrcVar = Expression.Variable(srcType, "ns_" + srcProp.Name);
+        var childDestVar = Expression.Variable(destType, "nd_" + destProp.Name);
+        var childStmts = new List<Expression>();
+
+        childStmts.Add(Expression.Assign(childSrcVar, srcAccess));
+
+        Expression newExpr = childTypeMap.CustomConstructor != null
+            ? Expression.Convert(
+                Expression.Invoke(Expression.Constant(childTypeMap.CustomConstructor),
+                    Expression.Convert(childSrcVar, typeof(object))),
+                destType)
+            : (Expression)Expression.New(childDestCtor!);
+        childStmts.Add(Expression.Assign(childDestVar, newExpr));
+
+        var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pm in childTypeMap.PropertyMaps)
+        {
+            processedProps.Add(pm.DestinationProperty.Name);
+            if (pm.Ignored) continue;
+            if (pm.HasUseValue)
+            {
+                try
+                {
+                    childStmts.Add(Expression.Assign(
+                        Expression.Property(childDestVar, pm.DestinationProperty),
+                        Expression.Convert(Expression.Constant(pm.UseValue), pm.DestinationProperty.PropertyType)));
+                }
+                catch { return null; }
+                continue;
+            }
+            if (pm.SourceMemberName != null)
+            {
+                var cSrcProp = childSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, pm.SourceMemberName, StringComparison.OrdinalIgnoreCase));
+                if (cSrcProp == null) continue;
+                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
+                if (assign == null) return null;
+                childStmts.Add(assign);
+            }
+        }
+
+        foreach (var cDestProp in childDestDetails.WritableProperties)
+        {
+            if (processedProps.Contains(cDestProp.Name)) continue;
+            processedProps.Add(cDestProp.Name);
+
+            var cSrcProp = childSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                string.Equals(p.Name, cDestProp.Name, StringComparison.OrdinalIgnoreCase));
+            if (cSrcProp == null) continue;
+
+            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
+            if (assign == null) return null;
+            childStmts.Add(assign);
+        }
+
+        childStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
+
+        var block = Expression.Block(new[] { childSrcVar, childDestVar }, childStmts);
+
+        return Expression.IfThen(
+            Expression.ReferenceNotEqual(
+                Expression.Convert(srcAccess, typeof(object)),
+                Expression.Constant(null, typeof(object))),
+            block);
+    }
+
+    /// <summary>
+    /// Builds an inlined collection mapping for the ctx-free path.
+    /// Emits: if (src.Coll != null) { var list = new List&lt;T&gt;(count); for (...) list.Add(mapElem(...)); d.Coll = list; }
+    /// </summary>
+    private static Expression? TryBuildCtxFreeCollectionAssign(
+        ParameterExpression srcParam,
+        ParameterExpression dVar,
+        PropertyInfo srcProp,
+        PropertyInfo destProp,
+        Dictionary<TypePair, TypeMap> allTypeMaps)
+    {
+        var srcType = srcProp.PropertyType;
+        var destType = destProp.PropertyType;
+        var srcElem = ReflectionHelper.GetCollectionElementType(srcType);
+        var destElem = ReflectionHelper.GetCollectionElementType(destType);
+        if (srcElem == null || destElem == null) return null;
+
+        var ilistSrcType = typeof(IList<>).MakeGenericType(srcElem);
+        var listDestType = typeof(List<>).MakeGenericType(destElem);
+        if (!ilistSrcType.IsAssignableFrom(srcType) || !destType.IsAssignableFrom(listDestType))
+            return null;
+
+        // Build element mapping lambda: Func<TSrcElem, TDestElem>
+        var elemTypePair = new TypePair(srcElem, destElem);
+        Expression? elemMapExpr = null;
+
+        if (srcElem == destElem)
+        {
+            // Same type — direct copy
+            // No element mapping needed, just copy elements
+        }
+        else if (allTypeMaps.TryGetValue(elemTypePair, out var elemTypeMap))
+        {
+            // Build an inline element mapper using TryBuildSimpleInlineAssign
+            var elemCtor = destElem.GetConstructor(Type.EmptyTypes);
+            if (elemCtor == null) return null;
+            if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
+            if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
+            if (elemTypeMap.PropertyMaps.Any(pm =>
+                pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+                || pm.HasNullSubstitute || pm.CustomResolver != null))
+                return null;
+
+            // We'll build the mapping as a helper method call
+            // Actually, for simplicity and maximum speed, build a Func<TSrcElem, TDestElem>
+            var elemSrcParam = Expression.Parameter(srcElem, "es");
+            var elemDestVar = Expression.Variable(destElem, "ed");
+            var elemStmts = new List<Expression>();
+            elemStmts.Add(Expression.Assign(elemDestVar, Expression.New(elemCtor)));
+
+            var elemSrcDetails = TypeDetails.Get(srcElem);
+            var elemDestDetails = TypeDetails.Get(destElem);
+            var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pm in elemTypeMap.PropertyMaps)
+            {
+                processed.Add(pm.DestinationProperty.Name);
+                if (pm.Ignored) continue;
+                if (pm.SourceMemberName != null)
+                {
+                    var sp = elemSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                        string.Equals(p.Name, pm.SourceMemberName, StringComparison.OrdinalIgnoreCase));
+                    if (sp == null) continue;
+                    var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, pm.DestinationProperty);
+                    if (a == null) return null;
+                    elemStmts.Add(a);
+                }
+            }
+
+            foreach (var dp in elemDestDetails.WritableProperties)
+            {
+                if (processed.Contains(dp.Name)) continue;
+                processed.Add(dp.Name);
+                var sp = elemSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, dp.Name, StringComparison.OrdinalIgnoreCase));
+                if (sp == null) continue;
+                var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, dp);
+                if (a == null) return null;
+                elemStmts.Add(a);
+            }
+
+            elemStmts.Add(elemDestVar);
+            var elemBody = Expression.Block(new[] { elemDestVar }, elemStmts);
+            var elemFuncType = typeof(Func<,>).MakeGenericType(srcElem, destElem);
+            elemMapExpr = Expression.Lambda(elemFuncType, elemBody, elemSrcParam);
+        }
+        else
+        {
+            return null; // Can't map collection elements without registered map
+        }
+
+        // Build: if (src.Coll != null) { var list = new List<T>(src.Coll.Count); for (i...) list.Add(map(src.Coll[i])); d.Coll = list; }
+        var srcAccess = Expression.Property(srcParam, srcProp);
+        var collVar = Expression.Variable(ilistSrcType, "col_" + srcProp.Name);
+        var listVar = Expression.Variable(listDestType, "lst_" + destProp.Name);
+        var iVar = Expression.Variable(typeof(int), "i_" + srcProp.Name);
+        var countVar = Expression.Variable(typeof(int), "cnt_" + srcProp.Name);
+        var breakLabel = Expression.Label("brk_" + srcProp.Name);
+
+        // IList<T>.Count is inherited from ICollection<T>
+        var icolType = typeof(ICollection<>).MakeGenericType(srcElem);
+        var countProp = icolType.GetProperty("Count")!;
+        // IList<T> indexer: this[int index]
+        var itemProp = ilistSrcType.GetProperties()
+            .FirstOrDefault(p => p.GetIndexParameters().Length == 1
+                && p.GetIndexParameters()[0].ParameterType == typeof(int));
+        if (itemProp == null) return null;
+        var listCtor = listDestType.GetConstructor(new[] { typeof(int) })!;
+        var addMethod = listDestType.GetMethod("Add")!;
+
+        // Loop body: get element and add mapped version
+        var elemAccess = Expression.MakeIndex(collVar, itemProp, new[] { (Expression)iVar });
+
+        Expression addExpr;
+        if (elemMapExpr != null)
+        {
+            // Use compiled lambda for element mapping
+            var compiledElemMap = Expression.Invoke(elemMapExpr, elemAccess);
+            addExpr = Expression.Call(listVar, addMethod, compiledElemMap);
+        }
+        else
+        {
+            // Same type — direct add
+            addExpr = Expression.Call(listVar, addMethod, elemAccess);
+        }
+
+        var loop = Expression.Block(
+            new[] { collVar, listVar, iVar, countVar },
+            Expression.Assign(collVar, Expression.Convert(srcAccess, ilistSrcType)),
+            Expression.Assign(countVar, Expression.Property(Expression.Convert(collVar, icolType), countProp)),
+            Expression.Assign(listVar, Expression.New(listCtor, countVar)),
+            Expression.Assign(iVar, Expression.Constant(0)),
+            Expression.Loop(
+                Expression.IfThenElse(
+                    Expression.LessThan(iVar, countVar),
+                    Expression.Block(
+                        addExpr,
+                        Expression.PostIncrementAssign(iVar)),
+                    Expression.Break(breakLabel)),
+                breakLabel),
+            Expression.Assign(Expression.Property(dVar, destProp), Expression.Convert(listVar, destType)));
+
+        return Expression.IfThen(
+            Expression.ReferenceNotEqual(
+                Expression.Convert(srcAccess, typeof(object)),
+                Expression.Constant(null, typeof(object))),
+            loop);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -381,8 +800,15 @@ internal static class ExpressionBuilder
                 string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
             if (srcProp == null)
             {
-                // No direct match — if there's a flattened source we cannot express it
-                // as an inline expression tree; let the flexible path handle the whole map.
+                // Try to build an inline flattened assignment expression
+                var flatExpr = TryBuildTypedFlattenedAssign(sVar, dVar, destProp, srcDetails);
+                if (flatExpr != null)
+                {
+                    stmts.Add(flatExpr);
+                    continue;
+                }
+
+                // If there's a flattened source but we can't inline it, bail out
                 if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
                     return false;
                 continue;
@@ -432,25 +858,47 @@ internal static class ExpressionBuilder
             var destElem = ReflectionHelper.GetCollectionElementType(destType);
             if (srcElem == null || destElem == null) return null;
 
-            var elemPair    = new TypePair(srcElem, destElem);
+            var elemPair = new TypePair(srcElem, destElem);
+
+            // Fast typed path for IList<TSrc> → List<TDest> when element mapper is available
+            var ilistSrcType = typeof(IList<>).MakeGenericType(srcElem);
+            var listDestType = typeof(List<>).MakeGenericType(destElem);
+            if (ilistSrcType.IsAssignableFrom(srcType)
+                && destType.IsAssignableFrom(listDestType)
+                && compiledMaps.TryGetValue(elemPair, out var elemDel))
+            {
+                var typedMethod = _mapListTypedMethod.MakeGenericMethod(srcElem, destElem);
+                var callExpr = Expression.Call(
+                    typedMethod,
+                    Expression.Convert(srcAccess, ilistSrcType),
+                    Expression.Constant(elemDel),
+                    ctxParam);
+
+                return Expression.IfThen(
+                    Expression.ReferenceNotEqual(
+                        Expression.Convert(srcAccess, typeof(object)),
+                        Expression.Constant(null, typeof(object))),
+                    Expression.Assign(destAccess, Expression.Convert(callExpr, destType)));
+            }
+
+            // Fallback: untyped collection mapping
             var mapsConst   = Expression.Constant(compiledMaps);
             var pairConst   = Expression.Constant(elemPair);
             var destTConst  = Expression.Constant(destType);
             var srcEConst   = Expression.Constant(srcElem);
             var destEConst  = Expression.Constant(destElem);
 
-            var callExpr = Expression.Call(
+            var fallbackCallExpr = Expression.Call(
                 _mapCollectionPropHelperMethod,
                 Expression.Convert(srcAccess, typeof(object)),
                 mapsConst, pairConst, destTConst, srcEConst, destEConst,
                 ctxParam);
 
-            // Assign only when the source collection is non-null
             return Expression.IfThen(
                 Expression.ReferenceNotEqual(
                     Expression.Convert(srcAccess, typeof(object)),
                     Expression.Constant(null, typeof(object))),
-                Expression.Assign(destAccess, Expression.Convert(callExpr, destType)));
+                Expression.Assign(destAccess, Expression.Convert(fallbackCallExpr, destType)));
         }
 
         // ── Same type: direct assignment (NO boxing for int/bool/double/etc.) ─
@@ -483,17 +931,21 @@ internal static class ExpressionBuilder
         }
 
         // ── Registered nested TypeMap (reference type source) ─────────────────
-        // When the child map is already compiled (guaranteed when the caller uses
-        // TopologicalOrder), embed its delegate directly as a constant — zero
-        // runtime dictionary lookup in the hot path.
         var typePair = new TypePair(srcType, destType);
         if (allTypeMaps.ContainsKey(typePair) && !srcType.IsValueType)
         {
+            // Try to inline the child map's property assignments directly into the
+            // parent expression tree — eliminates delegate call + boxing overhead.
+            var inlinedExpr = TryBuildInlinedNestedAssign(
+                sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam);
+            if (inlinedExpr != null)
+                return inlinedExpr;
+
+            // Fallback: embed compiled delegate (still has boxing overhead)
             Expression callExpr;
 
             if (compiledMaps.TryGetValue(typePair, out var childDel))
             {
-                // Direct embed: Expression.Invoke on a constant delegate — no lookup.
                 callExpr = Expression.Invoke(
                     Expression.Constant(childDel),
                     Expression.Convert(srcAccess, typeof(object)),
@@ -502,8 +954,6 @@ internal static class ExpressionBuilder
             }
             else
             {
-                // Child not yet compiled (should not happen with topological order),
-                // fall back to runtime lookup via the ConcurrentDictionary.
                 callExpr = Expression.Call(
                     _mapNestedHelperMethod,
                     Expression.Convert(srcAccess, typeof(object)),
@@ -527,6 +977,246 @@ internal static class ExpressionBuilder
         }
 
         // Can't express inline — signal fall-back
+        return null;
+    }
+
+    /// <summary>
+    /// Builds an inlined nested object mapping — instead of calling a child delegate
+    /// (which boxes src/dest), we directly emit the property assignments for the child
+    /// type into the parent expression tree. This eliminates delegate overhead and boxing.
+    /// Only inlines simple flat child maps (no further nesting, no collections).
+    /// </summary>
+    private static Expression? TryBuildInlinedNestedAssign(
+        ParameterExpression sVar,
+        ParameterExpression dVar,
+        PropertyInfo srcProp,
+        PropertyInfo destProp,
+        Dictionary<TypePair, TypeMap> allTypeMaps,
+        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        ParameterExpression ctxParam)
+    {
+        var srcType = srcProp.PropertyType;
+        var destType = destProp.PropertyType;
+        var typePair = new TypePair(srcType, destType);
+
+        if (!allTypeMaps.TryGetValue(typePair, out var childTypeMap))
+            return null;
+
+        // Only inline simple child maps (no hooks, conditions, MaxDepth, inheritance)
+        if (childTypeMap.BeforeMapAction != null) return null;
+        if (childTypeMap.AfterMapAction != null) return null;
+        if (childTypeMap.MaxDepth > 0) return null;
+        if (childTypeMap.BaseMapTypePair.HasValue) return null;
+        if (childTypeMap.PropertyMaps.Any(pm =>
+            pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+            || pm.HasNullSubstitute || pm.CustomResolver != null))
+            return null;
+
+        var childDestCtor = destType.GetConstructor(Type.EmptyTypes);
+        if (childDestCtor == null && childTypeMap.CustomConstructor == null) return null;
+
+        var childSrcDetails = TypeDetails.Get(srcType);
+        var childDestDetails = TypeDetails.Get(destType);
+
+        // Build: if (s.Prop != null) { var cs = s.Prop; var cd = new TDest(); cd.X = cs.X; ... d.Prop = cd; }
+        var srcAccess = Expression.Property(sVar, srcProp);
+        var childSrcVar = Expression.Variable(srcType, "cs_" + srcProp.Name);
+        var childDestVar = Expression.Variable(destType, "cd_" + destProp.Name);
+
+        var childStmts = new List<Expression>();
+        childStmts.Add(Expression.Assign(childSrcVar, srcAccess));
+
+        Expression newChildExpr = childTypeMap.CustomConstructor != null
+            ? Expression.Convert(
+                Expression.Invoke(Expression.Constant(childTypeMap.CustomConstructor),
+                    Expression.Convert(childSrcVar, typeof(object))),
+                destType)
+            : (Expression)Expression.New(childDestCtor!);
+        childStmts.Add(Expression.Assign(childDestVar, newChildExpr));
+
+        var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Process explicit property maps
+        foreach (var pm in childTypeMap.PropertyMaps)
+        {
+            processedProps.Add(pm.DestinationProperty.Name);
+            if (pm.Ignored) continue;
+
+            if (pm.HasUseValue)
+            {
+                try
+                {
+                    childStmts.Add(Expression.Assign(
+                        Expression.Property(childDestVar, pm.DestinationProperty),
+                        Expression.Convert(Expression.Constant(pm.UseValue), pm.DestinationProperty.PropertyType)));
+                }
+                catch { return null; }
+                continue;
+            }
+
+            if (pm.SourceMemberName != null)
+            {
+                var cSrcProp = childSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, pm.SourceMemberName, StringComparison.OrdinalIgnoreCase));
+                if (cSrcProp == null) continue;
+
+                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
+                if (assign == null) return null; // Property needs complex handling; bail out
+                childStmts.Add(assign);
+            }
+        }
+
+        // Convention mapping for remaining properties
+        foreach (var cDestProp in childDestDetails.WritableProperties)
+        {
+            if (processedProps.Contains(cDestProp.Name)) continue;
+            processedProps.Add(cDestProp.Name);
+
+            var cSrcProp = childSrcDetails.ReadableProperties.FirstOrDefault(p =>
+                string.Equals(p.Name, cDestProp.Name, StringComparison.OrdinalIgnoreCase));
+            if (cSrcProp == null) continue;
+
+            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
+            if (assign == null) return null; // Property needs complex handling; bail out
+            childStmts.Add(assign);
+        }
+
+        childStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
+
+        var block = Expression.Block(new[] { childSrcVar, childDestVar }, childStmts);
+
+        return Expression.IfThen(
+            Expression.ReferenceNotEqual(
+                Expression.Convert(srcAccess, typeof(object)),
+                Expression.Constant(null, typeof(object))),
+            block);
+    }
+
+    /// <summary>
+    /// Builds a simple typed property assignment (same type, assignable, or numeric conversion).
+    /// Returns null for complex properties (collections, nested maps) — these cause the
+    /// inlining to bail out and fall back to the delegate approach.
+    /// </summary>
+    private static Expression? TryBuildSimpleInlineAssign(
+        ParameterExpression srcVar, ParameterExpression destVar,
+        PropertyInfo srcProp, PropertyInfo destProp)
+    {
+        var srcType = srcProp.PropertyType;
+        var destType = destProp.PropertyType;
+        var srcAccess = Expression.Property(srcVar, srcProp);
+        var destAccess = Expression.Property(destVar, destProp);
+
+        // Collections or nested registered maps → bail
+        if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
+            return null;
+
+        if (srcType == destType)
+            return Expression.Assign(destAccess, srcAccess);
+
+        if (destType.IsAssignableFrom(srcType))
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        var srcUnderlying = Nullable.GetUnderlyingType(srcType);
+        if (srcUnderlying != null && (destType == srcUnderlying || destType.IsAssignableFrom(srcUnderlying)))
+            return Expression.Assign(destAccess,
+                Expression.Condition(
+                    Expression.Property(srcAccess, "HasValue"),
+                    Expression.Convert(Expression.Property(srcAccess, "Value"), destType),
+                    Expression.Default(destType)));
+
+        var destUnderlying = Nullable.GetUnderlyingType(destType);
+        if (destUnderlying != null && (srcType == destUnderlying || destUnderlying.IsAssignableFrom(srcType)))
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        if (srcType.IsValueType && destType.IsValueType)
+        {
+            try { return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType)); }
+            catch { return null; }
+        }
+
+        // Non-simple (nested reference type, etc.) — bail out
+        return null;
+    }
+
+    /// <summary>
+    /// Builds a typed expression for a flattened property assignment in the typed path.
+    /// E.g., dest.AddressStreet = src.Address?.Street
+    /// </summary>
+    private static Expression? TryBuildTypedFlattenedAssign(
+        ParameterExpression sVar,
+        ParameterExpression dVar,
+        PropertyInfo destProp,
+        TypeDetails srcDetails)
+    {
+        var destName = destProp.Name;
+
+        foreach (var srcProp in srcDetails.ReadableProperties)
+        {
+            if (!destName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
+            var remainder = destName.Substring(srcProp.Name.Length);
+            if (string.IsNullOrEmpty(remainder)) continue;
+
+            var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
+            var nestedProp = nestedDetails.ReadableProperties.FirstOrDefault(p =>
+                string.Equals(p.Name, remainder, StringComparison.OrdinalIgnoreCase));
+
+            if (nestedProp == null) continue;
+
+            var destType = destProp.PropertyType;
+            var nestedType = nestedProp.PropertyType;
+
+            // Only handle directly assignable types (avoid complex conversions)
+            if (!destType.IsAssignableFrom(nestedType))
+            {
+                // Try numeric conversion
+                if (nestedType.IsValueType && destType.IsValueType)
+                {
+                    try
+                    {
+                        var srcAccess = Expression.Property(sVar, srcProp);
+                        var nestedAccess = Expression.Property(srcAccess, nestedProp);
+                        var destAccess = Expression.Property(dVar, destProp);
+                        var converted = Expression.Convert(nestedAccess, destType);
+
+                        if (srcProp.PropertyType.IsValueType)
+                            return Expression.Assign(destAccess, converted);
+
+                        return Expression.IfThen(
+                            Expression.ReferenceNotEqual(
+                                Expression.Convert(srcAccess, typeof(object)),
+                                Expression.Constant(null, typeof(object))),
+                            Expression.Assign(destAccess, converted));
+                    }
+                    catch { continue; }
+                }
+                continue;
+            }
+
+            // Build: if (s.Address != null) d.AddressStreet = s.Address.Street;
+            {
+                var srcAccess = Expression.Property(sVar, srcProp);
+                var nestedAccess = Expression.Property(srcAccess, nestedProp);
+                var destAccess = Expression.Property(dVar, destProp);
+
+                Expression assignExpr;
+                if (nestedType == destType)
+                    assignExpr = Expression.Assign(destAccess, nestedAccess);
+                else
+                    assignExpr = Expression.Assign(destAccess, Expression.Convert(nestedAccess, destType));
+
+                // For value-type intermediate (rare), no null check needed
+                if (srcProp.PropertyType.IsValueType)
+                    return assignExpr;
+
+                // Reference type intermediate: null-check
+                return Expression.IfThen(
+                    Expression.ReferenceNotEqual(
+                        Expression.Convert(srcAccess, typeof(object)),
+                        Expression.Constant(null, typeof(object))),
+                    assignExpr);
+            }
+        }
+
         return null;
     }
 
@@ -577,6 +1267,30 @@ internal static class ExpressionBuilder
         return MapCollectionInternal(
             (IEnumerable)srcColl, destCollType, srcElemType, destElemType, elemPair, maps, ctx);
     }
+
+    /// <summary>
+    /// Generic typed collection mapping helper — avoids boxing for List→List mappings.
+    /// Called from typed expression trees when element mapper delegate is available.
+    /// </summary>
+    internal static List<TDest> MapListTyped<TSrc, TDest>(
+        IList<TSrc> source,
+        Func<object, object?, ResolutionContext, object> elemMapper,
+        ResolutionContext ctx)
+    {
+        var count = source.Count;
+        var result = new List<TDest>(count);
+        for (int i = 0; i < count; i++)
+        {
+            var item = source[i];
+            if (item == null) { result.Add(default!); continue; }
+            result.Add((TDest)elemMapper(item, null, ctx));
+        }
+        return result;
+    }
+
+    private static readonly MethodInfo _mapListTypedMethod =
+        typeof(ExpressionBuilder).GetMethod(nameof(MapListTyped),
+            BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)!;
 
     // ══════════════════════════════════════════════════════════════════════════
     // Flexible action-array path  (full feature set, used as fallback)
@@ -637,24 +1351,26 @@ internal static class ExpressionBuilder
 
         return (object src, object? dest, ResolutionContext ctx) =>
         {
+            // When MaxDepth is set and we've reached the limit, return null
+            // to stop creating nested objects beyond the depth cutoff.
+            if (maxDepth > 0 && ctx.Depth >= maxDepth)
+                return dest!;
+
             var typedDest = dest ?? factory(src);
 
             try
             {
                 beforeMap?.Invoke(src, typedDest);
 
-                if (maxDepth == 0 || ctx.Depth < maxDepth)
+                ctx.Depth++;
+                try
                 {
-                    ctx.Depth++;
-                    try
-                    {
-                        for (int i = 0; i < actionsArray.Length; i++)
-                            actionsArray[i](src, typedDest, ctx);
-                    }
-                    finally
-                    {
-                        ctx.Depth--;
-                    }
+                    for (int i = 0; i < actionsArray.Length; i++)
+                        actionsArray[i](src, typedDest, ctx);
+                }
+                finally
+                {
+                    ctx.Depth--;
                 }
 
                 afterMap?.Invoke(src, typedDest);
@@ -800,6 +1516,53 @@ internal static class ExpressionBuilder
 
         if (destType.IsAssignableFrom(srcType))
         {
+            // For self-referencing same-type reference maps (e.g. TreeNode → TreeNode with MaxDepth),
+            // we need to check for a registered delegate at runtime. The delegate may not be in
+            // compiledMaps yet at compile time for self-referencing types.
+            // Only do this for non-primitive reference types where src == dest type — NOT for
+            // string/object or base-class assignments, as those are always safe to direct-assign.
+            if (!srcType.IsValueType && srcType == destType
+                && srcType != typeof(string) && srcType != typeof(object))
+            {
+                var capturedMaps = compiledMaps;
+                var typePair = new TypePair(srcType, destType);
+
+                if (noGuards)
+                {
+                    return (src, dest, ctx) =>
+                    {
+                        var srcVal = getter(src);
+                        if (srcVal == null) return;
+
+                        if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                        {
+                            setter(dest, nestedDel(srcVal, null, ctx));
+                            return;
+                        }
+
+                        setter(dest, srcVal);
+                    };
+                }
+
+                return (src, dest, ctx) =>
+                {
+                    if (preCondition != null && !preCondition(src)) return;
+                    if (condition != null && !condition(src)) return;
+                    if (fullCondition != null && !fullCondition(src, dest)) return;
+
+                    var srcVal = getter(src);
+                    if (hasNullSub && srcVal == null) { setter(dest, nullSub); return; }
+
+                    if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                    {
+                        setter(dest, nestedDel(srcVal, null, ctx));
+                        return;
+                    }
+
+                    setter(dest, srcVal);
+                };
+            }
+
             if (noGuards)
                 return (src, dest, ctx) => setter(dest, getter(src));
 
@@ -946,6 +1709,9 @@ internal static class ExpressionBuilder
     {
         compiledMaps.TryGetValue(elementTypePair, out var elemMapper);
 
+        // Determine count upfront for pre-sizing when possible
+        int count = source is ICollection col ? col.Count : -1;
+
         object? MapElement(object? elem)
         {
             if (elem == null) return null;
@@ -956,19 +1722,39 @@ internal static class ExpressionBuilder
 
         if (destCollectionType.IsArray)
         {
-            var items = new List<object?>();
+            // When source is IList, we can pre-size the array and avoid the intermediate list
+            if (source is IList srcList)
+            {
+                var arr = Array.CreateInstance(destElemType, srcList.Count);
+                for (int i = 0; i < srcList.Count; i++)
+                    arr.SetValue(MapElement(srcList[i]), i);
+                return arr;
+            }
+
+            var items = count >= 0 ? new List<object?>(count) : new List<object?>();
             foreach (var item in source)
                 items.Add(MapElement(item));
-            var arr = Array.CreateInstance(destElemType, items.Count);
+            var arr2 = Array.CreateInstance(destElemType, items.Count);
             for (int i = 0; i < items.Count; i++)
-                arr.SetValue(items[i], i);
-            return arr;
+                arr2.SetValue(items[i], i);
+            return arr2;
         }
 
         var listType = typeof(List<>).MakeGenericType(destElemType);
         if (destCollectionType.IsAssignableFrom(listType))
         {
-            var list = (IList)Activator.CreateInstance(listType)!;
+            var list = count >= 0
+                ? (IList)Activator.CreateInstance(listType, count)!
+                : (IList)Activator.CreateInstance(listType)!;
+
+            // Use index-based loop for IList sources to avoid enumerator allocation
+            if (source is IList srcList)
+            {
+                for (int i = 0; i < srcList.Count; i++)
+                    list.Add(MapElement(srcList[i]));
+                return list;
+            }
+
             foreach (var item in source)
                 list.Add(MapElement(item));
             return list;
@@ -991,7 +1777,9 @@ internal static class ExpressionBuilder
         }
 
         {
-            var list = (IList)Activator.CreateInstance(listType)!;
+            var list = count >= 0
+                ? (IList)Activator.CreateInstance(listType, count)!
+                : (IList)Activator.CreateInstance(listType)!;
             foreach (var item in source)
                 list.Add(MapElement(item));
             return list;

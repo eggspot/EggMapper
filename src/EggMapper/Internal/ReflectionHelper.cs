@@ -24,18 +24,29 @@ internal static class ReflectionHelper
     {
         if (type == typeof(string)) return false;
         if (type.IsArray) return true;
-        return type.GetInterfaces().Any(i =>
-            i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+        var interfaces = type.GetInterfaces();
+        for (int i = 0; i < interfaces.Length; i++)
+        {
+            var iface = interfaces[i];
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                return true;
+        }
+        return false;
     }
 
     public static Type? GetCollectionElementType(Type type)
     {
         if (type.IsArray) return type.GetElementType();
-        var iface = type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>)
-            ? type
-            : type.GetInterfaces().FirstOrDefault(i =>
-                i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>));
-        return iface?.GetGenericArguments()[0];
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            return type.GetGenericArguments()[0];
+        var interfaces = type.GetInterfaces();
+        for (int i = 0; i < interfaces.Length; i++)
+        {
+            var iface = interfaces[i];
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+                return iface.GetGenericArguments()[0];
+        }
+        return null;
     }
 
     public static bool IsAssignable(Type sourceType, Type destinationType)

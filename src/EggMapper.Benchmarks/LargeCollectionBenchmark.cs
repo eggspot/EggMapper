@@ -7,16 +7,15 @@ namespace EggMapper.Benchmarks;
 
 [MemoryDiagnoser]
 [RankColumn]
-public class CollectionBenchmark
+public class LargeCollectionBenchmark
 {
     private List<ModelObject> _source = null!;
-    private static readonly MapperlyMapper Mapperly = new();
 
     [GlobalSetup]
     public void Setup()
     {
         MapsterConfig.Configure();
-        _source = Enumerable.Range(1, 100).Select(i => new ModelObject
+        _source = Enumerable.Range(1, 1000).Select(i => new ModelObject
         {
             Id = i,
             Name = $"User {i}",
@@ -66,7 +65,7 @@ public class CollectionBenchmark
     public List<ModelDto> Mapster() => _source.Adapt<List<ModelDto>>();
 
     [Benchmark]
-    public List<ModelDto> MapperlyMap() => Mapperly.MapFlatList(_source);
+    public List<ModelDto> MapperlyMap() => new MapperlyMapper().MapFlatList(_source);
 
     [Benchmark]
     public List<ModelDto> AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<List<ModelDto>>();

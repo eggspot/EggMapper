@@ -17,10 +17,17 @@ internal sealed class TypeDetails
     private TypeDetails(Type type)
     {
         Type = type;
-        ReadableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead).ToArray();
-        WritableProperties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanWrite).ToArray();
+        var allProps = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        var readable = new List<PropertyInfo>(allProps.Length);
+        var writable = new List<PropertyInfo>(allProps.Length);
+        for (int i = 0; i < allProps.Length; i++)
+        {
+            var p = allProps[i];
+            if (p.CanRead) readable.Add(p);
+            if (p.CanWrite) writable.Add(p);
+        }
+        ReadableProperties = readable.ToArray();
+        WritableProperties = writable.ToArray();
         Constructors = type.GetConstructors();
     }
 }

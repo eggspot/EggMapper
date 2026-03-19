@@ -5,11 +5,7 @@ using Xunit;
 
 namespace EggMapper.UnitTests;
 
-// MaxDepth requires DIFFERENT source/dest types so the recursive call
-// goes through the TypeMap delegate (which checks depth), rather than
-// direct assignment (which bypasses the TypeMap entirely).
-internal class NodeSrc { public string Name { get; set; } = ""; public NodeSrc? Child { get; set; } }
-internal class NodeDst { public string Name { get; set; } = ""; public NodeDst? Child { get; set; } }
+// MaxDepth reuses NodeSrc/NodeDst from CircularReferenceTests.
 
 public class MaxDepthTests
 {
@@ -33,7 +29,7 @@ public class MaxDepthTests
     }
 
     [Fact]
-    public void MaxDepth_1_maps_root_name_but_not_child_name()
+    public void MaxDepth_1_maps_root_only_child_is_null()
     {
         var mapper = CreateTreeMapper(1);
         var src = BuildChain(3); // L0 -> L1 -> L2
@@ -41,9 +37,8 @@ public class MaxDepthTests
         var dest = mapper.Map<NodeSrc, NodeDst>(src);
 
         dest.Name.Should().Be("L0");
-        // Child node is created but its Name is not mapped (depth limit reached)
-        dest.Child.Should().NotBeNull();
-        dest.Child!.Name.Should().BeEmpty();
+        // MaxDepth(1): root at depth 0 is mapped, child at depth 1 is cut off → null
+        dest.Child.Should().BeNull();
     }
 
     [Fact]
@@ -58,8 +53,7 @@ public class MaxDepthTests
         dest.Child.Should().NotBeNull();
         dest.Child!.Name.Should().Be("L1");
         // Third level not mapped (depth limit)
-        dest.Child.Child.Should().NotBeNull();
-        dest.Child.Child!.Name.Should().BeEmpty();
+        dest.Child.Child.Should().BeNull();
     }
 
     [Fact]

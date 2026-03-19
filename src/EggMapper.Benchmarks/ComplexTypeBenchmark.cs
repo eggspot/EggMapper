@@ -2,6 +2,7 @@ using BenchmarkDotNet.Attributes;
 using EggMapper.Benchmarks.Configs;
 using EggMapper.Benchmarks.Models;
 using Mapster;
+using AgileObjects.AgileMapper;
 
 namespace EggMapper.Benchmarks;
 
@@ -30,21 +31,30 @@ public class ComplexTypeBenchmark
     }
 
     [Benchmark(Baseline = true)]
-    public FooDest Manual() => new FooDest
+    public FooDest Manual()
     {
-        FooId = _source.FooId,
-        FooName = _source.FooName,
-        Inner = new InnerFooDest
+        var innerFoos = new List<InnerFooDest>(_source.InnerFoos.Count);
+        for (int i = 0; i < _source.InnerFoos.Count; i++)
         {
-            InnerFooId = _source.Inner.InnerFooId,
-            InnerFooName = _source.Inner.InnerFooName
-        },
-        InnerFoos = _source.InnerFoos.Select(x => new InnerFooDest
+            var x = _source.InnerFoos[i];
+            innerFoos.Add(new InnerFooDest
+            {
+                InnerFooId = x.InnerFooId,
+                InnerFooName = x.InnerFooName
+            });
+        }
+        return new FooDest
         {
-            InnerFooId = x.InnerFooId,
-            InnerFooName = x.InnerFooName
-        }).ToList()
-    };
+            FooId = _source.FooId,
+            FooName = _source.FooName,
+            Inner = new InnerFooDest
+            {
+                InnerFooId = _source.Inner.InnerFooId,
+                InnerFooName = _source.Inner.InnerFooName
+            },
+            InnerFoos = innerFoos
+        };
+    }
 
     [Benchmark]
     public FooDest EggMapper() => EggMapperConfig.Mapper.Map<Foo, FooDest>(_source);
@@ -54,4 +64,10 @@ public class ComplexTypeBenchmark
 
     [Benchmark]
     public FooDest Mapster() => _source.Adapt<FooDest>();
+
+    [Benchmark]
+    public FooDest MapperlyMap() => new MapperlyMapper().MapComplex(_source);
+
+    [Benchmark]
+    public FooDest AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<FooDest>();
 }

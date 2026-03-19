@@ -1,4 +1,3 @@
-using AutoMapper;
 using BenchmarkDotNet.Attributes;
 using EggMapper.Benchmarks.Models;
 using Mapster;
@@ -24,16 +23,17 @@ public class StartupBenchmark
     }
 
     [Benchmark]
-    public IMapper AutoMapperStartup()
+    public global::AutoMapper.IMapper AutoMapperStartup()
     {
-        var config = new MapperConfiguration(cfg =>
-        {
-            cfg.CreateMap<ModelObject, ModelDto>();
-            cfg.CreateMap<Customer, CustomerDTO>();
-            cfg.CreateMap<Address, AddressDTO>();
-            cfg.CreateMap<Foo, FooDest>();
-            cfg.CreateMap<InnerFoo, InnerFooDest>();
-        });
+        var config = new global::AutoMapper.MapperConfiguration(
+            (global::AutoMapper.IMapperConfigurationExpression cfg) =>
+            {
+                cfg.CreateMap<ModelObject, ModelDto>();
+                cfg.CreateMap<Customer, CustomerDTO>();
+                cfg.CreateMap<Address, AddressDTO>();
+                cfg.CreateMap<Foo, FooDest>();
+                cfg.CreateMap<InnerFoo, InnerFooDest>();
+            }, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
         return config.CreateMapper();
     }
 

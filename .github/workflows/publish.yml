@@ -1,45 +1,50 @@
 name: Publish NuGet
 
-# Every push to main produces a STABLE NuGet release.
+# Fully automatic versioning — every push to main auto-determines the version
+# bump type from commit messages (conventional commits) and publishes.
 #
-# Versioning strategy
-# ───────────────────
-# • Push to main → reads <Version> from EggMapper.csproj → stable package
-#                  → automatically creates and pushes git tag  v<version>
-#                  → if the tag already exists the job is a no-op (same
-#                    version committed twice without bumping csproj)
-# • workflow_dispatch → optional explicit version override (stable)
+# Versioning strategy (zero manual steps)
+# ───────────────────────────────────────
+# Commit message prefix → version bump:
+#   feat:  / feat!:       → minor bump (1.0.0 → 1.1.0)
+#   fix:  / perf: / chore: → patch bump (1.0.0 → 1.0.1)
+#   BREAKING CHANGE / !:  → major bump (1.0.0 → 2.0.0)
+#   (no prefix match)     → patch bump (default)
 #
-# Required secret: NUGET_API_KEY  (repository → Settings → Secrets)
+# Flow:
+#   Push to main → detect bump type from commits since last tag
+#     → bump version in csproj → build → test → pack → publish to NuGet
+#     → create git tag + GitHub Release → commit bumped csproj back to main
 #
-# To release a new version:
-#   1. Update <Version> in src/EggMapper/EggMapper.csproj
-#   2. Push / merge to main
-#   → workflow publishes the single EggMapper package and tags the commit automatically
+# Required secret: NUGET_API_KEY
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Explicit package version (e.g. 1.2.3). Overrides the version in EggMapper.csproj.'
+      force_bump:
+        description: 'Force a specific bump type (overrides commit detection)'
         required: false
+        default: 'auto'
+        type: choice
+        options: [auto, patch, minor, major]
 
 permissions:
-  contents: write   # needed to create and push git tags
+  contents: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history so tag existence checks work
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Install all required SDKs so every TFM in the library builds cleanly.
       - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
@@ -48,64 +53,111 @@ jobs:
             9.0.x
             10.0.x
 
-      # ── Determine the stable version to publish ────────────────────────────
-      - name: Determine version
+      # ── Determine bump type from commits ─────────────────────────────────
+      - name: Determine version bump
+        id: bump
+        shell: bash
+        run: |
+          CSPROJ="src/EggMapper/EggMapper.csproj"
+          CURRENT=$(grep -oP '(?<=<Version>)[^<]+' "$CSPROJ")
+          echo "CURRENT=${CURRENT}" >> "$GITHUB_OUTPUT"
+
+          # Manual override from workflow_dispatch
+          FORCE="${{ github.event.inputs.force_bump }}"
+          if [[ -n "$FORCE" && "$FORCE" != "auto" ]]; then
+            echo "BUMP_TYPE=${FORCE}" >> "$GITHUB_OUTPUT"
+            echo "Forced bump type: ${FORCE}"
+            exit 0
+          fi
+
+          # Find the last release tag
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "")
+          if [[ -z "$LAST_TAG" ]]; then
+            COMMIT_RANGE="HEAD"
+            echo "No previous tag found — analyzing all commits"
+          else
+            COMMIT_RANGE="${LAST_TAG}..HEAD"
+            echo "Analyzing commits since ${LAST_TAG}"
+          fi
+
+          # Analyze commit messages for conventional commit prefixes
+          BUMP="patch"
+          COMMITS=$(git log --pretty=format:"%s" ${COMMIT_RANGE} 2>/dev/null || git log --pretty=format:"%s" HEAD~10..HEAD)
+
+          echo "Commits to analyze:"
+          echo "$COMMITS"
+
+          if echo "$COMMITS" | grep -qiE "^.*!:|BREAKING CHANGE"; then
+            BUMP="major"
+          elif echo "$COMMITS" | grep -qiE "^feat(\(.*\))?:"; then
+            BUMP="minor"
+          fi
+
+          echo "BUMP_TYPE=${BUMP}" >> "$GITHUB_OUTPUT"
+          echo "Detected bump type: ${BUMP}"
+
+      # ── Calculate new version ────────────────────────────────────────────
+      - name: Calculate new version
         id: version
         shell: bash
         run: |
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            # Read the version declared in the project file — always stable
-            VERSION=$(grep -oP '(?<=<Version>)[^<]+' src/EggMapper/EggMapper.csproj)
-          fi
-          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Resolved version: ${VERSION}"
+          CURRENT="${{ steps.bump.outputs.CURRENT }}"
+          BUMP="${{ steps.bump.outputs.BUMP_TYPE }}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT}"
 
-      # ── Skip if this version was already published (tag exists) ───────────
+          case "$BUMP" in
+            major) VERSION="$((MAJOR + 1)).0.0" ;;
+            minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+          esac
+
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${CURRENT} → ${VERSION} (${BUMP} bump)"
+
+      # ── Check if already published ───────────────────────────────────────
       - name: Check for existing tag
         id: tag_check
         shell: bash
         run: |
           TAG="v${{ steps.version.outputs.VERSION }}"
           if git rev-parse --verify "refs/tags/${TAG}" > /dev/null 2>&1; then
-            echo "Tag ${TAG} already exists — version unchanged, skipping publish."
-            echo "ALREADY_TAGGED=true"  >> "$GITHUB_OUTPUT"
+            echo "Tag ${TAG} already exists — skipping."
+            echo "ALREADY_TAGGED=true" >> "$GITHUB_OUTPUT"
           else
-            echo "Tag ${TAG} does not exist — will publish."
             echo "ALREADY_TAGGED=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Build & test ───────────────────────────────────────────────────────
-      - name: Restore dependencies
+      # ── Update csproj version ────────────────────────────────────────────
+      - name: Update csproj version
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        shell: bash
+        run: |
+          CSPROJ="src/EggMapper/EggMapper.csproj"
+          sed -i "s|<Version>${{ steps.bump.outputs.CURRENT }}</Version>|<Version>${{ steps.version.outputs.VERSION }}</Version>|" "$CSPROJ"
+
+      # ── Build & test ─────────────────────────────────────────────────────
+      - name: Restore
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet restore
 
-      - name: Build (Release)
+      - name: Build
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet build --configuration Release --no-restore
 
-      - name: Run tests
+      - name: Test
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: dotnet test --configuration Release --no-build --verbosity minimal
 
-      # ── Pack (single package — DI is bundled into EggMapper) ──────────────
-      - name: Pack EggMapper
+      # ── Pack ─────────────────────────────────────────────────────────────
+      - name: Pack
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: |
           dotnet pack src/EggMapper/EggMapper.csproj \
-            --configuration Release \
-            --no-build \
+            --configuration Release --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             --output ./artifacts
 
-      # ── Inspect packages ──────────────────────────────────────────────────
-      - name: List packages
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        run: ls -lh ./artifacts/
-
-      # ── Upload as CI artifact (always, for traceability) ──────────────────
-      - name: Upload packages as artifact
+      - name: Upload artifacts
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         uses: actions/upload-artifact@v4
         with:
@@ -114,7 +166,7 @@ jobs:
             ./artifacts/*.nupkg
             ./artifacts/*.snupkg
 
-      # ── Push to NuGet.org ─────────────────────────────────────────────────
+      # ── Publish to NuGet ─────────────────────────────────────────────────
       - name: Push to NuGet.org
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         env:
@@ -124,7 +176,6 @@ jobs:
             --api-key "${NUGET_API_KEY}" \
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
-          # Push symbol packages if any were produced
           if ls ./artifacts/*.snupkg 1>/dev/null 2>&1; then
             dotnet nuget push ./artifacts/*.snupkg \
               --api-key "${NUGET_API_KEY}" \
@@ -132,8 +183,8 @@ jobs:
               --skip-duplicate
           fi
 
-      # ── Auto-tag the commit ────────────────────────────────────────────────
-      - name: Create and push git tag
+      # ── Tag + Release ────────────────────────────────────────────────────
+      - name: Create git tag
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         run: |
           TAG="v${{ steps.version.outputs.VERSION }}"
@@ -141,5 +192,26 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG}" -m "Release ${TAG}"
           git push origin "${TAG}"
-          echo "✅ Created and pushed tag ${TAG}"
 
+      - name: Create GitHub Release
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.version.outputs.VERSION }}"
+          gh release create "${TAG}" \
+            --title "EggMapper ${TAG}" \
+            --generate-notes \
+            ./artifacts/*.nupkg ./artifacts/*.snupkg
+
+      # ── Commit bumped version back to main ───────────────────────────────
+      - name: Commit version bump
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        shell: bash
+        run: |
+          CSPROJ="src/EggMapper/EggMapper.csproj"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$CSPROJ"
+          git commit -m "chore: release v${{ steps.version.outputs.VERSION }} [skip ci]"
+          git push origin main

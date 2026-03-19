@@ -10,6 +10,8 @@
     <!-- AutoMapper 16.1.1: latest stable (RPL 1.5 license — benchmark-only dependency, not distributed) -->
     <PackageReference Include="AutoMapper" Version="16.1.1" />
     <PackageReference Include="Mapster" Version="7.4.0" />
+    <PackageReference Include="Riok.Mapperly" Version="4.3.1" />
+    <PackageReference Include="AgileObjects.AgileMapper" Version="1.8.1" />
     <ProjectReference Include="..\EggMapper\EggMapper.csproj" />
   </ItemGroup>
 </Project>
