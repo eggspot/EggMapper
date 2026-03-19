@@ -110,36 +110,20 @@ public sealed class Mapper : IMapper
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
-        // Ultra-fast path: direct static field read for List<T> sources
+        // Fast path: use per-item FastCache delegate with tight devirtualized loop
         if (source is List<TSource> directList)
         {
-            if (FastListCache<TSource, TDestination>.Generation == _generation)
+            var itemFunc = FastCache<TSource, TDestination>.Func;
+            if (itemFunc != null & FastCache<TSource, TDestination>.Generation == _generation)
             {
-                var fast = FastListCache<TSource, TDestination>.Func;
-                if (fast != null)
-                    return fast(directList);
+                var count = directList.Count;
+                var result = new List<TDestination>(count);
+                for (int i = 0; i < count; i++)
+                    result.Add(itemFunc(directList[i]));
+                return result;
             }
-
-            return MapListSlow<TSource, TDestination>(directList);
         }
 
-        return MapListFallback<TSource, TDestination>(source);
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private List<TDestination> MapListSlow<TSource, TDestination>(List<TSource> source)
-    {
-        var key = new TypePair(typeof(TSource), typeof(TDestination));
-
-        if (_config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDel))
-        {
-            var typed = (Func<List<TSource>, List<TDestination>>)listDel;
-            FastListCache<TSource, TDestination>.Func = typed;
-            FastListCache<TSource, TDestination>.Generation = _generation;
-            return typed(source);
-        }
-
-        // Fallback to per-item mapping
         return MapListFallback<TSource, TDestination>(source);
     }
 
@@ -147,10 +131,12 @@ public sealed class Mapper : IMapper
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        // Ctx-free per-item delegate
+        // Ctx-free per-item delegate — also populate FastCache for next call
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
             var typedDel = (Func<TSource, TDestination>)ctxFreeDel;
+            FastCache<TSource, TDestination>.Func = typedDel;
+            FastCache<TSource, TDestination>.Generation = _generation;
 
             if (source is IList<TSource> lst)
             {

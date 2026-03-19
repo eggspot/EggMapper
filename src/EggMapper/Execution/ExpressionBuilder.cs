@@ -301,41 +301,35 @@ internal static class ExpressionBuilder
 
         elemStmts.Add(elemDestVar);
 
-        // Build the list mapping using array-based construction for maximum speed:
-        // (List<TSrc> source) => { var arr = new TDst[count]; for (...) arr[i] = map(source[i]); return new List<TDst>(arr); }
-        // Using List<T> (not IList<T>) allows JIT to devirtualize Count and indexer.
+        // Build the list mapping with List<T> direct indexer (JIT-devirtualized):
+        // (List<TSrc> source) => { var list = new List<TDst>(count); for (...) list.Add(map(source[i])); return list; }
         var listSrcType = typeof(List<>).MakeGenericType(srcElem);
         var listDestType = typeof(List<>).MakeGenericType(destElem);
-        var arrDestType = destElem.MakeArrayType();
         var srcListParam = Expression.Parameter(listSrcType, "source");
 
-        var arrVar = Expression.Variable(arrDestType, "arr");
+        var listVar = Expression.Variable(listDestType, "result");
         var iVar = Expression.Variable(typeof(int), "i");
         var countVar = Expression.Variable(typeof(int), "count");
         var breakLabel = Expression.Label("brk");
 
         var countProp = listSrcType.GetProperty("Count")!;
-        var itemProp = listSrcType.GetProperty("Item")!; // List<T>.this[int]
+        var itemProp = listSrcType.GetProperty("Item")!;
+        var listCtor = listDestType.GetConstructor(new[] { typeof(int) })!;
+        var addMethod = listDestType.GetMethod("Add")!;
 
-        // new List<TDst>(TDst[]) — use the IEnumerable<T> constructor
-        var listCtor = listDestType.GetConstructor(new[] { typeof(IEnumerable<>).MakeGenericType(destElem) })!;
-
-        // Build: arr[i] = mapped_element
         var indexAccess = Expression.MakeIndex(srcListParam, itemProp, new[] { (Expression)iVar });
-        var arrAccess = Expression.ArrayAccess(arrVar, iVar);
 
         var loopBodyStmts = new List<Expression>();
         loopBodyStmts.Add(Expression.Assign(elemSrcParam, indexAccess));
         for (int idx = 0; idx < elemStmts.Count - 1; idx++)
             loopBodyStmts.Add(elemStmts[idx]);
-        // arr[i] = ed  (direct array write — no bounds check in JIT-optimized loops)
-        loopBodyStmts.Add(Expression.Assign(arrAccess, elemDestVar));
+        loopBodyStmts.Add(Expression.Call(listVar, addMethod, elemDestVar));
         loopBodyStmts.Add(Expression.PostIncrementAssign(iVar));
 
         var fullBody = Expression.Block(
-            new[] { arrVar, iVar, countVar, elemSrcParam, elemDestVar },
+            new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar },
             Expression.Assign(countVar, Expression.Property(srcListParam, countProp)),
-            Expression.Assign(arrVar, Expression.NewArrayBounds(destElem, countVar)),
+            Expression.Assign(listVar, Expression.New(listCtor, countVar)),
             Expression.Assign(iVar, Expression.Constant(0)),
             Expression.Loop(
                 Expression.IfThenElse(
@@ -343,7 +337,7 @@ internal static class ExpressionBuilder
                     Expression.Block(loopBodyStmts),
                     Expression.Break(breakLabel)),
                 breakLabel),
-            Expression.New(listCtor, arrVar));
+            listVar);
 
         var funcType = typeof(Func<,>).MakeGenericType(listSrcType, listDestType);
         return Expression.Lambda(funcType, fullBody, srcListParam).Compile();
