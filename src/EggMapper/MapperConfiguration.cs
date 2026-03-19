@@ -33,6 +33,10 @@ public sealed class MapperConfiguration
             _typeMaps[key] = typeMap;
         }
 
+        // Resolve IncludeAllDerived: for each base map with the flag set,
+        // find derived type maps and auto-set their BaseMapTypePair.
+        ResolveIncludeAllDerived();
+
         foreach (var typeMap in TopologicalOrder(_typeMaps))
             CompileMap(typeMap);
 
@@ -97,9 +101,44 @@ public sealed class MapperConfiguration
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
         if (_compiledMaps.ContainsKey(key)) return;
 
+        // ConvertUsing overrides the entire mapping delegate
+        if (typeMap.ConvertUsingFunc != null)
+        {
+            _compiledMaps[key] = typeMap.ConvertUsingFunc;
+            typeMap.MappingDelegate = typeMap.ConvertUsingFunc;
+            return;
+        }
+
         var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps);
         _compiledMaps[key] = compiledDelegate;
         typeMap.MappingDelegate = compiledDelegate;
+    }
+
+    private void ResolveIncludeAllDerived()
+    {
+        // Find all base maps with IncludeAllDerived flag
+        var baseMaps = _typeMaps.Values
+            .Where(m => m.IncludeAllDerivedFlag)
+            .ToList();
+
+        foreach (var baseMap in baseMaps)
+        {
+            var basePair = new TypePair(baseMap.SourceType, baseMap.DestinationType);
+
+            // Find derived maps whose source/dest types inherit from the base map types
+            foreach (var kvp in _typeMaps)
+            {
+                var derivedMap = kvp.Value;
+                if (derivedMap == baseMap) continue;
+                if (derivedMap.BaseMapTypePair.HasValue) continue; // already has a base
+
+                if (baseMap.SourceType.IsAssignableFrom(derivedMap.SourceType) &&
+                    baseMap.DestinationType.IsAssignableFrom(derivedMap.DestinationType))
+                {
+                    derivedMap.BaseMapTypePair = basePair;
+                }
+            }
+        }
     }
 
     public IMapper CreateMapper() => new Mapper(this);

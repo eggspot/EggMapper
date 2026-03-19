@@ -9,7 +9,12 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(cfg => cfg.AddProfiles(assemblies));
         services.AddSingleton(config);
-        services.AddSingleton<IMapper>(sp => sp.GetRequiredService<MapperConfiguration>().CreateMapper());
+        services.AddSingleton<IMapper>(sp =>
+        {
+            var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
+            mapper.ServiceProvider = sp;
+            return mapper;
+        });
         return services;
     }
 
@@ -17,7 +22,12 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(configure);
         services.AddSingleton(config);
-        services.AddSingleton<IMapper>(sp => sp.GetRequiredService<MapperConfiguration>().CreateMapper());
+        services.AddSingleton<IMapper>(sp =>
+        {
+            var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
+            mapper.ServiceProvider = sp;
+            return mapper;
+        });
         return services;
     }
 }

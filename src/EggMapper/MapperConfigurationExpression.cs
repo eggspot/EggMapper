@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using EggMapper.Internal;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EggMapper;
 
@@ -49,6 +50,9 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
             }
         }
     }
+
+    public void AddMaps(params Assembly[] assemblies) => AddProfiles(assemblies);
+    public void AddMaps(IEnumerable<Assembly> assemblies) => AddProfiles(assemblies);
 
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
 }
@@ -136,9 +140,23 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, ResolutionContext> beforeFunction)
+    {
+        _typeMap.BeforeMapCtxAction = (src, dest, ctx) =>
+            beforeFunction((TSource)src, (TDestination)dest, ctx);
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination> afterFunction)
     {
         _typeMap.AfterMapAction = (src, dest) => afterFunction((TSource)src, (TDestination)dest);
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination, ResolutionContext> afterFunction)
+    {
+        _typeMap.AfterMapCtxAction = (src, dest, ctx) =>
+            afterFunction((TSource)src, (TDestination)dest, ctx);
         return this;
     }
 
@@ -148,9 +166,28 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> IncludeAllDerived()
+    {
+        _typeMap.IncludeAllDerivedFlag = true;
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> MaxDepth(int depth)
     {
         _typeMap.MaxDepth = depth;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) => converter((TSource)src)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination?, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter((TSource)src, dest is TDestination td ? td : default)!;
         return this;
     }
 
@@ -190,6 +227,34 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
             mapFunction((TSource)src, dest is TDestination td ? td : default!);
     }
 
+    public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, TSourceMember> mapFunction)
+    {
+        _propMap.CustomResolver = (src, dest) =>
+            mapFunction((TSource)src, dest is TDestination td ? td : default!, default!);
+    }
+
+    public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, ResolutionContext, TSourceMember> mapFunction)
+    {
+        _propMap.ContextResolver = (src, dest, destMember, ctx) =>
+            mapFunction((TSource)src, dest is TDestination td ? td : default!,
+                destMember is TMember tm ? tm : default!, ctx);
+    }
+
+    public void MapFrom<TValueResolver, TSourceMember>(Expression<Func<TSource, TSourceMember>> sourceMember)
+        where TValueResolver : IMemberValueResolver<object, object, TSourceMember, TMember>
+    {
+        var compiled = sourceMember.Compile();
+        _propMap.ValueResolverFactory = sp =>
+        {
+            var resolver = (TValueResolver)ActivatorUtilities.CreateInstance(sp, typeof(TValueResolver));
+            return (src, dest, destMember, ctx) =>
+            {
+                var srcMember = compiled((TSource)src);
+                return resolver.Resolve(src, dest!, srcMember, destMember is TMember dm ? dm : default!, ctx);
+            };
+        };
+    }
+
     public void Ignore() => _propMap.Ignored = true;
 
     public void Condition(Func<TSource, bool> condition)
@@ -218,6 +283,11 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
     {
         _propMap.UseValue = value;
         _propMap.HasUseValue = true;
+    }
+
+    public void UseDestinationValue()
+    {
+        _propMap.UseDestinationValue = true;
     }
 }
 

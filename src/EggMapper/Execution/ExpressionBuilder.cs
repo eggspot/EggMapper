@@ -93,9 +93,11 @@ internal static class ExpressionBuilder
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap>? allTypeMaps = null)
     {
-        // Same bailout conditions as TryBuildTypedDelegate
+        if (typeMap.ConvertUsingFunc != null) return null;
         if (typeMap.BeforeMapAction != null) return null;
         if (typeMap.AfterMapAction  != null) return null;
+        if (typeMap.BeforeMapCtxAction != null) return null;
+        if (typeMap.AfterMapCtxAction  != null) return null;
         if (typeMap.MaxDepth > 0) return null;
         if (typeMap.BaseMapTypePair.HasValue) return null;
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return null;
@@ -135,13 +137,13 @@ internal static class ExpressionBuilder
             if (propMap.Ignored) continue;
 
             // Runtime guards cannot be expressed without ctx → bail out
-            if (propMap.Condition      != null
-                || propMap.FullCondition != null
-                || propMap.PreCondition  != null
-                || propMap.HasNullSubstitute)
+            if (propMap.Condition != null || propMap.FullCondition != null
+                || propMap.PreCondition != null || propMap.HasNullSubstitute
+                || propMap.UseDestinationValue)
                 return null;
 
-            if (propMap.CustomResolver != null) return null;
+            if (propMap.CustomResolver != null || propMap.ContextResolver != null
+                || propMap.ValueResolverFactory != null) return null;
 
             if (propMap.HasUseValue)
             {
@@ -700,10 +702,11 @@ internal static class ExpressionBuilder
         result = null;
 
         // Bail out for features that can't be expressed in a static expression tree
-        if (typeMap.BeforeMapAction != null) return false;
-        if (typeMap.AfterMapAction != null) return false;
+        if (typeMap.BeforeMapAction != null || typeMap.BeforeMapCtxAction != null) return false;
+        if (typeMap.AfterMapAction != null || typeMap.AfterMapCtxAction != null) return false;
         if (typeMap.MaxDepth > 0) return false;
         if (typeMap.BaseMapTypePair.HasValue) return false;
+        if (typeMap.ConvertUsingFunc != null) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return false;
 
@@ -751,15 +754,15 @@ internal static class ExpressionBuilder
             processedDestProps.Add(propMap.DestinationProperty.Name);
             if (propMap.Ignored) continue;
 
-            // Conditions, null-substitution, and custom resolvers all need the
-            // flexible runtime path — bail out for the whole map.
-            if (propMap.Condition != null
-                || propMap.FullCondition != null
-                || propMap.PreCondition != null
-                || propMap.HasNullSubstitute)
+            // Conditions, null-substitution, custom/context resolvers, and DI resolvers
+            // all need the flexible runtime path — bail out for the whole map.
+            if (propMap.Condition != null || propMap.FullCondition != null
+                || propMap.PreCondition != null || propMap.HasNullSubstitute
+                || propMap.UseDestinationValue)
                 return false;
 
-            if (propMap.CustomResolver != null) return false;
+            if (propMap.CustomResolver != null || propMap.ContextResolver != null
+                || propMap.ValueResolverFactory != null) return false;
 
             if (propMap.HasUseValue)
             {
@@ -1347,12 +1350,12 @@ internal static class ExpressionBuilder
         var actionsArray = mappingActions.ToArray();
         var beforeMap = typeMap.BeforeMapAction;
         var afterMap = typeMap.AfterMapAction;
+        var beforeMapCtx = typeMap.BeforeMapCtxAction;
+        var afterMapCtx = typeMap.AfterMapCtxAction;
         var maxDepth = typeMap.MaxDepth;
 
         return (object src, object? dest, ResolutionContext ctx) =>
         {
-            // When MaxDepth is set and we've reached the limit, return null
-            // to stop creating nested objects beyond the depth cutoff.
             if (maxDepth > 0 && ctx.Depth >= maxDepth)
                 return dest!;
 
@@ -1361,6 +1364,7 @@ internal static class ExpressionBuilder
             try
             {
                 beforeMap?.Invoke(src, typedDest);
+                beforeMapCtx?.Invoke(src, typedDest, ctx);
 
                 ctx.Depth++;
                 try
@@ -1374,6 +1378,7 @@ internal static class ExpressionBuilder
                 }
 
                 afterMap?.Invoke(src, typedDest);
+                afterMapCtx?.Invoke(src, typedDest, ctx);
             }
             catch (MappingException)
             {
@@ -1394,6 +1399,7 @@ internal static class ExpressionBuilder
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
     {
         if (propMap.Ignored) return null;
+        if (propMap.UseDestinationValue) return null; // skip — preserve existing value
 
         var destProp = propMap.DestinationProperty;
         var setter = GetOrBuildSetter(destProp);
@@ -1402,6 +1408,48 @@ internal static class ExpressionBuilder
         {
             var useVal = propMap.UseValue;
             return (src, dest, ctx) => setter(dest, useVal);
+        }
+
+        // DI-injected value resolver (resolved lazily from ServiceProvider)
+        if (propMap.ValueResolverFactory != null)
+        {
+            var factory = propMap.ValueResolverFactory;
+            Func<object, object?, object?, ResolutionContext, object?>? cachedResolver = null;
+            var getter = propMap.SourceMemberName != null
+                ? GetOrBuildGetter(srcDetails.ReadableProperties.FirstOrDefault(p =>
+                    string.Equals(p.Name, propMap.SourceMemberName, StringComparison.OrdinalIgnoreCase))!)
+                : null;
+            var destType = destProp.PropertyType;
+
+            return (src, dest, ctx) =>
+            {
+                if (ctx.ServiceProvider == null)
+                    throw new InvalidOperationException(
+                        "IMemberValueResolver requires DI. Use services.AddEggMapper() for dependency injection.");
+                cachedResolver ??= factory(ctx.ServiceProvider);
+                var val = cachedResolver(src, dest, null, ctx);
+                setter(dest, ConvertValue(val, destType));
+            };
+        }
+
+        // Context-aware resolver: (src, dest, destMember, ctx) => value
+        if (propMap.ContextResolver != null)
+        {
+            var resolver = propMap.ContextResolver;
+            var condition = propMap.Condition;
+            var fullCondition = propMap.FullCondition;
+            var preCondition = propMap.PreCondition;
+            var destType = destProp.PropertyType;
+
+            return (src, dest, ctx) =>
+            {
+                if (preCondition != null && !preCondition(src)) return;
+                if (condition != null && !condition(src)) return;
+                if (fullCondition != null && !fullCondition(src, dest)) return;
+
+                var val = resolver(src, dest, null, ctx);
+                setter(dest, ConvertValue(val, destType));
+            };
         }
 
         if (propMap.CustomResolver != null)

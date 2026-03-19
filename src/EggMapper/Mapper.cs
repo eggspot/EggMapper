@@ -7,14 +7,22 @@ namespace EggMapper;
 public sealed class Mapper : IMapper
 {
     private readonly MapperConfiguration _config;
+    internal IServiceProvider? ServiceProvider { get; set; }
 
-    // Thread-local ResolutionContext pool: avoids a heap allocation on every
-    // Map call.  The context is reset (Depth = 0) before each top-level call so
-    // nested delegates always start at depth zero.
     [ThreadStatic]
     private static ResolutionContext? _sharedCtx;
 
     public Mapper(MapperConfiguration config) => _config = config;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private ResolutionContext GetContext()
+    {
+        var ctx = _sharedCtx ??= new ResolutionContext();
+        ctx.Depth = 0;
+        ctx.Mapper = this;
+        ctx.ServiceProvider = ServiceProvider;
+        return ctx;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TDestination Map<TDestination>(object source)
@@ -46,8 +54,7 @@ public sealed class Mapper : IMapper
         // Fallback: ctx-aware boxed delegate
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
-            var ctx = _sharedCtx ??= new ResolutionContext();
-            ctx.Depth = 0;
+            var ctx = GetContext();
             return (TDestination)del(source, null, ctx);
         }
 
@@ -63,8 +70,7 @@ public sealed class Mapper : IMapper
         var key = new TypePair(typeof(TSource), typeof(TDestination));
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
-            var ctx = _sharedCtx ??= new ResolutionContext();
-            ctx.Depth = 0;
+            var ctx = GetContext();
             return (TDestination)del(source, destination, ctx);
         }
         throw new InvalidOperationException(
@@ -164,8 +170,7 @@ public sealed class Mapper : IMapper
         var key = new TypePair(sourceType, destinationType);
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
-            var ctx = _sharedCtx ??= new ResolutionContext();
-            ctx.Depth = 0;
+            var ctx = GetContext();
             return del(source, destination, ctx);
         }
         throw new InvalidOperationException(

@@ -17,12 +17,18 @@ public interface IMappingExpression<TSource, TDestination>
     IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, TDestination> ctor);
 
     IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination> beforeFunction);
+    IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, ResolutionContext> beforeFunction);
 
     IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination> afterFunction);
+    IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination, ResolutionContext> afterFunction);
 
     IMappingExpression<TSource, TDestination> IncludeBase<TSourceBase, TDestinationBase>();
+    IMappingExpression<TSource, TDestination> IncludeAllDerived();
 
     IMappingExpression<TSource, TDestination> MaxDepth(int depth);
+
+    IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination> converter);
+    IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination?, TDestination> converter);
 
     IMappingExpression<TSource, TDestination> ForAllMembers(
         Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions);
