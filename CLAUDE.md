@@ -120,6 +120,8 @@ No manual version editing needed. Just use conventional commit prefixes.
 
 ## Working Style
 
+- **NEVER push directly to `main`** — always create a feature branch and open a PR
 - Break complex tasks into smaller incremental commits
 - A single PR should focus on one logical change
-- Commit and push after each verified, self-contained unit of work
+- Commit and push to the feature branch after each verified, self-contained unit of work
+- Use conventional commit prefixes (`feat:`, `fix:`, `perf:`, `chore:`, `docs:`) — the publish pipeline auto-detects version bumps from these
