@@ -18,6 +18,10 @@ public sealed class MapperConfiguration
     // ctx/dest parameters from the per-item call in Map<> and MapList<>.
     internal Dictionary<TypePair, Delegate> FrozenCtxFreeMaps = null!;
 
+    // Ctx-free compiled list delegates: Func<IList<TSource>, List<TDestination>>
+    // Inlines the entire collection + element mapping loop — zero per-element delegate call.
+    internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = null!;
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
@@ -36,14 +40,25 @@ public sealed class MapperConfiguration
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
 
         // Build ctx-free typed delegates for eligible maps.
+        // Pass allTypeMaps so nested maps and collections can be inlined.
         var ctxFree = new Dictionary<TypePair, Delegate>();
         foreach (var kvp in _typeMaps)
         {
-            var del = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(kvp.Value);
+            var del = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(kvp.Value, _typeMaps);
             if (del != null)
                 ctxFree[kvp.Key] = del;
         }
         FrozenCtxFreeMaps = ctxFree;
+
+        // Build ctx-free list delegates for eligible maps.
+        var ctxFreeList = new Dictionary<TypePair, Delegate>();
+        foreach (var kvp in _typeMaps)
+        {
+            var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(kvp.Value, _typeMaps);
+            if (listDel != null)
+                ctxFreeList[kvp.Key] = listDel;
+        }
+        FrozenCtxFreeListMaps = ctxFreeList;
     }
 
     private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)

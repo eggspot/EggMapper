@@ -10,6 +10,7 @@ namespace EggMapper.Benchmarks;
 public class FlatMappingBenchmark
 {
     private ModelObject _source = null!;
+    private static readonly MapperlyMapper Mapperly = new();
 
     [GlobalSetup]
     public void Setup()
@@ -53,4 +54,10 @@ public class FlatMappingBenchmark
 
     [Benchmark]
     public ModelDto Mapster() => _source.Adapt<ModelDto>();
+
+    [Benchmark]
+    public ModelDto MapperlyMap() => Mapperly.MapFlat(_source);
+
+    [Benchmark]
+    public ModelDto AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<ModelDto>();
 }

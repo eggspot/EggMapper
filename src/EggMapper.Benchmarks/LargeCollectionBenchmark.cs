@@ -63,4 +63,10 @@ public class LargeCollectionBenchmark
 
     [Benchmark]
     public List<ModelDto> Mapster() => _source.Adapt<List<ModelDto>>();
+
+    [Benchmark]
+    public List<ModelDto> MapperlyMap() => new MapperlyMapper().MapFlatList(_source);
+
+    [Benchmark]
+    public List<ModelDto> AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<List<ModelDto>>();
 }

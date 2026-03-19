@@ -1,23 +1,18 @@
 using EggMapper.Benchmarks.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace EggMapper.Benchmarks.Configs;
 
-public static class AutoMapperConfig
+public static class FlatteningAutoMapperConfig
 {
     public static readonly global::AutoMapper.IMapper Mapper;
 
-    static AutoMapperConfig()
+    static FlatteningAutoMapperConfig()
     {
         var config = new global::AutoMapper.MapperConfiguration(
             (global::AutoMapper.IMapperConfigurationExpression cfg) =>
             {
-                cfg.CreateMap<ModelObject, ModelDto>();
-                cfg.CreateMap<Customer, CustomerDTO>();
-                cfg.CreateMap<Address, AddressDTO>();
-                cfg.CreateMap<Foo, FooDest>();
-                cfg.CreateMap<InnerFoo, InnerFooDest>();
+                cfg.CreateMap<FlatteningSource, FlatteningDest>();
             }, NullLoggerFactory.Instance);
         Mapper = config.CreateMapper();
     }

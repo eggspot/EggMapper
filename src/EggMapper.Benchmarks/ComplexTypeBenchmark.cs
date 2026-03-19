@@ -2,6 +2,7 @@ using BenchmarkDotNet.Attributes;
 using EggMapper.Benchmarks.Configs;
 using EggMapper.Benchmarks.Models;
 using Mapster;
+using AgileObjects.AgileMapper;
 
 namespace EggMapper.Benchmarks;
 
@@ -63,4 +64,10 @@ public class ComplexTypeBenchmark
 
     [Benchmark]
     public FooDest Mapster() => _source.Adapt<FooDest>();
+
+    [Benchmark]
+    public FooDest MapperlyMap() => new MapperlyMapper().MapComplex(_source);
+
+    [Benchmark]
+    public FooDest AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<FooDest>();
 }

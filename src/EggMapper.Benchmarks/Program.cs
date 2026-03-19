@@ -9,6 +9,7 @@ using BenchmarkDotNet.Running;
 var config = DefaultConfig.Instance
     .AddColumn(StatisticColumn.Min)
     .AddColumn(StatisticColumn.Median)
-    .AddColumn(StatisticColumn.Max);
+    .AddColumn(StatisticColumn.Max)
+    .WithOptions(ConfigOptions.DisableOptimizationsValidator);
 
 BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);

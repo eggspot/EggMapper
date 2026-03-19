@@ -16,15 +16,12 @@ public class FlatteningBenchmark
 
     private static readonly global::EggMapper.IMapper EggMapper = EggConfig.CreateMapper();
 
-    private static readonly AutoMapper.IMapper AutoMap;
+    private static readonly AutoMapper.IMapper AutoMap = BuildAutoMapper();
 
-    static FlatteningBenchmark()
+    private static AutoMapper.IMapper BuildAutoMapper()
     {
-        var amConfig = new AutoMapper.MapperConfiguration(cfg =>
-            cfg.CreateMap<FlatteningSource, FlatteningDest>());
-        AutoMap = amConfig.CreateMapper();
-
         TypeAdapterConfig<FlatteningSource, FlatteningDest>.NewConfig();
+        return FlatteningAutoMapperConfig.Mapper;
     }
 
     [GlobalSetup]
@@ -70,4 +67,10 @@ public class FlatteningBenchmark
 
     [Benchmark]
     public FlatteningDest Mapster() => _source.Adapt<FlatteningDest>();
+
+    [Benchmark]
+    public FlatteningDest MapperlyMap() => new MapperlyMapper().MapFlattening(_source);
+
+    [Benchmark]
+    public FlatteningDest AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<FlatteningDest>();
 }

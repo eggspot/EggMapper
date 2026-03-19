@@ -84,4 +84,11 @@ public class DeepCollectionBenchmark
 
     [Benchmark]
     public List<CustomerDTO> Mapster() => _source.Adapt<List<CustomerDTO>>();
+
+    [Benchmark]
+    public List<CustomerDTO> MapperlyMap() => new MapperlyMapper().MapCustomerList(_source);
+
+    [Benchmark]
+    public List<CustomerDTO> AgileMapper() =>
+        AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<List<CustomerDTO>>();
 }

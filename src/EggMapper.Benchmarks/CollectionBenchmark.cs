@@ -10,6 +10,7 @@ namespace EggMapper.Benchmarks;
 public class CollectionBenchmark
 {
     private List<ModelObject> _source = null!;
+    private static readonly MapperlyMapper Mapperly = new();
 
     [GlobalSetup]
     public void Setup()
@@ -63,4 +64,10 @@ public class CollectionBenchmark
 
     [Benchmark]
     public List<ModelDto> Mapster() => _source.Adapt<List<ModelDto>>();
+
+    [Benchmark]
+    public List<ModelDto> MapperlyMap() => Mapperly.MapFlatList(_source);
+
+    [Benchmark]
+    public List<ModelDto> AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<List<ModelDto>>();
 }

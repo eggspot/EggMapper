@@ -69,4 +69,10 @@ public class DeepTypeBenchmark
 
     [Benchmark]
     public CustomerDTO Mapster() => _source.Adapt<CustomerDTO>();
+
+    [Benchmark]
+    public CustomerDTO MapperlyMap() => new MapperlyMapper().MapCustomer(_source);
+
+    [Benchmark]
+    public CustomerDTO AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<CustomerDTO>();
 }
