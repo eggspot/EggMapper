@@ -94,6 +94,7 @@ internal static class ExpressionBuilder
         Dictionary<TypePair, TypeMap>? allTypeMaps = null)
     {
         if (typeMap.ConvertUsingFunc != null) return null;
+        if (typeMap.ShouldMapProperty != null) return null;
         if (typeMap.BeforeMapAction != null) return null;
         if (typeMap.AfterMapAction  != null) return null;
         if (typeMap.BeforeMapCtxAction != null) return null;
@@ -707,6 +708,7 @@ internal static class ExpressionBuilder
         if (typeMap.MaxDepth > 0) return false;
         if (typeMap.BaseMapTypePair.HasValue) return false;
         if (typeMap.ConvertUsingFunc != null) return false;
+        if (typeMap.ShouldMapProperty != null) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return false;
 
@@ -1338,9 +1340,11 @@ internal static class ExpressionBuilder
                 mappingActions.Add(action);
         }
 
+        var shouldMapProperty = typeMap.ShouldMapProperty;
         foreach (var destProp in destDetails.WritableProperties)
         {
             if (processedDestProps.Contains(destProp.Name)) continue;
+            if (shouldMapProperty != null && !shouldMapProperty(destProp)) continue;
             processedDestProps.Add(destProp.Name);
             var action = BuildConventionAction(destProp, srcDetails, allTypeMaps, compiledMaps);
             if (action != null)

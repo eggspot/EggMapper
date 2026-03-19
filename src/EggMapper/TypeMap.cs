@@ -20,4 +20,5 @@ internal sealed class TypeMap
     // ConvertUsing: replaces the entire mapping with a custom converter
     public Func<object, object?, ResolutionContext, object>? ConvertUsingFunc { get; set; }
     public Func<object, object?, ResolutionContext, object>? MappingDelegate { get; set; }
+    public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
 }

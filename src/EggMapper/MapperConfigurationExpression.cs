@@ -51,10 +51,27 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         }
     }
 
+    public IMappingExpression CreateMap(Type sourceType, Type destinationType)
+    {
+        var typeMap = new TypeMap
+        {
+            SourceType = sourceType,
+            DestinationType = destinationType
+        };
+        var key = new TypePair(sourceType, destinationType);
+        _typeMaps[key] = typeMap;
+        return new NonGenericMappingExpression(typeMap, RegisterTypeMap);
+    }
+
     public void AddMaps(params Assembly[] assemblies) => AddProfiles(assemblies);
     public void AddMaps(IEnumerable<Assembly> assemblies) => AddProfiles(assemblies);
+    public void AddMaps(params Type[] markerTypes) =>
+        AddProfiles(markerTypes.Select(t => t.Assembly).Distinct());
+
+    public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
 
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
+    internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
 }
 
 internal sealed class MappingExpression<TSource, TDestination> : IMappingExpression<TSource, TDestination>
@@ -191,6 +208,41 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination?, ResolutionContext, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(ITypeConverter<TSource, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter.Convert((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing<TConverter>()
+        where TConverter : ITypeConverter<TSource, TDestination>, new()
+    {
+        var converter = new TConverter();
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter.Convert((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Type converterType)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+        {
+            var converter = Activator.CreateInstance(converterType)!;
+            var method = converterType.GetMethod("Convert")
+                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+            return method.Invoke(converter, new[] { src, dest, ctx })!;
+        };
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> ForAllMembers(
         Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions)
     {
@@ -307,5 +359,66 @@ internal sealed class PathConfigurationExpression<TSource, TDestination, TMember
         _propMap.CustomResolver = (src, dest) => compiled((TSource)src);
     }
 
+    public void Ignore() => _propMap.Ignored = true;
+}
+
+// ── Non-generic mapping expression for CreateMap(Type, Type) ─────────────
+
+internal sealed class NonGenericMappingExpression : IMappingExpression
+{
+    private readonly TypeMap _typeMap;
+    private readonly Action<TypeMap> _registerTypeMap;
+
+    internal NonGenericMappingExpression(TypeMap typeMap, Action<TypeMap> registerTypeMap)
+    {
+        _typeMap = typeMap;
+        _registerTypeMap = registerTypeMap;
+    }
+
+    public IMappingExpression ForMember(string destinationMember, Action<IMemberConfigurationExpression> memberOptions)
+    {
+        var destDetails = TypeDetails.Get(_typeMap.DestinationType);
+        var destProp = destDetails.WritableProperties.FirstOrDefault(p =>
+            string.Equals(p.Name, destinationMember, StringComparison.OrdinalIgnoreCase));
+        if (destProp != null)
+        {
+            var existing = _typeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destProp.Name);
+            if (existing == null)
+            {
+                existing = new PropertyMap { DestinationProperty = destProp };
+                _typeMap.PropertyMaps.Add(existing);
+            }
+            var expr = new NonGenericMemberConfigurationExpression(existing);
+            memberOptions(expr);
+        }
+        return this;
+    }
+
+    public IMappingExpression IncludeAllDerived()
+    {
+        _typeMap.IncludeAllDerivedFlag = true;
+        return this;
+    }
+
+    public IMappingExpression ConvertUsing(Type converterType)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+        {
+            var converter = Activator.CreateInstance(converterType)!;
+            var method = converterType.GetMethod("Convert")
+                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+            return method.Invoke(converter, new[] { src, dest, ctx })!;
+        };
+        return this;
+    }
+}
+
+internal sealed class NonGenericMemberConfigurationExpression : IMemberConfigurationExpression
+{
+    private readonly PropertyMap _propMap;
+
+    internal NonGenericMemberConfigurationExpression(PropertyMap propMap) => _propMap = propMap;
+
+    public void MapFrom(string sourceMemberName) => _propMap.SourceMemberName = sourceMemberName;
     public void Ignore() => _propMap.Ignored = true;
 }

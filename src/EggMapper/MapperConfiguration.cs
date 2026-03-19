@@ -22,13 +22,17 @@ public sealed class MapperConfiguration
     // Inlines the entire collection + element mapping loop — zero per-element delegate call.
     internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = null!;
 
+    internal Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; private set; }
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
         configure(expr);
+        ShouldMapProperty = expr.GetShouldMapProperty();
 
         foreach (var typeMap in expr.GetTypeMaps())
         {
+            typeMap.ShouldMapProperty = ShouldMapProperty;
             var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
             _typeMaps[key] = typeMap;
         }
@@ -162,12 +166,17 @@ public sealed class MapperConfiguration
 
             foreach (var destProp in destDetails.WritableProperties)
             {
+                if (ShouldMapProperty != null && !ShouldMapProperty(destProp)) continue;
+
                 var propMap = typeMap.PropertyMaps.FirstOrDefault(p =>
                     p.DestinationProperty.Name == destProp.Name);
 
                 if (propMap?.Ignored == true) continue;
                 if (propMap?.HasUseValue == true) continue;
+                if (propMap?.UseDestinationValue == true) continue;
                 if (propMap?.CustomResolver != null) continue;
+                if (propMap?.ContextResolver != null) continue;
+                if (propMap?.ValueResolverFactory != null) continue;
 
                 var sourceMemberName = propMap?.SourceMemberName ?? destProp.Name;
                 var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>

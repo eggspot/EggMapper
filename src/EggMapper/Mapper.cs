@@ -34,28 +34,44 @@ public sealed class Mapper : IMapper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TDestination Map<TSource, TDestination>(TSource source)
     {
-        if (source == null) return default!;
-
         // Fast path: check per-mapper generic cache first (no dictionary lookup)
-        var cached = TypePairCache<TSource, TDestination>.GetCached(this);
-        if (cached != null)
-            return cached(source);
-
-        var key = new TypePair(typeof(TSource), typeof(TDestination));
-
-        // Ctx-free typed delegate — zero boxing, zero ctx overhead
-        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+        // Only for non-null reference type sources
+        if (source != null)
         {
-            var typed = (Func<TSource, TDestination>)ctxFreeDel;
-            TypePairCache<TSource, TDestination>.SetCached(this, typed);
-            return typed(source);
+            var cached = TypePairCache<TSource, TDestination>.GetCached(this);
+            if (cached != null)
+                return cached(source);
+
+            var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+            // Ctx-free typed delegate — zero boxing, zero ctx overhead
+            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+            {
+                var typed = (Func<TSource, TDestination>)ctxFreeDel;
+                TypePairCache<TSource, TDestination>.SetCached(this, typed);
+                return typed(source);
+            }
+
+            // Fallback: ctx-aware boxed delegate
+            if (_config.FrozenMaps.TryGetValue(key, out var del))
+            {
+                var ctx = GetContext();
+                return (TDestination)del(source, null, ctx);
+            }
         }
-
-        // Fallback: ctx-aware boxed delegate
-        if (_config.FrozenMaps.TryGetValue(key, out var del))
+        else
         {
-            var ctx = GetContext();
-            return (TDestination)del(source, null, ctx);
+            // For value types (Nullable<T>), ConvertUsing should still run
+            if (typeof(TSource).IsValueType)
+            {
+                var key = new TypePair(typeof(TSource), typeof(TDestination));
+                if (_config.FrozenMaps.TryGetValue(key, out var del))
+                {
+                    var ctx = GetContext();
+                    return (TDestination)del(source!, null, ctx);
+                }
+            }
+            return default!;
         }
 
         throw new InvalidOperationException(
