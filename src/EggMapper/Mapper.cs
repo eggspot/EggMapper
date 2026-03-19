@@ -12,7 +12,11 @@ public sealed class Mapper : IMapper
     [ThreadStatic]
     private static ResolutionContext? _sharedCtx;
 
-    public Mapper(MapperConfiguration config) => _config = config;
+    public Mapper(MapperConfiguration config)
+    {
+        _config = config;
+        _generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private ResolutionContext GetContext()
@@ -34,44 +38,49 @@ public sealed class Mapper : IMapper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TDestination Map<TSource, TDestination>(TSource source)
     {
-        // Fast path: check per-mapper generic cache first (no dictionary lookup)
-        // Only for non-null reference type sources
         if (source != null)
         {
-            var cached = TypePairCache<TSource, TDestination>.GetCached(this);
-            if (cached != null)
-                return cached(source);
+            // Ultra-fast path: single static field read + null check.
+            // Generation is embedded in the func — if mapper changed, func is null.
+            var fast = FastCache<TSource, TDestination>.Func;
+            if (fast != null & FastCache<TSource, TDestination>.Generation == _generation)
+                return fast(source);
 
+            return MapSlow<TSource, TDestination>(source);
+        }
+
+        // Null source: check for value type ConvertUsing
+        if (typeof(TSource).IsValueType)
+        {
             var key = new TypePair(typeof(TSource), typeof(TDestination));
-
-            // Ctx-free typed delegate — zero boxing, zero ctx overhead
-            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
-            {
-                var typed = (Func<TSource, TDestination>)ctxFreeDel;
-                TypePairCache<TSource, TDestination>.SetCached(this, typed);
-                return typed(source);
-            }
-
-            // Fallback: ctx-aware boxed delegate
             if (_config.FrozenMaps.TryGetValue(key, out var del))
             {
                 var ctx = GetContext();
-                return (TDestination)del(source, null, ctx);
+                return (TDestination)del(source!, null, ctx);
             }
         }
-        else
+        return default!;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private TDestination MapSlow<TSource, TDestination>(TSource source)
+    {
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+        // Try ctx-free typed delegate
+        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
-            // For value types (Nullable<T>), ConvertUsing should still run
-            if (typeof(TSource).IsValueType)
-            {
-                var key = new TypePair(typeof(TSource), typeof(TDestination));
-                if (_config.FrozenMaps.TryGetValue(key, out var del))
-                {
-                    var ctx = GetContext();
-                    return (TDestination)del(source!, null, ctx);
-                }
-            }
-            return default!;
+            var typed = (Func<TSource, TDestination>)ctxFreeDel;
+            FastCache<TSource, TDestination>.Func = typed;
+            FastCache<TSource, TDestination>.Generation = _generation;
+            return typed(source);
+        }
+
+        // Fallback: ctx-aware boxed delegate
+        if (_config.FrozenMaps.TryGetValue(key, out var del))
+        {
+            var ctx = GetContext();
+            return (TDestination)del(source, null, ctx);
         }
 
         throw new InvalidOperationException(
@@ -101,25 +110,44 @@ public sealed class Mapper : IMapper
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
-        // Ultra-fast path: check per-mapper list cache first (zero dict lookups after warm-up)
+        // Ultra-fast path: direct static field read for List<T> sources
         if (source is List<TSource> directList)
         {
-            var cachedListDel = ListCache<TSource, TDestination>.GetCached(this);
-            if (cachedListDel != null)
-                return cachedListDel(directList);
-
-            var key0 = new TypePair(typeof(TSource), typeof(TDestination));
-            if (_config.FrozenCtxFreeListMaps.TryGetValue(key0, out var listDel0))
+            if (FastListCache<TSource, TDestination>.Generation == _generation)
             {
-                var typedListDel = (Func<List<TSource>, List<TDestination>>)listDel0;
-                ListCache<TSource, TDestination>.SetCached(this, typedListDel);
-                return typedListDel(directList);
+                var fast = FastListCache<TSource, TDestination>.Func;
+                if (fast != null)
+                    return fast(directList);
             }
+
+            return MapListSlow<TSource, TDestination>(directList);
         }
 
+        return MapListFallback<TSource, TDestination>(source);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private List<TDestination> MapListSlow<TSource, TDestination>(List<TSource> source)
+    {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        // Ctx-free element delegate: per-element typed delegate
+        if (_config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDel))
+        {
+            var typed = (Func<List<TSource>, List<TDestination>>)listDel;
+            FastListCache<TSource, TDestination>.Func = typed;
+            FastListCache<TSource, TDestination>.Generation = _generation;
+            return typed(source);
+        }
+
+        // Fallback to per-item mapping
+        return MapListFallback<TSource, TDestination>(source);
+    }
+
+    private List<TDestination> MapListFallback<TSource, TDestination>(IEnumerable<TSource> source)
+    {
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+        // Ctx-free per-item delegate
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
             var typedDel = (Func<TSource, TDestination>)ctxFreeDel;
@@ -144,13 +172,11 @@ public sealed class Mapper : IMapper
             return result;
         }
 
-        // Fallback: ctx-aware boxed delegate
+        // Ctx-aware boxed delegate
         if (!_config.FrozenMaps.TryGetValue(key, out var del))
             throw new InvalidOperationException(
-                $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
-                $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
-        var ctx = _sharedCtx ??= new ResolutionContext();
-        ctx.Depth = 0;
+                $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}.");
+        var ctx = GetContext();
 
         if (source is IList<TSource> list)
         {
@@ -170,7 +196,6 @@ public sealed class Mapper : IMapper
             var resultList = source is ICollection<TSource> col2
                 ? new List<TDestination>(col2.Count)
                 : new List<TDestination>();
-
             foreach (var item in source)
             {
                 if (item == null) { resultList.Add(default!); continue; }
@@ -195,56 +220,27 @@ public sealed class Mapper : IMapper
     }
 
     /// <summary>
-    /// Static generic cache for MapList delegates — eliminates dictionary lookups.
+    // Global generation counter — incremented every time a new Mapper is created.
+    // Cached delegates are only valid for the current generation.
+    private static int _globalGeneration;
+    private readonly int _generation;
+
+    /// <summary>
+    /// Lock-free single-slot global cache for Map&lt;S,D&gt;. Zero overhead after first call.
+    /// JIT specializes each (TSource,TDestination) pair into a direct static field read.
     /// </summary>
-    private static class ListCache<TSource, TDestination>
+    private static class FastCache<TSource, TDestination>
     {
-        private static Mapper? _cachedMapper;
-        private static Func<List<TSource>, List<TDestination>>? _cachedDelegate;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Func<List<TSource>, List<TDestination>>? GetCached(Mapper mapper)
-        {
-            if (ReferenceEquals(_cachedMapper, mapper))
-                return _cachedDelegate;
-            return null;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void SetCached(Mapper mapper, Func<List<TSource>, List<TDestination>> del)
-        {
-            _cachedDelegate = del;
-            _cachedMapper = mapper;
-        }
+        public static Func<TSource, TDestination>? Func;
+        public static int Generation;
     }
 
     /// <summary>
-    /// Static generic cache that eliminates dictionary lookups for the most common
-    /// Map&lt;TSource, TDestination&gt; calls. Each unique (TSource, TDestination)
-    /// pair gets its own JIT-specialized static field.
+    /// Lock-free single-slot global cache for MapList. Zero overhead after first call.
     /// </summary>
-    private static class TypePairCache<TSource, TDestination>
+    private static class FastListCache<TSource, TDestination>
     {
-        // Single-slot cache: stores the last Mapper instance and its typed delegate.
-        // For single-mapper applications (the common case), this eliminates ALL
-        // dictionary lookups after the first call.
-        private static Mapper? _cachedMapper;
-        private static Func<TSource, TDestination>? _cachedDelegate;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Func<TSource, TDestination>? GetCached(Mapper mapper)
-        {
-            // Volatile read of mapper reference; if it matches, the delegate is valid.
-            if (ReferenceEquals(_cachedMapper, mapper))
-                return _cachedDelegate;
-            return null;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void SetCached(Mapper mapper, Func<TSource, TDestination> del)
-        {
-            _cachedDelegate = del;
-            _cachedMapper = mapper;
-        }
+        public static Func<List<TSource>, List<TDestination>>? Func;
+        public static int Generation;
     }
 }
