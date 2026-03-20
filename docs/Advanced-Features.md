@@ -196,3 +196,94 @@ Validate at startup (or in tests) that every destination property is covered:
 config.AssertConfigurationIsValid();
 // Throws if any destination property is unmapped and not ignored
 ```
+
+---
+
+## Record and Constructor Mapping
+
+EggMapper automatically selects the best-matching constructor when the destination type has no parameterless constructor. It scores constructors by how many parameter names match source property names (case-insensitive) and picks the highest-scoring one.
+
+```csharp
+public record OrderDto(int Id, string CustomerName, decimal Total);
+
+cfg.CreateMap<Order, OrderDto>();
+// Automatically calls: new OrderDto(src.Id, src.CustomerName, src.Total)
+```
+
+Any destination properties that exist on the constructor are set via it; remaining writable properties are set afterward. This works for C# records, immutable value objects, and any class with a parameterized constructor.
+
+---
+
+## Patch / Partial Mapping
+
+`mapper.Patch<TSource, TDestination>(source, destination)` copies only the *set* properties from `source` onto an existing `destination` object:
+
+- **Reference types** (`string`, classes) — copied only when the source value is non-null
+- **`Nullable<T>`** — copied only when `.HasValue` is true
+- **Non-nullable value types** (`int`, `bool`, etc.) — always copied (no sentinel for "not set")
+
+```csharp
+cfg.CreateMap<UpdateOrderRequest, Order>();
+
+var existing = db.Orders.Find(id)!;
+mapper.Patch(request, existing);   // only non-null fields overwrite existing
+db.SaveChanges();
+```
+
+No extra configuration needed — every type map automatically gets a patch delegate compiled at startup.
+
+---
+
+## Inline Validation
+
+Add post-mapping validation rules directly to a type map with `.Validate()`. All rules run after mapping completes; a `MappingValidationException` is thrown that contains **every** violation (not just the first):
+
+```csharp
+cfg.CreateMap<UserRequest, User>()
+   .Validate(d => d.Email, e => e.Contains("@"), "Email must be valid")
+   .Validate(d => d.Age,   a => a >= 18,          "Must be 18 or older")
+   .Validate(d => d.Name,  n => n.Length > 0,     "Name is required");
+```
+
+```csharp
+try
+{
+    var user = mapper.Map<UserRequest, User>(request);
+}
+catch (MappingValidationException ex)
+{
+    // ex.Errors — IReadOnlyList<string> with all violations
+    foreach (var err in ex.Errors) Console.WriteLine(err);
+}
+```
+
+Maps without `.Validate()` calls use the zero-overhead ctx-free path — no performance penalty for the common case.
+
+---
+
+## IQueryable Projection (ProjectTo)
+
+`ProjectTo<TSource, TDest>(config)` builds a pure `Expression<Func<TSource, TDest>>` from the registered type map and passes it directly to `IQueryable.Select()`. The expression is **never compiled** by EggMapper, so LINQ providers (EF Core, etc.) can translate it to SQL.
+
+```csharp
+cfg.CreateMap<Order, OrderDto>();
+
+// EF Core — translated to SQL SELECT
+var dtos = dbContext.Orders
+    .Where(o => o.IsActive)
+    .ProjectTo<Order, OrderDto>(config)
+    .ToListAsync();
+```
+
+Supports:
+- Flat DTOs (`MemberInitExpression`)
+- Records and parameterized constructors (`NewExpression` with member associations)
+- Nested registered maps (recursive projection)
+- Flattened properties (`AddressStreet` → `src.Address.Street`)
+- Custom `MapFrom` expressions inlined into the projection tree
+
+You can also get the raw expression for inspection or composition:
+
+```csharp
+Expression<Func<Order, OrderDto>> expr = config.BuildProjection<Order, OrderDto>();
+```
