@@ -5,6 +5,18 @@ public sealed class ResolutionContext
     public int Depth { get; internal set; }
     public int MaxDepth { get; internal set; }
 
+    /// <summary>
+    /// The mapper instance — allows recursive Map calls from within AfterMap,
+    /// BeforeMap, and MapFrom resolution context callbacks.
+    /// </summary>
+    public IMapper Mapper { get; internal set; } = null!;
+
+    /// <summary>
+    /// The service provider — allows resolving DI services (e.g., IMemberValueResolver)
+    /// from within mapping delegates. Null when DI is not configured.
+    /// </summary>
+    public IServiceProvider? ServiceProvider { get; internal set; }
+
     // Allocated only when cycle-detection is actually needed; most simple mappings
     // never touch this dictionary, so we avoid the allocation on every Map call.
     private Dictionary<object, object>? _instanceCache;

@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using EggMapper.Internal;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EggMapper;
 
@@ -50,7 +51,27 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         }
     }
 
+    public IMappingExpression CreateMap(Type sourceType, Type destinationType)
+    {
+        var typeMap = new TypeMap
+        {
+            SourceType = sourceType,
+            DestinationType = destinationType
+        };
+        var key = new TypePair(sourceType, destinationType);
+        _typeMaps[key] = typeMap;
+        return new NonGenericMappingExpression(typeMap, RegisterTypeMap);
+    }
+
+    public void AddMaps(params Assembly[] assemblies) => AddProfiles(assemblies);
+    public void AddMaps(IEnumerable<Assembly> assemblies) => AddProfiles(assemblies);
+    public void AddMaps(params Type[] markerTypes) =>
+        AddProfiles(markerTypes.Select(t => t.Assembly).Distinct());
+
+    public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
+
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
+    internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
 }
 
 internal sealed class MappingExpression<TSource, TDestination> : IMappingExpression<TSource, TDestination>
@@ -136,9 +157,23 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, ResolutionContext> beforeFunction)
+    {
+        _typeMap.BeforeMapCtxAction = (src, dest, ctx) =>
+            beforeFunction((TSource)src, (TDestination)dest, ctx);
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination> afterFunction)
     {
         _typeMap.AfterMapAction = (src, dest) => afterFunction((TSource)src, (TDestination)dest);
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> AfterMap(Action<TSource, TDestination, ResolutionContext> afterFunction)
+    {
+        _typeMap.AfterMapCtxAction = (src, dest, ctx) =>
+            afterFunction((TSource)src, (TDestination)dest, ctx);
         return this;
     }
 
@@ -148,9 +183,63 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> IncludeAllDerived()
+    {
+        _typeMap.IncludeAllDerivedFlag = true;
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> MaxDepth(int depth)
     {
         _typeMap.MaxDepth = depth;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) => converter((TSource)src)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination?, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter((TSource)src, dest is TDestination td ? td : default)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination?, ResolutionContext, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(ITypeConverter<TSource, TDestination> converter)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter.Convert((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing<TConverter>()
+        where TConverter : ITypeConverter<TSource, TDestination>, new()
+    {
+        var converter = new TConverter();
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            converter.Convert((TSource)src, dest is TDestination td ? td : default, ctx)!;
+        return this;
+    }
+
+    public IMappingExpression<TSource, TDestination> ConvertUsing(Type converterType)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+        {
+            var converter = Activator.CreateInstance(converterType)!;
+            var method = converterType.GetMethod("Convert")
+                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+            return method.Invoke(converter, new[] { src, dest, ctx })!;
+        };
         return this;
     }
 
@@ -190,6 +279,34 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
             mapFunction((TSource)src, dest is TDestination td ? td : default!);
     }
 
+    public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, TSourceMember> mapFunction)
+    {
+        _propMap.CustomResolver = (src, dest) =>
+            mapFunction((TSource)src, dest is TDestination td ? td : default!, default!);
+    }
+
+    public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, ResolutionContext, TSourceMember> mapFunction)
+    {
+        _propMap.ContextResolver = (src, dest, destMember, ctx) =>
+            mapFunction((TSource)src, dest is TDestination td ? td : default!,
+                destMember is TMember tm ? tm : default!, ctx);
+    }
+
+    public void MapFrom<TValueResolver, TSourceMember>(Expression<Func<TSource, TSourceMember>> sourceMember)
+        where TValueResolver : IMemberValueResolver<object, object, TSourceMember, TMember>
+    {
+        var compiled = sourceMember.Compile();
+        _propMap.ValueResolverFactory = sp =>
+        {
+            var resolver = (TValueResolver)ActivatorUtilities.CreateInstance(sp, typeof(TValueResolver));
+            return (src, dest, destMember, ctx) =>
+            {
+                var srcMember = compiled((TSource)src);
+                return resolver.Resolve(src, dest!, srcMember, destMember is TMember dm ? dm : default!, ctx);
+            };
+        };
+    }
+
     public void Ignore() => _propMap.Ignored = true;
 
     public void Condition(Func<TSource, bool> condition)
@@ -219,6 +336,11 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
         _propMap.UseValue = value;
         _propMap.HasUseValue = true;
     }
+
+    public void UseDestinationValue()
+    {
+        _propMap.UseDestinationValue = true;
+    }
 }
 
 internal sealed class PathConfigurationExpression<TSource, TDestination, TMember>
@@ -237,5 +359,66 @@ internal sealed class PathConfigurationExpression<TSource, TDestination, TMember
         _propMap.CustomResolver = (src, dest) => compiled((TSource)src);
     }
 
+    public void Ignore() => _propMap.Ignored = true;
+}
+
+// ── Non-generic mapping expression for CreateMap(Type, Type) ─────────────
+
+internal sealed class NonGenericMappingExpression : IMappingExpression
+{
+    private readonly TypeMap _typeMap;
+    private readonly Action<TypeMap> _registerTypeMap;
+
+    internal NonGenericMappingExpression(TypeMap typeMap, Action<TypeMap> registerTypeMap)
+    {
+        _typeMap = typeMap;
+        _registerTypeMap = registerTypeMap;
+    }
+
+    public IMappingExpression ForMember(string destinationMember, Action<IMemberConfigurationExpression> memberOptions)
+    {
+        var destDetails = TypeDetails.Get(_typeMap.DestinationType);
+        var destProp = destDetails.WritableProperties.FirstOrDefault(p =>
+            string.Equals(p.Name, destinationMember, StringComparison.OrdinalIgnoreCase));
+        if (destProp != null)
+        {
+            var existing = _typeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destProp.Name);
+            if (existing == null)
+            {
+                existing = new PropertyMap { DestinationProperty = destProp };
+                _typeMap.PropertyMaps.Add(existing);
+            }
+            var expr = new NonGenericMemberConfigurationExpression(existing);
+            memberOptions(expr);
+        }
+        return this;
+    }
+
+    public IMappingExpression IncludeAllDerived()
+    {
+        _typeMap.IncludeAllDerivedFlag = true;
+        return this;
+    }
+
+    public IMappingExpression ConvertUsing(Type converterType)
+    {
+        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+        {
+            var converter = Activator.CreateInstance(converterType)!;
+            var method = converterType.GetMethod("Convert")
+                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+            return method.Invoke(converter, new[] { src, dest, ctx })!;
+        };
+        return this;
+    }
+}
+
+internal sealed class NonGenericMemberConfigurationExpression : IMemberConfigurationExpression
+{
+    private readonly PropertyMap _propMap;
+
+    internal NonGenericMemberConfigurationExpression(PropertyMap propMap) => _propMap = propMap;
+
+    public void MapFrom(string sourceMemberName) => _propMap.SourceMemberName = sourceMemberName;
     public void Ignore() => _propMap.Ignored = true;
 }

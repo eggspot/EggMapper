@@ -10,6 +10,12 @@ internal sealed class TypeDetails
     public PropertyInfo[] WritableProperties { get; }
     public ConstructorInfo[] Constructors { get; }
 
+    /// <summary>Cached parameterless constructor — avoids repeated GetConstructor(Type.EmptyTypes) calls.</summary>
+    public ConstructorInfo? ParameterlessCtor { get; }
+
+    /// <summary>Case-insensitive name → PropertyInfo index for readable properties. O(1) lookups.</summary>
+    public Dictionary<string, PropertyInfo> ReadableByName { get; }
+
     private static readonly ConcurrentDictionary<Type, TypeDetails> Cache = new();
 
     public static TypeDetails Get(Type type) => Cache.GetOrAdd(type, t => new TypeDetails(t));
@@ -29,5 +35,11 @@ internal sealed class TypeDetails
         ReadableProperties = readable.ToArray();
         WritableProperties = writable.ToArray();
         Constructors = type.GetConstructors();
+        ParameterlessCtor = type.GetConstructor(Type.EmptyTypes);
+
+        ReadableByName = new Dictionary<string, PropertyInfo>(readable.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var p in readable)
+            if (!ReadableByName.ContainsKey(p.Name))
+                ReadableByName[p.Name] = p;
     }
 }

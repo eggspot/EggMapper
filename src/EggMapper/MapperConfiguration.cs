@@ -22,42 +22,36 @@ public sealed class MapperConfiguration
     // Inlines the entire collection + element mapping loop — zero per-element delegate call.
     internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = null!;
 
+    internal Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; private set; }
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
         configure(expr);
+        ShouldMapProperty = expr.GetShouldMapProperty();
 
         foreach (var typeMap in expr.GetTypeMaps())
         {
+            typeMap.ShouldMapProperty = ShouldMapProperty;
             var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
             _typeMaps[key] = typeMap;
         }
 
-        foreach (var typeMap in TopologicalOrder(_typeMaps))
-            CompileMap(typeMap);
+        // Resolve IncludeAllDerived: for each base map with the flag set,
+        // find derived type maps and auto-set their BaseMapTypePair.
+        ResolveIncludeAllDerived();
 
-        // Snapshot: no further writes will occur to _compiledMaps after construction.
-        FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
-
-        // Build ctx-free typed delegates for eligible maps.
-        // Pass allTypeMaps so nested maps and collections can be inlined.
+        // Single topological pass: try ctx-free first to avoid a redundant Compile() call,
+        // fall back to the full typed-delegate build, then try list delegate — all in one loop.
         var ctxFree = new Dictionary<TypePair, Delegate>();
-        foreach (var kvp in _typeMaps)
-        {
-            var del = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(kvp.Value, _typeMaps);
-            if (del != null)
-                ctxFree[kvp.Key] = del;
-        }
-        FrozenCtxFreeMaps = ctxFree;
-
-        // Build ctx-free list delegates for eligible maps.
         var ctxFreeList = new Dictionary<TypePair, Delegate>();
-        foreach (var kvp in _typeMaps)
-        {
-            var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(kvp.Value, _typeMaps);
-            if (listDel != null)
-                ctxFreeList[kvp.Key] = listDel;
-        }
+
+        foreach (var typeMap in TopologicalOrder(_typeMaps))
+            CompileMap(typeMap, ctxFree, ctxFreeList);
+
+        // Snapshot: no further writes will occur after construction.
+        FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
+        FrozenCtxFreeMaps = ctxFree;
         FrozenCtxFreeListMaps = ctxFreeList;
     }
 
@@ -76,9 +70,7 @@ public sealed class MapperConfiguration
 
             foreach (var destProp in destDetails.WritableProperties)
             {
-                var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
-                    string.Equals(p.Name, destProp.Name, StringComparison.OrdinalIgnoreCase));
-                if (srcProp == null) continue;
+                if (!srcDetails.ReadableByName.TryGetValue(destProp.Name, out var srcProp)) continue;
 
                 var nestedPair = new TypePair(srcProp.PropertyType, destProp.PropertyType);
                 if (typeMaps.TryGetValue(nestedPair, out var nestedMap))
@@ -92,14 +84,77 @@ public sealed class MapperConfiguration
         return result;
     }
 
-    private void CompileMap(TypeMap typeMap)
+    private void CompileMap(
+        TypeMap typeMap,
+        Dictionary<TypePair, Delegate> ctxFree,
+        Dictionary<TypePair, Delegate> ctxFreeList)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
         if (_compiledMaps.ContainsKey(key)) return;
 
-        var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps);
-        _compiledMaps[key] = compiledDelegate;
-        typeMap.MappingDelegate = compiledDelegate;
+        // ConvertUsing overrides the entire mapping delegate; ctx-free not applicable.
+        if (typeMap.ConvertUsingFunc != null)
+        {
+            _compiledMaps[key] = typeMap.ConvertUsingFunc;
+            typeMap.MappingDelegate = typeMap.ConvertUsingFunc;
+            return;
+        }
+
+        // Try ctx-free-with-dest: single Compile() that handles both create-new and update-existing.
+        // Derive the boxed FrozenMaps entry and the typed FrozenCtxFreeMaps entry from it
+        // via zero-cost closures — no second expression-tree compilation.
+        var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps);
+        if (ctxFreeWithDest != null)
+        {
+            // Func<TSrc,TDest,TDest> stored directly — FastCache calls it as f(src, default!)
+            // eliminating the extra closure call a NoDestWrapper would add.
+            ctxFree[key] = ctxFreeWithDest;
+
+            // Func<object,object?,ResolutionContext,object> — handles dest != null too
+            var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(
+                typeMap.SourceType, typeMap.DestinationType, ctxFreeWithDest);
+            _compiledMaps[key] = boxed;
+            typeMap.MappingDelegate = boxed;
+        }
+        else
+        {
+            // Complex map (hooks, conditions, inheritance…) — fall back to full compilation.
+            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps);
+            _compiledMaps[key] = compiledDelegate;
+            typeMap.MappingDelegate = compiledDelegate;
+        }
+
+        // Ctx-free list delegate — entire collection loop inlined (independent of above path).
+        var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps);
+        if (listDel != null)
+            ctxFreeList[key] = listDel;
+    }
+
+    private void ResolveIncludeAllDerived()
+    {
+        // Find all base maps with IncludeAllDerived flag
+        var baseMaps = _typeMaps.Values
+            .Where(m => m.IncludeAllDerivedFlag)
+            .ToList();
+
+        foreach (var baseMap in baseMaps)
+        {
+            var basePair = new TypePair(baseMap.SourceType, baseMap.DestinationType);
+
+            // Find derived maps whose source/dest types inherit from the base map types
+            foreach (var kvp in _typeMaps)
+            {
+                var derivedMap = kvp.Value;
+                if (derivedMap == baseMap) continue;
+                if (derivedMap.BaseMapTypePair.HasValue) continue; // already has a base
+
+                if (baseMap.SourceType.IsAssignableFrom(derivedMap.SourceType) &&
+                    baseMap.DestinationType.IsAssignableFrom(derivedMap.DestinationType))
+                {
+                    derivedMap.BaseMapTypePair = basePair;
+                }
+            }
+        }
     }
 
     public IMapper CreateMapper() => new Mapper(this);
@@ -123,16 +178,20 @@ public sealed class MapperConfiguration
 
             foreach (var destProp in destDetails.WritableProperties)
             {
+                if (ShouldMapProperty != null && !ShouldMapProperty(destProp)) continue;
+
                 var propMap = typeMap.PropertyMaps.FirstOrDefault(p =>
                     p.DestinationProperty.Name == destProp.Name);
 
                 if (propMap?.Ignored == true) continue;
                 if (propMap?.HasUseValue == true) continue;
+                if (propMap?.UseDestinationValue == true) continue;
                 if (propMap?.CustomResolver != null) continue;
+                if (propMap?.ContextResolver != null) continue;
+                if (propMap?.ValueResolverFactory != null) continue;
 
                 var sourceMemberName = propMap?.SourceMemberName ?? destProp.Name;
-                var srcProp = srcDetails.ReadableProperties.FirstOrDefault(p =>
-                    string.Equals(p.Name, sourceMemberName, StringComparison.OrdinalIgnoreCase));
+                srcDetails.ReadableByName.TryGetValue(sourceMemberName, out var srcProp);
 
                 if (srcProp == null && !ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
                 {
