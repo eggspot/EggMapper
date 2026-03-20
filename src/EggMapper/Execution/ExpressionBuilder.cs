@@ -488,11 +488,11 @@ internal static class ExpressionBuilder
         var childDestDetails = TypeDetails.Get(destType);
 
         var srcAccess = Expression.Property(srcParam, srcProp);
+        // Hoist the source nav-property read before the null check so the getter
+        // is only called once instead of twice (once for check, once for assignment).
         var childSrcVar = Expression.Variable(srcType, "ns_" + srcProp.Name);
         var childDestVar = Expression.Variable(destType, "nd_" + destProp.Name);
-        var childStmts = new List<Expression>();
-
-        childStmts.Add(Expression.Assign(childSrcVar, srcAccess));
+        var innerStmts = new List<Expression>();
 
         Expression newExpr = childTypeMap.CustomConstructor != null
             ? Expression.Convert(
@@ -500,7 +500,7 @@ internal static class ExpressionBuilder
                     Expression.Convert(childSrcVar, typeof(object))),
                 destType)
             : (Expression)Expression.New(childDestCtor!);
-        childStmts.Add(Expression.Assign(childDestVar, newExpr));
+        innerStmts.Add(Expression.Assign(childDestVar, newExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -512,7 +512,7 @@ internal static class ExpressionBuilder
             {
                 try
                 {
-                    childStmts.Add(Expression.Assign(
+                    innerStmts.Add(Expression.Assign(
                         Expression.Property(childDestVar, pm.DestinationProperty),
                         Expression.Convert(Expression.Constant(pm.UseValue), pm.DestinationProperty.PropertyType)));
                 }
@@ -525,7 +525,7 @@ internal static class ExpressionBuilder
                 if (cSrcProp == null) continue;
                 var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
                 if (assign == null) return null;
-                childStmts.Add(assign);
+                innerStmts.Add(assign);
             }
         }
 
@@ -539,18 +539,20 @@ internal static class ExpressionBuilder
 
             var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
             if (assign == null) return null;
-            childStmts.Add(assign);
+            innerStmts.Add(assign);
         }
 
-        childStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
+        innerStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
 
-        var block = Expression.Block(new[] { childSrcVar, childDestVar }, childStmts);
-
-        return Expression.IfThen(
-            Expression.ReferenceNotEqual(
-                Expression.Convert(srcAccess, typeof(object)),
-                Expression.Constant(null, typeof(object))),
-            block);
+        // var ns = src.NavProp; if (ns != null) { var nd = new TDest(); ... d.NavProp = nd; }
+        return Expression.Block(
+            new[] { childSrcVar },
+            Expression.Assign(childSrcVar, srcAccess),
+            Expression.IfThen(
+                Expression.ReferenceNotEqual(
+                    Expression.Convert(childSrcVar, typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                Expression.Block(new[] { childDestVar }, innerStmts)));
     }
 
     /// <summary>
@@ -1038,13 +1040,13 @@ internal static class ExpressionBuilder
         var childSrcDetails = TypeDetails.Get(srcType);
         var childDestDetails = TypeDetails.Get(destType);
 
-        // Build: if (s.Prop != null) { var cs = s.Prop; var cd = new TDest(); cd.X = cs.X; ... d.Prop = cd; }
+        // Hoist source nav-property read before the null check — one getter call instead of two.
+        // Generates: var cs = s.Prop; if (cs != null) { var cd = new TDest(); ... d.Prop = cd; }
         var srcAccess = Expression.Property(sVar, srcProp);
         var childSrcVar = Expression.Variable(srcType, "cs_" + srcProp.Name);
         var childDestVar = Expression.Variable(destType, "cd_" + destProp.Name);
 
-        var childStmts = new List<Expression>();
-        childStmts.Add(Expression.Assign(childSrcVar, srcAccess));
+        var innerStmts = new List<Expression>();
 
         Expression newChildExpr = childTypeMap.CustomConstructor != null
             ? Expression.Convert(
@@ -1052,7 +1054,7 @@ internal static class ExpressionBuilder
                     Expression.Convert(childSrcVar, typeof(object))),
                 destType)
             : (Expression)Expression.New(childDestCtor!);
-        childStmts.Add(Expression.Assign(childDestVar, newChildExpr));
+        innerStmts.Add(Expression.Assign(childDestVar, newChildExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1066,7 +1068,7 @@ internal static class ExpressionBuilder
             {
                 try
                 {
-                    childStmts.Add(Expression.Assign(
+                    innerStmts.Add(Expression.Assign(
                         Expression.Property(childDestVar, pm.DestinationProperty),
                         Expression.Convert(Expression.Constant(pm.UseValue), pm.DestinationProperty.PropertyType)));
                 }
@@ -1081,7 +1083,7 @@ internal static class ExpressionBuilder
 
                 var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
                 if (assign == null) return null; // Property needs complex handling; bail out
-                childStmts.Add(assign);
+                innerStmts.Add(assign);
             }
         }
 
@@ -1096,18 +1098,19 @@ internal static class ExpressionBuilder
 
             var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
             if (assign == null) return null; // Property needs complex handling; bail out
-            childStmts.Add(assign);
+            innerStmts.Add(assign);
         }
 
-        childStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
+        innerStmts.Add(Expression.Assign(Expression.Property(dVar, destProp), childDestVar));
 
-        var block = Expression.Block(new[] { childSrcVar, childDestVar }, childStmts);
-
-        return Expression.IfThen(
-            Expression.ReferenceNotEqual(
-                Expression.Convert(srcAccess, typeof(object)),
-                Expression.Constant(null, typeof(object))),
-            block);
+        return Expression.Block(
+            new[] { childSrcVar },
+            Expression.Assign(childSrcVar, srcAccess),
+            Expression.IfThen(
+                Expression.ReferenceNotEqual(
+                    Expression.Convert(childSrcVar, typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                Expression.Block(new[] { childDestVar }, innerStmts)));
     }
 
     /// <summary>
