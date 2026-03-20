@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using EggMapper.Internal;
 
 namespace EggMapper;
@@ -21,4 +22,6 @@ internal sealed class TypeMap
     public Func<object, object?, ResolutionContext, object>? ConvertUsingFunc { get; set; }
     public Func<object, object?, ResolutionContext, object>? MappingDelegate { get; set; }
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
+    /// <summary>The compiled expression tree, stored before .Compile() for diagnostics.</summary>
+    public LambdaExpression? MappingExpression { get; set; }
 }
