@@ -8,5 +8,7 @@
     <Project Path="src/EggMapper/EggMapper.csproj" />
     <Project Path="src/EggMapper.ClassMapper/EggMapper.ClassMapper.csproj" />
     <Project Path="src/EggMapper.ClassMapper.Tests/EggMapper.ClassMapper.Tests.csproj" />
+    <Project Path="src/EggMapper.Analyzers/EggMapper.Analyzers.csproj" />
+    <Project Path="src/EggMapper.Analyzers.Tests/EggMapper.Analyzers.Tests.csproj" />
   </Folder>
 </Solution>
