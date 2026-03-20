@@ -3,7 +3,7 @@
     <AssemblyName>EggMapper</AssemblyName>
     <RootNamespace>EggMapper</RootNamespace>
     <PackageId>EggMapper</PackageId>
-    <Version>1.12.0</Version>
+    <Version>1.12.1</Version>
     <Authors>Eggspot</Authors>
     <Company>Eggspot</Company>
     <Product>EggMapper</Product>
