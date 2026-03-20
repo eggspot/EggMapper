@@ -84,6 +84,10 @@ public class MyService(IMapper mapper) { ... }
 
 ## Performance
 
+<!-- PERF_TIMESTAMP_START -->
+> ⏱ **Last updated:** 2026-03-20 15:25 UTC
+<!-- PERF_TIMESTAMP_END -->
+
 All benchmarks run on BenchmarkDotNet with .NET 10. Ratio = time vs hand-written manual code (lower is better).
 
 <!-- SUMMARY_TABLE_START -->
@@ -110,8 +114,6 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 ```
 
 <!-- BENCHMARK_RESULTS_START -->
-
-> ⏱ **Last updated:** 2026-03-20 15:45 UTC
 
 > **Competitors tested:** EggMapper, AutoMapper, Mapster, Mapperly (source-gen), AgileMapper
 

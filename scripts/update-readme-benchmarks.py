@@ -30,10 +30,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-START_MARKER   = "<!-- BENCHMARK_RESULTS_START -->"
-END_MARKER     = "<!-- BENCHMARK_RESULTS_END -->"
-SUMMARY_START  = "<!-- SUMMARY_TABLE_START -->"
-SUMMARY_END    = "<!-- SUMMARY_TABLE_END -->"
+START_MARKER      = "<!-- BENCHMARK_RESULTS_START -->"
+END_MARKER        = "<!-- BENCHMARK_RESULTS_END -->"
+SUMMARY_START     = "<!-- SUMMARY_TABLE_START -->"
+SUMMARY_END       = "<!-- SUMMARY_TABLE_END -->"
+TIMESTAMP_START   = "<!-- PERF_TIMESTAMP_START -->"
+TIMESTAMP_END     = "<!-- PERF_TIMESTAMP_END -->"
 
 # Canonical order and short labels for the README summary
 BENCHMARK_ORDER: list[tuple[str, str]] = [
@@ -222,15 +224,6 @@ def build_performance_section(artifacts_dir: str) -> str:
         "",
     ]
 
-    # Only include a timestamp when there are real benchmark results so that
-    # no-op runs (benchmarks unchanged) don't produce a spurious diff/commit.
-    if has_results:
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-        parts += [
-            f"> ⏱ **Last updated:** {timestamp}",
-            "",
-        ]
-
     parts += [
         COMPETITORS_NOTE,
         "",
@@ -294,6 +287,13 @@ def update_readme(artifacts_dir: str, readme_path: str) -> None:
             new_content,
             flags=re.DOTALL,
         )
+
+    # ── Timestamp (right after ## Performance) ───────────────────────────
+    if md_files and TIMESTAMP_START in new_content and TIMESTAMP_END in new_content:
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        ts_block = f"{TIMESTAMP_START}\n> ⏱ **Last updated:** {timestamp}\n{TIMESTAMP_END}"
+        pattern = re.escape(TIMESTAMP_START) + r".*?" + re.escape(TIMESTAMP_END)
+        new_content = re.sub(pattern, ts_block, new_content, flags=re.DOTALL)
 
     # ── Summary table ────────────────────────────────────────────────────
     if md_files and SUMMARY_START in new_content and SUMMARY_END in new_content:

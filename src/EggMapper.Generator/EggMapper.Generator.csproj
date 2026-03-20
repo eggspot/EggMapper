@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>EggMapper.Generator</AssemblyName>
+    <RootNamespace>EggMapper.Generator</RootNamespace>
+    <PackageId>EggMapper.Generator</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Eggspot</Authors>
+    <Company>Eggspot</Company>
+    <Product>EggMapper</Product>
+    <Description>Roslyn source generator for EggMapper. Generates compile-time, type-safe extension methods from [MapTo] attributes. Zero runtime reflection, zero allocations.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mapper;source-generator;compile-time;roslyn;extension-methods</PackageTags>
+    <Copyright>Copyright © Eggspot</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591</NoWarn>
+    <!-- Generators must target netstandard2.0 to run inside the Roslyn compiler process -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- Prevent the generator DLL itself from being added as a runtime reference -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn API — compile-only, never shipped as a runtime dependency -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+  <!-- Pack the generator DLL into the analyzers/dotnet/cs folder of the NuGet package -->
+  <ItemGroup>
+    <None Include="$(OutputPath)\$(AssemblyName).dll"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+  </ItemGroup>
+</Project>
