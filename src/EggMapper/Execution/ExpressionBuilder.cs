@@ -1413,23 +1413,6 @@ internal static class ExpressionBuilder
         typeof(ExpressionBuilder).GetMethod(nameof(WrapCtxFreeAsBoxed),
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private static readonly MethodInfo _noDestWrapperMethod =
-        typeof(ExpressionBuilder).GetMethod(nameof(NoDestWrapper),
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    /// <summary>
-    /// Creates a <c>Func&lt;TSrc,TDest&gt;</c> wrapper around a ctx-free-with-dest delegate
-    /// that always passes <c>default</c> as the existing destination (create-new path).
-    /// Zero extra <c>Compile()</c> calls — just a closure.
-    /// </summary>
-    internal static Delegate CreateNoDestWrapper(Type srcType, Type destType, Delegate ctxFreeWithDest)
-        => (Delegate)_noDestWrapperMethod
-            .MakeGenericMethod(srcType, destType)
-            .Invoke(null, new object[] { ctxFreeWithDest })!;
-
-    private static Func<TSrc, TDest> NoDestWrapper<TSrc, TDest>(Func<TSrc, TDest, TDest> f)
-        => src => f(src, default!);
-
     /// <summary>
     /// Wraps a ctx-free-with-dest <c>Func&lt;TSrc,TDest,TDest&gt;</c> as a boxed
     /// <c>Func&lt;object,object?,ResolutionContext,object&gt;</c> without a second

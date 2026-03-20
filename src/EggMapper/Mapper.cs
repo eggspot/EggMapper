@@ -110,9 +110,14 @@ public sealed class Mapper : IMapper
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
-        // Fast path: use per-item FastCache delegate with tight devirtualized loop
+        // Ultra-fast path: inlined-loop list delegate (entire collection in one compiled call)
         if (source is List<TSource> directList)
         {
+            var listFunc = FastListCache<TSource, TDestination>.Func;
+            if (listFunc != null & FastListCache<TSource, TDestination>.Generation == _generation)
+                return listFunc(directList);
+
+            // Per-item FastCache fallback for List<T>
             var itemFunc = FastCache<TSource, TDestination>.Func;
             if (itemFunc != null & FastCache<TSource, TDestination>.Generation == _generation)
             {
@@ -130,6 +135,24 @@ public sealed class Mapper : IMapper
     private List<TDestination> MapListFallback<TSource, TDestination>(IEnumerable<TSource> source)
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+        // Ctx-free list delegate — entire loop inlined; also populate FastListCache for next call
+        if (source is List<TSource> srcList
+            && _config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDelRaw))
+        {
+            var listDel = (Func<List<TSource>, List<TDestination>>)listDelRaw;
+            FastListCache<TSource, TDestination>.Func = listDel;
+            FastListCache<TSource, TDestination>.Generation = _generation;
+
+            // Also warm the per-item FastCache so MapList<> next call uses the fast path
+            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeRaw))
+            {
+                FastCache<TSource, TDestination>.Func = (Func<TSource, TDestination, TDestination>)ctxFreeRaw;
+                FastCache<TSource, TDestination>.Generation = _generation;
+            }
+
+            return listDel(srcList);
+        }
 
         // Ctx-free per-item delegate — also populate FastCache for next call
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
