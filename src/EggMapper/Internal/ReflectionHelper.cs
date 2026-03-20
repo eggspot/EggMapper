@@ -20,9 +20,50 @@ internal static class ReflectionHelper
     public static Type GetUnderlyingType(Type type) =>
         Nullable.GetUnderlyingType(type) ?? type;
 
+    public static bool IsDictionaryType(Type type)
+    {
+        if (!type.IsGenericType && type.GetInterfaces().Length == 0) return false;
+        if (type.IsGenericType)
+        {
+            var def = type.GetGenericTypeDefinition();
+            if (def == typeof(IDictionary<,>) || def == typeof(Dictionary<,>)) return true;
+        }
+        var interfaces = type.GetInterfaces();
+        for (int i = 0; i < interfaces.Length; i++)
+        {
+            var iface = interfaces[i];
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+                return true;
+        }
+        return false;
+    }
+
+    public static (Type KeyType, Type ValueType) GetDictionaryKeyValueTypes(Type type)
+    {
+        if (type.IsGenericType)
+        {
+            var def = type.GetGenericTypeDefinition();
+            if (def == typeof(IDictionary<,>) || def == typeof(Dictionary<,>))
+            {
+                var args = type.GetGenericArguments();
+                return (args[0], args[1]);
+            }
+        }
+        var iface = type.GetInterfaces()
+            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+        if (iface != null)
+        {
+            var args = iface.GetGenericArguments();
+            return (args[0], args[1]);
+        }
+        throw new InvalidOperationException($"{type.Name} is not a dictionary type");
+    }
+
     public static bool IsCollectionType(Type type)
     {
         if (type == typeof(string)) return false;
+        // Dictionaries are not treated as plain collections
+        if (IsDictionaryType(type)) return false;
         if (type.IsArray) return true;
         var interfaces = type.GetInterfaces();
         for (int i = 0; i < interfaces.Length; i++)

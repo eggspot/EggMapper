@@ -408,6 +408,14 @@ internal static class ExpressionBuilder
         if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
             return null;
 
+        // ── Dictionary property ───────────────────────────────────────────────
+        if (ReflectionHelper.IsDictionaryType(srcType) || ReflectionHelper.IsDictionaryType(destType))
+        {
+            if (!ReflectionHelper.IsDictionaryType(srcType) || !ReflectionHelper.IsDictionaryType(destType))
+                return null;
+            return TryBuildCtxFreeDictionaryAssign(srcParam, dVar, srcProp, destProp);
+        }
+
         // Same type: direct assignment (no boxing, no conversion)
         if (srcType == destType)
             return Expression.Assign(destAccess, srcAccess);
@@ -942,6 +950,14 @@ internal static class ExpressionBuilder
         var destType   = destProp.PropertyType;
         var srcAccess  = Expression.Property(sVar, srcProp);
         var destAccess = Expression.Property(dVar, destProp);
+
+        // ── Dictionary property ───────────────────────────────────────────────
+        if (ReflectionHelper.IsDictionaryType(srcType) || ReflectionHelper.IsDictionaryType(destType))
+        {
+            if (!ReflectionHelper.IsDictionaryType(srcType) || !ReflectionHelper.IsDictionaryType(destType))
+                return null;
+            return TryBuildCtxFreeDictionaryAssign(sVar, dVar, srcProp, destProp);
+        }
 
         // ── Collection property ───────────────────────────────────────────────
         if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
@@ -1735,6 +1751,15 @@ internal static class ExpressionBuilder
         // mappings without conditions/null-substitution do too.
         bool noGuards = condition == null && fullCondition == null && preCondition == null && !hasNullSub;
 
+        // ── Dictionary property ───────────────────────────────────────────────
+        if (ReflectionHelper.IsDictionaryType(srcType) || ReflectionHelper.IsDictionaryType(destType))
+        {
+            if (!ReflectionHelper.IsDictionaryType(srcType) || !ReflectionHelper.IsDictionaryType(destType))
+                return null;
+            return BuildDictionaryAction(getter, setter, srcType, destType, noGuards, compiledMaps,
+                condition, fullCondition, preCondition, hasNullSub, nullSub);
+        }
+
         if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
         {
             var srcElemType = ReflectionHelper.GetCollectionElementType(srcType);
@@ -1958,6 +1983,121 @@ internal static class ExpressionBuilder
         }
 
         return null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Dictionary helpers
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Ctx-free: emits <c>dest.Prop = src.Prop == null ? null : new Dictionary&lt;K,V&gt;(src.Prop)</c>
+    /// for same key+value-type dictionaries.
+    /// </summary>
+    private static Expression? TryBuildCtxFreeDictionaryAssign(
+        ParameterExpression srcParam,
+        ParameterExpression dVar,
+        PropertyInfo srcProp,
+        PropertyInfo destProp)
+    {
+        var srcType = srcProp.PropertyType;
+        var destType = destProp.PropertyType;
+        var (srcKeyType, srcValType) = ReflectionHelper.GetDictionaryKeyValueTypes(srcType);
+        var (destKeyType, destValType) = ReflectionHelper.GetDictionaryKeyValueTypes(destType);
+
+        if (srcKeyType != destKeyType || srcValType != destValType) return null;
+
+        var dictConcreteType = typeof(Dictionary<,>).MakeGenericType(destKeyType, destValType);
+        var srcDictIfaceType = typeof(IDictionary<,>).MakeGenericType(srcKeyType, srcValType);
+        var copyCtor = dictConcreteType.GetConstructor(new[] { srcDictIfaceType });
+        if (copyCtor == null) return null;
+
+        var srcAccess = Expression.Property(srcParam, srcProp);
+        var destAccess = Expression.Property(dVar, destProp);
+
+        var srcCast = srcDictIfaceType.IsAssignableFrom(srcType)
+            ? (Expression)Expression.Convert(srcAccess, srcDictIfaceType)
+            : srcAccess;
+
+        return Expression.IfThen(
+            Expression.ReferenceNotEqual(
+                Expression.Convert(srcAccess, typeof(object)),
+                Expression.Constant(null, typeof(object))),
+            Expression.Assign(destAccess,
+                Expression.Convert(Expression.New(copyCtor, srcCast), destType)));
+    }
+
+    private static Action<object, object, ResolutionContext>? BuildDictionaryAction(
+        Func<object, object?> getter,
+        Action<object, object?> setter,
+        Type srcType,
+        Type destType,
+        bool noGuards,
+        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        Func<object, bool>? condition,
+        Func<object, object, bool>? fullCondition,
+        Func<object, bool>? preCondition,
+        bool hasNullSub,
+        object? nullSub)
+    {
+        var (srcKeyType, srcValType) = ReflectionHelper.GetDictionaryKeyValueTypes(srcType);
+        var (destKeyType, destValType) = ReflectionHelper.GetDictionaryKeyValueTypes(destType);
+
+        if (srcKeyType != destKeyType) return null;
+
+        var destDictType = typeof(Dictionary<,>).MakeGenericType(destKeyType, destValType);
+        var valPair = new TypePair(srcValType, destValType);
+        var capturedMaps = compiledMaps;
+
+        if (noGuards)
+        {
+            return (src, dest, ctx) =>
+            {
+                var srcVal = getter(src);
+                if (srcVal == null) return;
+                setter(dest, MapDictionaryInternal(srcVal, srcValType, destValType, destDictType, valPair, capturedMaps, ctx));
+            };
+        }
+
+        return (src, dest, ctx) =>
+        {
+            if (preCondition != null && !preCondition(src)) return;
+            if (condition != null && !condition(src)) return;
+            if (fullCondition != null && !fullCondition(src, dest)) return;
+
+            var srcVal = getter(src);
+            if (srcVal == null)
+            {
+                if (hasNullSub) setter(dest, nullSub);
+                return;
+            }
+            setter(dest, MapDictionaryInternal(srcVal, srcValType, destValType, destDictType, valPair, capturedMaps, ctx));
+        };
+    }
+
+    private static object MapDictionaryInternal(
+        object srcDict,
+        Type srcValType,
+        Type destValType,
+        Type destDictType,
+        TypePair valPair,
+        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        ResolutionContext ctx)
+    {
+        compiledMaps.TryGetValue(valPair, out var valMapper);
+        var dest = (IDictionary)Activator.CreateInstance(destDictType)!;
+        foreach (DictionaryEntry entry in (IDictionary)srcDict)
+        {
+            var val = entry.Value;
+            object? mappedVal;
+            if (valMapper != null && val != null)
+                mappedVal = valMapper(val, null, ctx);
+            else if (destValType.IsAssignableFrom(srcValType))
+                mappedVal = val;
+            else
+                mappedVal = val != null ? ConvertValue(val, destValType) : null;
+            dest[entry.Key] = mappedVal;
+        }
+        return dest;
     }
 
     private static object? MapCollectionInternal(
