@@ -24,11 +24,14 @@ public sealed class MapperConfiguration
 
     internal Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; private set; }
 
+    internal int DefaultMaxDepth { get; private set; }
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
         configure(expr);
         ShouldMapProperty = expr.GetShouldMapProperty();
+        DefaultMaxDepth = expr.GetDefaultMaxDepth();
 
         foreach (var typeMap in expr.GetTypeMaps())
         {
@@ -47,7 +50,7 @@ public sealed class MapperConfiguration
         var ctxFreeList = new Dictionary<TypePair, Delegate>();
 
         foreach (var typeMap in TopologicalOrder(_typeMaps))
-            CompileMap(typeMap, ctxFree, ctxFreeList);
+            CompileMap(typeMap, ctxFree, ctxFreeList, DefaultMaxDepth);
 
         // Snapshot: no further writes will occur after construction.
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
@@ -87,7 +90,8 @@ public sealed class MapperConfiguration
     private void CompileMap(
         TypeMap typeMap,
         Dictionary<TypePair, Delegate> ctxFree,
-        Dictionary<TypePair, Delegate> ctxFreeList)
+        Dictionary<TypePair, Delegate> ctxFreeList,
+        int defaultMaxDepth)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
         if (_compiledMaps.ContainsKey(key)) return;
@@ -119,7 +123,7 @@ public sealed class MapperConfiguration
         else
         {
             // Complex map (hooks, conditions, inheritance…) — fall back to full compilation.
-            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps);
+            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps, defaultMaxDepth);
             _compiledMaps[key] = compiledDelegate;
             typeMap.MappingDelegate = compiledDelegate;
         }

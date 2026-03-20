@@ -71,7 +71,8 @@ internal static class ExpressionBuilder
     public static Func<object, object?, ResolutionContext, object> BuildMappingDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        int defaultMaxDepth = 32)
     {
         // Fast path: compile a single typed Expression tree (no per-property delegate
         // calls, no boxing of value types in the hot loop).  Falls back to the
@@ -80,7 +81,7 @@ internal static class ExpressionBuilder
         if (TryBuildTypedDelegate(typeMap, allTypeMaps, compiledMaps, out var fastDel))
             return fastDel!;
 
-        return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps);
+        return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps, defaultMaxDepth);
     }
 
     /// <summary>
@@ -1517,7 +1518,8 @@ internal static class ExpressionBuilder
     private static Func<object, object?, ResolutionContext, object> BuildFlexibleDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        int defaultMaxDepth = 32)
     {
         var factory = BuildFactory(typeMap);
         var srcDetails = TypeDetails.Get(typeMap.SourceType);
@@ -1569,7 +1571,8 @@ internal static class ExpressionBuilder
         var afterMap = typeMap.AfterMapAction;
         var beforeMapCtx = typeMap.BeforeMapCtxAction;
         var afterMapCtx = typeMap.AfterMapCtxAction;
-        var maxDepth = typeMap.MaxDepth;
+        // Per-map MaxDepth takes precedence; fall back to global default as safety net.
+        var maxDepth = typeMap.MaxDepth > 0 ? typeMap.MaxDepth : defaultMaxDepth;
 
         return (object src, object? dest, ResolutionContext ctx) =>
         {

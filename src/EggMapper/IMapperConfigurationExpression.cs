@@ -24,4 +24,11 @@ public interface IMapperConfigurationExpression
     /// Compatible with AutoMapper's ShouldMapProperty.
     /// </summary>
     Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
+
+    /// <summary>
+    /// Global maximum recursion depth applied as a safety net in the flexible delegate path.
+    /// Default is 32. Set to 0 to disable. Individual maps can override with .MaxDepth(n).
+    /// Prevents stack exhaustion from deeply or infinitely nested object graphs (CVE-class issue).
+    /// </summary>
+    int DefaultMaxDepth { get; set; }
 }
