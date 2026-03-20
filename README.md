@@ -86,15 +86,17 @@ public class MyService(IMapper mapper) { ... }
 
 All benchmarks run on BenchmarkDotNet with .NET 10. Ratio = time vs hand-written manual code (lower is better).
 
+<!-- SUMMARY_TABLE_START -->
 | Scenario | Manual | EggMapper | Mapster | AutoMapper | Mapperly* |
 |----------|--------|-----------|---------|------------|-----------|
-| **Flat (10 props)** | 14.5 ns | **29.5 ns** (2.0×) | 31.1 ns (2.1×) | 73.0 ns (5.0×) | 14.9 ns (1.0×) |
-| **Flattening** | 18.3 ns | **37.3 ns** (2.0×) | 38.8 ns (2.1×) | 92.5 ns (5.1×) | 26.2 ns (1.4×) |
-| **Deep (2 nested)** | 51.2 ns | **64.6 ns** (1.3×) | 72.3 ns (1.4×) | 111 ns (2.2×) | 52.0 ns (1.0×) |
-| **Complex (nest+coll)** | 62.4 ns | **88.8 ns** (1.4×) | 85.8 ns (1.4×) | 143 ns (2.3×) | 65.0 ns (1.0×) |
-| **Collection (100)** | 1.81 us | **1.95 us** (1.1×) | 1.85 us (1.0×) | 2.39 us (1.3×) | 1.85 us (1.0×) |
-| **Deep Coll (100)** | 5.18 us | **6.07 us** (1.2×) | 5.51 us (1.1×) | 7.58 us (1.5×) | 5.06 us (1.0×) |
-| **Large Coll (1000)** | 21.7 us | **27.7 us** (1.3×) | 24.1 us (1.1×) | 29.9 us (1.4×) | 24.8 us (1.1×) |
+| **Flat (10 props)** | 15.2 ns | **28.2 ns** (1.9×) | 28.4 ns (1.9×) | 83.5 ns (5.5×) | 15.0 ns (1.0×) |
+| **Flattening** | 18.7 ns | **31.4 ns** (1.7×) | 47.3 ns (2.5×) | 90.9 ns (4.9×) | 23.7 ns (1.3×) |
+| **Deep (2 nested)** | 54.3 ns | **68.0 ns** (1.3×) | 70.8 ns (1.3×) | 122 ns (2.3×) | 49.5 ns (0.9×) |
+| **Complex (nest+coll)** | 82.5 ns | **102 ns** (1.2×) | 97.4 ns (1.2×) | 161 ns (2.0×) | 77.9 ns (0.9×) |
+| **Collection (100)** | 1.80 us | **1.78 us** (1.0×) | 1.94 us (1.1×) | 2.56 us (1.4×) | 2.04 us (1.1×) |
+| **Deep Coll (100)** | 5.47 us | **5.97 us** (1.1×) | 6.04 us (1.1×) | 7.19 us (1.3×) | 5.67 us (1.0×) |
+| **Large Coll (1000)** | 17.3 us | **17.3 us** (1.0×) | 17.2 us (1.0×) | 20.8 us (1.2×) | 19.4 us (1.1×) |
+<!-- SUMMARY_TABLE_END -->
 
 **\*** *Mapperly is a compile-time source generator — it produces code equivalent to hand-written mapping. EggMapper is the fastest **runtime** mapper.*
 
@@ -234,7 +236,6 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Patch / partial mapping via `mapper.Patch<S,D>(src, dest)`
 - ✅ Inline validation rules via `.Validate()` (collects all failures before throwing)
 - ✅ IQueryable projection via `ProjectTo<S,D>(config)` for EF Core / LINQ providers
-- ✅ auto-update README features list and wiki docs on every release
 <!-- FEATURES_END -->
 
 ## Documentation
