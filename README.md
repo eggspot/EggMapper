@@ -208,6 +208,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 
 ## Features
 
+<!-- FEATURES_START -->
 - ✅ Compiled expression tree delegates (zero runtime reflection)
 - ✅ `ForMember` / `MapFrom` custom mappings
 - ✅ `Ignore()` members
@@ -215,7 +216,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Nested object mapping (inlined into parent expression tree)
 - ✅ Collection mapping (`List<T>`, arrays, `HashSet<T>`, etc.)
 - ✅ Flattening (`src.Address.Street` → `dest.AddressStreet`)
-- ✅ Constructor mapping
+- ✅ Constructor mapping (auto-detects best-matching constructor for records)
 - ✅ Profile-based configuration
 - ✅ Assembly scanning
 - ✅ Before/After map hooks
@@ -230,6 +231,10 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ `CreateMap(Type, Type)` runtime type mapping
 - ✅ `ITypeConverter<S,D>` / `ConvertUsing` custom converters
 - ✅ `ShouldMapProperty` global property filter
+- ✅ Patch / partial mapping via `mapper.Patch<S,D>(src, dest)`
+- ✅ Inline validation rules via `.Validate()` (collects all failures before throwing)
+- ✅ IQueryable projection via `ProjectTo<S,D>(config)` for EF Core / LINQ providers
+<!-- FEATURES_END -->
 
 ## Documentation
 

@@ -204,6 +204,19 @@ jobs:
             --generate-notes \
             ./artifacts/*.nupkg ./artifacts/*.snupkg
 
+      # ── Update README features list and wiki docs ─────────────────────────
+      - name: Update feature docs
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        shell: bash
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bash scripts/update-features.sh
+          git add README.md docs/Advanced-Features.md
+          git diff --cached --quiet \
+            && echo "Feature docs already up-to-date — nothing to commit." \
+            || git commit -m "docs: update features list for v${{ steps.version.outputs.VERSION }} [skip ci]"
+
       # ── Commit bumped version back to main ───────────────────────────────
       - name: Commit version bump
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
