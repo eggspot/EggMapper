@@ -50,7 +50,8 @@ internal static class ExpressionBuilder
             return typeMap.CustomConstructor;
 
         var destType = typeMap.DestinationType;
-        var defaultCtor = TypeDetails.Get(destType).ParameterlessCtor;
+        var destDetails = TypeDetails.Get(destType);
+        var defaultCtor = destDetails.ParameterlessCtor;
 
         if (defaultCtor != null)
         {
@@ -58,6 +59,24 @@ internal static class ExpressionBuilder
             var newExpr = Expression.New(defaultCtor);
             var boxed = Expression.Convert(newExpr, typeof(object));
             return Expression.Lambda<Func<object, object>>(boxed, srcParam).Compile();
+        }
+
+        // Try parameterized constructor matched against source properties
+        var srcType = typeMap.SourceType;
+        var srcDetails = TypeDetails.Get(srcType);
+        var found = FindBestConstructor(destDetails, srcDetails);
+        if (found != null)
+        {
+            var (bestCtor, bestParams) = found.Value;
+            var objSrcParam = Expression.Parameter(typeof(object), "src");
+            var typedSrcVar = Expression.Variable(srcType, "s");
+            var args = BuildCtorArgExpressions(bestParams, typedSrcVar, srcDetails);
+            var newExpr = Expression.New(bestCtor, args);
+            var boxed = Expression.Convert(newExpr, typeof(object));
+            var body = Expression.Block(new[] { typedSrcVar },
+                Expression.Assign(typedSrcVar, Expression.Convert(objSrcParam, srcType)),
+                boxed);
+            return Expression.Lambda<Func<object, object>>(body, objSrcParam).Compile();
         }
 
         return _ => Activator.CreateInstance(destType)
@@ -112,8 +131,15 @@ internal static class ExpressionBuilder
         var srcType  = typeMap.SourceType;
         var destType = typeMap.DestinationType;
 
-        var defaultCtor = TypeDetails.Get(destType).ParameterlessCtor;
-        if (defaultCtor == null && typeMap.CustomConstructor == null) return null;
+        var destDetailsCf = TypeDetails.Get(destType);
+        var defaultCtor = destDetailsCf.ParameterlessCtor;
+        (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorCf = null;
+        if (defaultCtor == null && typeMap.CustomConstructor == null)
+        {
+            var srcDetailsCf = TypeDetails.Get(srcType);
+            bestCtorCf = FindBestConstructor(destDetailsCf, srcDetailsCf);
+            if (bestCtorCf == null) return null;
+        }
 
         var srcDetails  = TypeDetails.Get(srcType);
         var destDetails = TypeDetails.Get(destType);
@@ -127,13 +153,18 @@ internal static class ExpressionBuilder
 
         var stmts = new List<Expression>();
 
-        // d = existingDest ?? new TDest()
-        Expression newDestExpr = typeMap.CustomConstructor != null
-            ? Expression.Convert(
+        // d = existingDest ?? new TDest()  (or new TDest(matchedArgs) for records)
+        Expression newDestExpr;
+        if (typeMap.CustomConstructor != null)
+            newDestExpr = Expression.Convert(
                 Expression.Invoke(Expression.Constant(typeMap.CustomConstructor),
                     Expression.Convert(srcParam, typeof(object))),
-                destType)
-            : (Expression)Expression.New(defaultCtor!);
+                destType);
+        else if (bestCtorCf != null)
+            newDestExpr = Expression.New(bestCtorCf.Value.Ctor,
+                BuildCtorArgExpressions(bestCtorCf.Value.Params, srcParam, srcDetails));
+        else
+            newDestExpr = Expression.New(defaultCtor!);
 
         // Value types can never be null so always construct fresh.
         Expression initDest = destType.IsValueType
@@ -253,8 +284,15 @@ internal static class ExpressionBuilder
         if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
         if (ReflectionHelper.IsCollectionType(srcElem) || ReflectionHelper.IsCollectionType(destElem)) return null;
 
-        var destCtor = TypeDetails.Get(destElem).ParameterlessCtor;
-        if (destCtor == null && elemTypeMap.CustomConstructor == null) return null;
+        var destElemDetails = TypeDetails.Get(destElem);
+        var destCtor = destElemDetails.ParameterlessCtor;
+        (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorList = null;
+        if (destCtor == null && elemTypeMap.CustomConstructor == null)
+        {
+            var srcElemDetails = TypeDetails.Get(srcElem);
+            bestCtorList = FindBestConstructor(destElemDetails, srcElemDetails);
+            if (bestCtorList == null) return null;
+        }
 
         var srcDetails = TypeDetails.Get(srcElem);
         var destDetails = TypeDetails.Get(destElem);
@@ -264,12 +302,17 @@ internal static class ExpressionBuilder
         var elemDestVar = Expression.Variable(destElem, "ed");
         var elemStmts = new List<Expression>();
 
-        Expression newDestExpr = elemTypeMap.CustomConstructor != null
-            ? Expression.Convert(
+        Expression newDestExpr;
+        if (elemTypeMap.CustomConstructor != null)
+            newDestExpr = Expression.Convert(
                 Expression.Invoke(Expression.Constant(elemTypeMap.CustomConstructor),
                     Expression.Convert(elemSrcParam, typeof(object))),
-                destElem)
-            : (Expression)Expression.New(destCtor!);
+                destElem);
+        else if (bestCtorList != null)
+            newDestExpr = Expression.New(bestCtorList.Value.Ctor,
+                BuildCtorArgExpressions(bestCtorList.Value.Params, elemSrcParam, srcDetails));
+        else
+            newDestExpr = Expression.New(destCtor!);
         elemStmts.Add(Expression.Assign(elemDestVar, newDestExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -551,8 +594,15 @@ internal static class ExpressionBuilder
         // Self-referencing guard
         if (srcType == destType) return null;
 
-        var childDestCtor = TypeDetails.Get(destType).ParameterlessCtor;
-        if (childDestCtor == null && childTypeMap.CustomConstructor == null) return null;
+        var childDestDetailsCfn = TypeDetails.Get(destType);
+        var childDestCtor = childDestDetailsCfn.ParameterlessCtor;
+        (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorCfn = null;
+        if (childDestCtor == null && childTypeMap.CustomConstructor == null)
+        {
+            var childSrcDetailsCfn = TypeDetails.Get(srcType);
+            bestCtorCfn = FindBestConstructor(childDestDetailsCfn, childSrcDetailsCfn);
+            if (bestCtorCfn == null) return null;
+        }
 
         var childSrcDetails = TypeDetails.Get(srcType);
         var childDestDetails = TypeDetails.Get(destType);
@@ -564,12 +614,17 @@ internal static class ExpressionBuilder
         var childDestVar = Expression.Variable(destType, "nd_" + destProp.Name);
         var innerStmts = new List<Expression>();
 
-        Expression newExpr = childTypeMap.CustomConstructor != null
-            ? Expression.Convert(
+        Expression newExpr;
+        if (childTypeMap.CustomConstructor != null)
+            newExpr = Expression.Convert(
                 Expression.Invoke(Expression.Constant(childTypeMap.CustomConstructor),
                     Expression.Convert(childSrcVar, typeof(object))),
-                destType)
-            : (Expression)Expression.New(childDestCtor!);
+                destType);
+        else if (bestCtorCfn != null)
+            newExpr = Expression.New(bestCtorCfn.Value.Ctor,
+                BuildCtorArgExpressions(bestCtorCfn.Value.Params, childSrcVar, childSrcDetails));
+        else
+            newExpr = Expression.New(childDestCtor!);
         innerStmts.Add(Expression.Assign(childDestVar, newExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -660,7 +715,6 @@ internal static class ExpressionBuilder
         {
             // Build an inline element mapper using TryBuildSimpleInlineAssign
             var elemCtor = TypeDetails.Get(destElem).ParameterlessCtor;
-            if (elemCtor == null) return null;
             if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
             if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
             if (elemTypeMap.PropertyMaps.Any(pm =>
@@ -673,7 +727,19 @@ internal static class ExpressionBuilder
             var elemSrcParam = Expression.Parameter(srcElem, "es");
             var elemDestVar = Expression.Variable(destElem, "ed");
             var elemStmts = new List<Expression>();
-            elemStmts.Add(Expression.Assign(elemDestVar, Expression.New(elemCtor)));
+            Expression newElemExpr;
+            if (elemCtor != null)
+                newElemExpr = Expression.New(elemCtor);
+            else
+            {
+                var srcElemDetails2 = TypeDetails.Get(srcElem);
+                var destElemDetails2 = TypeDetails.Get(destElem);
+                var bestCtorCol = FindBestConstructor(destElemDetails2, srcElemDetails2);
+                if (bestCtorCol == null) return null;
+                newElemExpr = Expression.New(bestCtorCol.Value.Ctor,
+                    BuildCtorArgExpressions(bestCtorCol.Value.Params, elemSrcParam, srcElemDetails2));
+            }
+            elemStmts.Add(Expression.Assign(elemDestVar, newElemExpr));
 
             var elemSrcDetails = TypeDetails.Get(srcElem);
             var elemDestDetails = TypeDetails.Get(destElem);
@@ -804,9 +870,16 @@ internal static class ExpressionBuilder
         var srcType  = typeMap.SourceType;
         var destType = typeMap.DestinationType;
 
-        // Require a parameterless constructor (or a pre-configured custom one)
-        var defaultCtor = TypeDetails.Get(destType).ParameterlessCtor;
-        if (defaultCtor == null && typeMap.CustomConstructor == null) return false;
+        // Require a parameterless constructor, a custom constructor, or a matched parameterized one
+        var destDetailsT = TypeDetails.Get(destType);
+        var defaultCtor = destDetailsT.ParameterlessCtor;
+        (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorT = null;
+        if (defaultCtor == null && typeMap.CustomConstructor == null)
+        {
+            var srcDetailsT = TypeDetails.Get(srcType);
+            bestCtorT = FindBestConstructor(destDetailsT, srcDetailsT);
+            if (bestCtorT == null) return false;
+        }
 
         var srcDetails  = TypeDetails.Get(srcType);
         var destDetails = TypeDetails.Get(destType);
@@ -824,12 +897,17 @@ internal static class ExpressionBuilder
         // s = (TSrc)src
         stmts.Add(Expression.Assign(sVar, Expression.Convert(srcParam, srcType)));
 
-        // d = dest != null ? (TDst)dest : new TDst()
-        Expression newDestExpr = typeMap.CustomConstructor != null
-            ? Expression.Convert(
+        // d = dest != null ? (TDst)dest : new TDst()  (or new TDst(matchedArgs) for records)
+        Expression newDestExpr;
+        if (typeMap.CustomConstructor != null)
+            newDestExpr = Expression.Convert(
                 Expression.Invoke(Expression.Constant(typeMap.CustomConstructor), srcParam),
-                destType)
-            : (Expression)Expression.New(defaultCtor!);
+                destType);
+        else if (bestCtorT != null)
+            newDestExpr = Expression.New(bestCtorT.Value.Ctor,
+                BuildCtorArgExpressions(bestCtorT.Value.Params, sVar, srcDetails));
+        else
+            newDestExpr = Expression.New(defaultCtor!);
 
         stmts.Add(Expression.Assign(dVar,
             Expression.Condition(
@@ -1104,8 +1182,15 @@ internal static class ExpressionBuilder
             || pm.HasNullSubstitute || pm.CustomResolver != null))
             return null;
 
-        var childDestCtor = TypeDetails.Get(destType).ParameterlessCtor;
-        if (childDestCtor == null && childTypeMap.CustomConstructor == null) return null;
+        var childDestDetailsTn = TypeDetails.Get(destType);
+        var childDestCtor = childDestDetailsTn.ParameterlessCtor;
+        (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorTn = null;
+        if (childDestCtor == null && childTypeMap.CustomConstructor == null)
+        {
+            var childSrcDetailsTn = TypeDetails.Get(srcType);
+            bestCtorTn = FindBestConstructor(childDestDetailsTn, childSrcDetailsTn);
+            if (bestCtorTn == null) return null;
+        }
 
         var childSrcDetails = TypeDetails.Get(srcType);
         var childDestDetails = TypeDetails.Get(destType);
@@ -1118,12 +1203,17 @@ internal static class ExpressionBuilder
 
         var innerStmts = new List<Expression>();
 
-        Expression newChildExpr = childTypeMap.CustomConstructor != null
-            ? Expression.Convert(
+        Expression newChildExpr;
+        if (childTypeMap.CustomConstructor != null)
+            newChildExpr = Expression.Convert(
                 Expression.Invoke(Expression.Constant(childTypeMap.CustomConstructor),
                     Expression.Convert(childSrcVar, typeof(object))),
-                destType)
-            : (Expression)Expression.New(childDestCtor!);
+                destType);
+        else if (bestCtorTn != null)
+            newChildExpr = Expression.New(bestCtorTn.Value.Ctor,
+                BuildCtorArgExpressions(bestCtorTn.Value.Params, childSrcVar, childSrcDetails));
+        else
+            newChildExpr = Expression.New(childDestCtor!);
         innerStmts.Add(Expression.Assign(childDestVar, newChildExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -2046,6 +2136,72 @@ internal static class ExpressionBuilder
                 list.Add(MapElement(item));
             return list;
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Constructor matching helpers (Feature 5: Record / parameterized-ctor support)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Finds the constructor whose parameter names best match readable source
+    /// properties (case-insensitive). Returns null when no non-empty constructor
+    /// matches at least one source property (fall back to existing logic).
+    /// </summary>
+    private static (ConstructorInfo Ctor, ParameterInfo[] Params)? FindBestConstructor(
+        TypeDetails destDetails, TypeDetails srcDetails)
+    {
+        ConstructorInfo? best = null;
+        ParameterInfo[]? bestParams = null;
+        int bestScore = 0; // require ≥1 matched param
+
+        foreach (var ctor in destDetails.Constructors)
+        {
+            var parameters = ctor.GetParameters();
+            if (parameters.Length == 0) continue;
+            int score = 0;
+            foreach (var p in parameters)
+            {
+                if (p.Name != null && srcDetails.ReadableByName.ContainsKey(p.Name))
+                    score++;
+            }
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = ctor;
+                bestParams = parameters;
+            }
+        }
+
+        return best == null ? null : (best, bestParams!);
+    }
+
+    /// <summary>
+    /// Builds constructor argument expressions from source properties matched by
+    /// parameter name (case-insensitive). Unmatched parameters get Expression.Default.
+    /// </summary>
+    private static Expression[] BuildCtorArgExpressions(
+        ParameterInfo[] ctorParams, Expression typedSrc, TypeDetails srcDetails)
+    {
+        var args = new Expression[ctorParams.Length];
+        for (int i = 0; i < ctorParams.Length; i++)
+        {
+            var p = ctorParams[i];
+            if (p.Name != null && srcDetails.ReadableByName.TryGetValue(p.Name, out var srcProp))
+            {
+                var srcAccess = Expression.Property(typedSrc, srcProp);
+                if (srcProp.PropertyType == p.ParameterType)
+                    args[i] = srcAccess;
+                else if (p.ParameterType.IsAssignableFrom(srcProp.PropertyType))
+                    args[i] = Expression.Convert(srcAccess, p.ParameterType);
+                else
+                    args[i] = Expression.Default(p.ParameterType);
+            }
+            else
+            {
+                args[i] = Expression.Default(p.ParameterType);
+            }
+        }
+        return args;
     }
 
     private static object? ConvertValue(object? value, Type targetType)
