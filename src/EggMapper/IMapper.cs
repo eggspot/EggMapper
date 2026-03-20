@@ -14,4 +14,11 @@ public interface IMapper
     /// using a single shared <see cref="ResolutionContext"/>, avoiding per-item allocations.
     /// </summary>
     List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source);
+
+    /// <summary>
+    /// Partial / patch mapping: copies only non-null (reference types) or HasValue
+    /// (Nullable&lt;T&gt;) source properties onto <paramref name="destination"/>.
+    /// Non-nullable value-type source properties are always assigned.
+    /// </summary>
+    TDestination Patch<TSource, TDestination>(TSource source, TDestination destination);
 }

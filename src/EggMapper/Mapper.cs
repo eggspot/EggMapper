@@ -106,6 +106,34 @@ public sealed class Mapper : IMapper
     public object Map(object source, Type sourceType, Type destinationType)
         => MapInternal(source, sourceType, destinationType, null);
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public TDestination Patch<TSource, TDestination>(TSource source, TDestination destination)
+    {
+        if (source == null) return destination;
+
+        var fast = PatchCache<TSource, TDestination>.Func;
+        if (fast != null & PatchCache<TSource, TDestination>.Generation == _generation)
+            return fast(source, destination);
+
+        return PatchSlow<TSource, TDestination>(source, destination);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private TDestination PatchSlow<TSource, TDestination>(TSource source, TDestination destination)
+    {
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+        if (_config.FrozenPatchMaps.TryGetValue(key, out var raw))
+        {
+            var patchDel = (Func<TSource, TDestination, TDestination>)raw;
+            PatchCache<TSource, TDestination>.Func = patchDel;
+            PatchCache<TSource, TDestination>.Generation = _generation;
+            return patchDel(source, destination);
+        }
+        throw new InvalidOperationException(
+            $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
+            $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
+    }
+
     public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
@@ -252,6 +280,15 @@ public sealed class Mapper : IMapper
     private static class FastListCache<TSource, TDestination>
     {
         public static Func<List<TSource>, List<TDestination>>? Func;
+        public static int Generation;
+    }
+
+    /// <summary>
+    /// Lock-free single-slot global cache for Patch&lt;S,D&gt;. Zero overhead after first call.
+    /// </summary>
+    private static class PatchCache<TSource, TDestination>
+    {
+        public static Func<TSource, TDestination, TDestination>? Func;
         public static int Generation;
     }
 }
