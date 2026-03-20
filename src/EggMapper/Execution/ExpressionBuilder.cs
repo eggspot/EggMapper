@@ -126,6 +126,7 @@ internal static class ExpressionBuilder
         if (typeMap.AfterMapCtxAction  != null) return null;
         if (typeMap.MaxDepth > 0) return null;
         if (typeMap.BaseMapTypePair.HasValue) return null;
+        if (typeMap.ValidationRules?.Count > 0) return null;  // validators need flexible path
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return null;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return null;
 
@@ -875,6 +876,7 @@ internal static class ExpressionBuilder
         if (typeMap.BaseMapTypePair.HasValue) return false;
         if (typeMap.ConvertUsingFunc != null) return false;
         if (typeMap.ShouldMapProperty != null) return false;
+        if (typeMap.ValidationRules?.Count > 0) return false;  // validators need flexible path
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return false;
 
@@ -1682,6 +1684,7 @@ internal static class ExpressionBuilder
         var afterMapCtx = typeMap.AfterMapCtxAction;
         // Per-map MaxDepth takes precedence; fall back to global default as safety net.
         var maxDepth = typeMap.MaxDepth > 0 ? typeMap.MaxDepth : defaultMaxDepth;
+        var validationRules = typeMap.ValidationRules;
 
         return (object src, object? dest, ResolutionContext ctx) =>
         {
@@ -1708,6 +1711,27 @@ internal static class ExpressionBuilder
 
                 afterMap?.Invoke(src, typedDest);
                 afterMapCtx?.Invoke(src, typedDest, ctx);
+
+                // Inline validation — collect all violations before throwing
+                if (validationRules != null && validationRules.Count > 0)
+                {
+                    List<string>? violations = null;
+                    for (int i = 0; i < validationRules.Count; i++)
+                    {
+                        var (predicate, message) = validationRules[i];
+                        if (!predicate(typedDest))
+                        {
+                            violations ??= new List<string>();
+                            violations.Add(message);
+                        }
+                    }
+                    if (violations != null)
+                        throw new MappingValidationException(violations);
+                }
+            }
+            catch (MappingValidationException)
+            {
+                throw;
             }
             catch (MappingException)
             {

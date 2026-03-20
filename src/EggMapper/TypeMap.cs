@@ -24,4 +24,11 @@ internal sealed class TypeMap
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
     /// <summary>The compiled expression tree, stored before .Compile() for diagnostics.</summary>
     public LambdaExpression? MappingExpression { get; set; }
+
+    /// <summary>
+    /// Inline validation rules added via .Validate(). Each entry is a (predicate, errorMessage)
+    /// pair where the predicate receives the fully-mapped destination object (boxed as object).
+    /// Maps with validators are routed to the flexible path (zero overhead when list is null).
+    /// </summary>
+    public List<(Func<object, bool> Predicate, string Message)>? ValidationRules { get; set; }
 }

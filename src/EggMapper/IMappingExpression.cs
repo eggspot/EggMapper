@@ -36,6 +36,18 @@ public interface IMappingExpression<TSource, TDestination>
 
     IMappingExpression<TSource, TDestination> ForAllMembers(
         Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions);
+
+    /// <summary>
+    /// Adds an inline validation rule that runs after all properties are mapped.
+    /// If <paramref name="predicate"/> returns false for the mapped destination value,
+    /// <paramref name="errorMessage"/> is collected and thrown as part of a
+    /// <see cref="MappingValidationException"/> once all rules have been evaluated.
+    /// Maps with validation rules are routed to the flexible delegate path.
+    /// </summary>
+    IMappingExpression<TSource, TDestination> Validate<TMember>(
+        Expression<Func<TDestination, TMember>> destinationMember,
+        Func<TMember, bool> predicate,
+        string errorMessage);
 }
 
 /// <summary>

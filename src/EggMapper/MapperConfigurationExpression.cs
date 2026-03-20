@@ -257,6 +257,19 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         }
         return this;
     }
+
+    public IMappingExpression<TSource, TDestination> Validate<TMember>(
+        Expression<Func<TDestination, TMember>> destinationMember,
+        Func<TMember, bool> predicate,
+        string errorMessage)
+    {
+        var compiled = destinationMember.Compile();
+        _typeMap.ValidationRules ??= new();
+        _typeMap.ValidationRules.Add((
+            obj => predicate(compiled((TDestination)obj)),
+            errorMessage));
+        return this;
+    }
 }
 
 internal sealed class MemberConfigurationExpression<TSource, TDestination, TMember>
