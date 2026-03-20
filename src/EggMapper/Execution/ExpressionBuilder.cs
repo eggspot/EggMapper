@@ -11,6 +11,11 @@ internal static class ExpressionBuilder
     private static readonly ConcurrentDictionary<PropertyInfo, Func<object, object?>> Getters = new();
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> Setters = new();
 
+    private static readonly MethodInfo EnumParseMethod =
+        typeof(Enum).GetMethod("Parse", new[] { typeof(Type), typeof(string), typeof(bool) })!;
+    private static readonly MethodInfo ObjectToStringMethod =
+        typeof(object).GetMethod("ToString", Type.EmptyTypes)!;
+
     private static Func<object, object?> GetOrBuildGetter(PropertyInfo prop) =>
         Getters.GetOrAdd(prop, BuildGetter);
 
@@ -432,6 +437,16 @@ internal static class ExpressionBuilder
             return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
         }
 
+        // ── Enum ↔ string auto-conversion ────────────────────────────────────
+        {
+            var srcCore  = srcUnderlying  ?? srcType;
+            var destCore = destUnderlying ?? destType;
+            if (srcCore.IsEnum && destType == typeof(string))
+                return BuildEnumToStringAssign(srcAccess, destAccess, srcUnderlying);
+            if (srcType == typeof(string) && destCore.IsEnum)
+                return BuildStringToEnumAssign(srcAccess, destAccess, destType, destCore);
+        }
+
         // ── Nested reference type — try to inline child map ──────────────────
         if (!srcType.IsValueType && allTypeMaps != null)
         {
@@ -450,6 +465,61 @@ internal static class ExpressionBuilder
         }
 
         return null;
+    }
+
+    /// <summary>Emits: destAccess = srcEnum.ToString() (via object.ToString for virtual dispatch).</summary>
+    private static Expression BuildEnumToStringAssign(
+        Expression srcAccess, Expression destAccess, Type? srcNullableUnderlying)
+    {
+        Expression nameExpr;
+        if (srcNullableUnderlying != null)
+        {
+            // Nullable<TEnum> → srcAccess.HasValue ? (object)srcAccess.Value.ToString() : null
+            nameExpr = Expression.Condition(
+                Expression.Property(srcAccess, "HasValue"),
+                Expression.Call(
+                    Expression.Convert(Expression.Property(srcAccess, "Value"), typeof(object)),
+                    ObjectToStringMethod),
+                Expression.Constant(null, typeof(string)));
+        }
+        else
+        {
+            // TEnum → ((object)srcAccess).ToString()
+            nameExpr = Expression.Call(
+                Expression.Convert(srcAccess, typeof(object)),
+                ObjectToStringMethod);
+        }
+        return Expression.Assign(destAccess, nameExpr);
+    }
+
+    /// <summary>
+    /// Emits: destAccess = string.IsNullOrEmpty(src) ? default : (TEnum)Enum.Parse(typeof(TEnum), src, true)
+    /// Handles both plain TEnum and Nullable&lt;TEnum&gt; destinations.
+    /// </summary>
+    private static Expression BuildStringToEnumAssign(
+        Expression srcAccess, Expression destAccess, Type destType, Type destEnumCore)
+    {
+        // (TEnum)Enum.Parse(typeof(TEnum), srcStr, ignoreCase: true)
+        Expression parseExpr = Expression.Convert(
+            Expression.Call(EnumParseMethod,
+                Expression.Constant(destEnumCore),
+                srcAccess,
+                Expression.Constant(true)),
+            destEnumCore);
+
+        // If dest is Nullable<TEnum>, wrap the parse result
+        if (destType != destEnumCore)
+            parseExpr = Expression.Convert(parseExpr, destType);
+
+        // Guard: null or empty string → default(destType)
+        var nullOrEmpty = Expression.OrElse(
+            Expression.ReferenceEqual(srcAccess, Expression.Constant(null, typeof(string))),
+            Expression.Equal(
+                Expression.Property(srcAccess, nameof(string.Length)),
+                Expression.Constant(0)));
+
+        return Expression.Assign(destAccess,
+            Expression.Condition(nullOrEmpty, Expression.Default(destType), parseExpr));
     }
 
     /// <summary>
@@ -1148,6 +1218,16 @@ internal static class ExpressionBuilder
         var destUnderlying = Nullable.GetUnderlyingType(destType);
         if (destUnderlying != null && (srcType == destUnderlying || destUnderlying.IsAssignableFrom(srcType)))
             return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        // ── Enum ↔ string auto-conversion ────────────────────────────────────
+        {
+            var srcCore  = srcUnderlying  ?? srcType;
+            var destCore = destUnderlying ?? destType;
+            if (srcCore.IsEnum && destType == typeof(string))
+                return BuildEnumToStringAssign(srcAccess, destAccess, srcUnderlying);
+            if (srcType == typeof(string) && destCore.IsEnum)
+                return BuildStringToEnumAssign(srcAccess, destAccess, destType, destCore);
+        }
 
         if (srcType.IsValueType && destType.IsValueType)
         {
@@ -1975,6 +2055,12 @@ internal static class ExpressionBuilder
         if (targetType.IsAssignableFrom(valueType)) return value;
 
         var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // Enum ↔ string
+        if (underlying.IsEnum && value is string strVal)
+            return string.IsNullOrEmpty(strVal) ? Enum.ToObject(underlying, 0) : Enum.Parse(underlying, strVal, ignoreCase: true);
+        if (valueType.IsEnum && (underlying == typeof(string) || targetType == typeof(string)))
+            return value.ToString();
 
         try
         {
