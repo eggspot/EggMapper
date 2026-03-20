@@ -44,7 +44,7 @@ public sealed class Mapper : IMapper
             // Generation is embedded in the func — if mapper changed, func is null.
             var fast = FastCache<TSource, TDestination>.Func;
             if (fast != null & FastCache<TSource, TDestination>.Generation == _generation)
-                return fast(source);
+                return fast(source, default!);
 
             return MapSlow<TSource, TDestination>(source);
         }
@@ -70,10 +70,10 @@ public sealed class Mapper : IMapper
         // Try ctx-free typed delegate
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
-            var typed = (Func<TSource, TDestination>)ctxFreeDel;
+            var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
             FastCache<TSource, TDestination>.Func = typed;
             FastCache<TSource, TDestination>.Generation = _generation;
-            return typed(source);
+            return typed(source, default!);
         }
 
         // Fallback: ctx-aware boxed delegate
@@ -119,7 +119,7 @@ public sealed class Mapper : IMapper
                 var count = directList.Count;
                 var result = new List<TDestination>(count);
                 for (int i = 0; i < count; i++)
-                    result.Add(itemFunc(directList[i]));
+                    result.Add(itemFunc(directList[i], default!));
                 return result;
             }
         }
@@ -134,7 +134,7 @@ public sealed class Mapper : IMapper
         // Ctx-free per-item delegate — also populate FastCache for next call
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
-            var typedDel = (Func<TSource, TDestination>)ctxFreeDel;
+            var typedDel = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
             FastCache<TSource, TDestination>.Func = typedDel;
             FastCache<TSource, TDestination>.Generation = _generation;
 
@@ -145,7 +145,7 @@ public sealed class Mapper : IMapper
                 for (int i = 0; i < count; i++)
                 {
                     var item = lst[i];
-                    r.Add(item == null ? default! : typedDel(item));
+                    r.Add(item == null ? default! : typedDel(item, default!));
                 }
                 return r;
             }
@@ -154,7 +154,7 @@ public sealed class Mapper : IMapper
                 ? new List<TDestination>(col.Count)
                 : new List<TDestination>();
             foreach (var item in source)
-                result.Add(item == null ? default! : typedDel(item));
+                result.Add(item == null ? default! : typedDel(item, default!));
             return result;
         }
 
@@ -214,10 +214,12 @@ public sealed class Mapper : IMapper
     /// <summary>
     /// Lock-free single-slot global cache for Map&lt;S,D&gt;. Zero overhead after first call.
     /// JIT specializes each (TSource,TDestination) pair into a direct static field read.
+    /// Stores Func&lt;TSrc,TDest,TDest&gt; — the compiled ctx-free delegate — to avoid the
+    /// extra closure call that a NoDestWrapper would add.
     /// </summary>
     private static class FastCache<TSource, TDestination>
     {
-        public static Func<TSource, TDestination>? Func;
+        public static Func<TSource, TDestination, TDestination>? Func;
         public static int Generation;
     }
 
