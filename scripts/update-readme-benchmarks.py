@@ -68,13 +68,28 @@ _WORKFLOW_URL = f"{_REPO_URL}/actions/workflows/benchmarks.yml"
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
+def _match_class(cls_name: str, filepath: str) -> bool:
+    """
+    Exact class-name match against a BenchmarkDotNet result file path.
+
+    BenchmarkDotNet generates paths like:
+        results/EggMapper.Benchmarks.CollectionBenchmark-report-github.md
+
+    A plain substring check would cause "CollectionBenchmark" to match
+    "DeepCollectionBenchmark" and "LargeCollectionBenchmark" as well.
+    We guard against that by requiring the class name to be preceded by a
+    dot or slash/backslash and followed by a dash.
+    """
+    return bool(re.search(r'[/\\.]' + re.escape(cls_name) + r'-', filepath))
+
+
 def _find_md_files(artifacts_dir: str) -> list[str]:
     pattern_github = os.path.join(artifacts_dir, "results", "*-report-github.md")
     pattern_plain  = os.path.join(artifacts_dir, "results", "*-report.md")
     files = glob.glob(pattern_github) or glob.glob(pattern_plain)
     def _key(p: str) -> int:
         for i, (cls, _) in enumerate(BENCHMARK_ORDER):
-            if cls in p:
+            if _match_class(cls, p):
                 return i
         return len(BENCHMARK_ORDER)
     return sorted(files, key=_key)
@@ -125,7 +140,7 @@ def build_performance_section(artifacts_dir: str) -> str:
         for md_file in md_files:
             label = Path(md_file).stem  # fallback
             for cls_name, display_label in BENCHMARK_ORDER:
-                if cls_name in md_file:
+                if _match_class(cls_name, md_file):
                     label = display_label
                     break
 

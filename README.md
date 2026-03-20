@@ -107,28 +107,6 @@ cd src/EggMapper.Benchmarks
 dotnet run --configuration Release -f net10.0 -- --filter * --exporters json markdown
 ```
 
-## Features
-
-- ✅ Compiled expression tree delegates (zero runtime reflection)
-- ✅ `ForMember` / `MapFrom` custom mappings
-- ✅ `Ignore()` members
-- ✅ `ReverseMap()` bidirectional mapping
-- ✅ Nested object mapping (inlined into parent expression tree)
-- ✅ Collection mapping (`List<T>`, arrays, `HashSet<T>`, etc.)
-- ✅ Flattening (`src.Address.Street` → `dest.AddressStreet`)
-- ✅ Constructor mapping
-- ✅ Profile-based configuration
-- ✅ Assembly scanning
-- ✅ Before/After map hooks
-- ✅ Conditional mapping
-- ✅ Null substitution
-- ✅ `MaxDepth` for self-referencing types
-- ✅ Inheritance mapping
-- ✅ Enum mapping
-- ✅ `ForPath` for nested destination properties
-- ✅ .NET Dependency Injection integration (built-in, no extra package)
-- ✅ Configuration validation
-
 <!-- BENCHMARK_RESULTS_START -->
 
 > ⏱ **Last updated:** 2026-03-20 05:42 UTC
@@ -227,6 +205,31 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 *Benchmarks run automatically on every push to `main` with .NET 10. [See workflow](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)*
 
 <!-- BENCHMARK_RESULTS_END -->
+
+## Features
+
+- ✅ Compiled expression tree delegates (zero runtime reflection)
+- ✅ `ForMember` / `MapFrom` custom mappings
+- ✅ `Ignore()` members
+- ✅ `ReverseMap()` bidirectional mapping
+- ✅ Nested object mapping (inlined into parent expression tree)
+- ✅ Collection mapping (`List<T>`, arrays, `HashSet<T>`, etc.)
+- ✅ Flattening (`src.Address.Street` → `dest.AddressStreet`)
+- ✅ Constructor mapping
+- ✅ Profile-based configuration
+- ✅ Assembly scanning
+- ✅ Before/After map hooks
+- ✅ Conditional mapping
+- ✅ Null substitution
+- ✅ `MaxDepth` for self-referencing types
+- ✅ Inheritance mapping
+- ✅ Enum mapping (int ↔ enum and string ↔ enum auto-conversion)
+- ✅ `ForPath` for nested destination properties
+- ✅ .NET Dependency Injection integration (built-in, no extra package)
+- ✅ Configuration validation
+- ✅ `CreateMap(Type, Type)` runtime type mapping
+- ✅ `ITypeConverter<S,D>` / `ConvertUsing` custom converters
+- ✅ `ShouldMapProperty` global property filter
 
 ## Documentation
 
