@@ -183,6 +183,17 @@ public sealed class MapperConfiguration
     internal Dictionary<TypePair, TypeMap> TypeMaps => _typeMaps;
 
     /// <summary>
+    /// Builds an <see cref="System.Linq.Expressions.Expression{TDelegate}"/> that projects
+    /// <typeparamref name="TSource"/> to <typeparamref name="TDestination"/> using the
+    /// registered type map. The expression is suitable for use with LINQ providers (e.g.
+    /// EF Core) and is never compiled by EggMapper — pass it directly to
+    /// <c>IQueryable.Select()</c> or use the <c>ProjectTo</c> extension method.
+    /// </summary>
+    public System.Linq.Expressions.Expression<Func<TSource, TDestination>>
+        BuildProjection<TSource, TDestination>()
+        => Execution.ProjectionBuilder.Build<TSource, TDestination>(this);
+
+    /// <summary>
     /// Returns a human-readable string representation of the compiled expression tree
     /// for the <typeparamref name="TSource"/> → <typeparamref name="TDestination"/> map.
     /// Returns null when no expression tree is available (e.g. flexible delegate path or
