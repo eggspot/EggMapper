@@ -233,7 +233,9 @@ internal static class ExpressionBuilder
         var body     = Expression.Block(new[] { dVar }, stmts);
         // Func<TSrc, TDest, TDest> — second param is optional existing destination
         var funcType = typeof(Func<,,>).MakeGenericType(srcType, destType, destType);
-        return Expression.Lambda(funcType, body, srcParam, destParam).Compile();
+        var lambda = Expression.Lambda(funcType, body, srcParam, destParam);
+        typeMap.MappingExpression = lambda;
+        return lambda.Compile();
     }
 
     /// <summary>
@@ -927,6 +929,7 @@ internal static class ExpressionBuilder
         var body   = Expression.Block(new[] { sVar, dVar }, stmts);
         var lambda = Expression.Lambda<Func<object, object?, ResolutionContext, object>>(
             body, srcParam, destParam, ctxParam);
+        typeMap.MappingExpression = lambda;
 
         result = lambda.Compile();
         return true;

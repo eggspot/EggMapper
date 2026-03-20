@@ -171,6 +171,20 @@ public sealed class MapperConfiguration
 
     internal Dictionary<TypePair, TypeMap> TypeMaps => _typeMaps;
 
+    /// <summary>
+    /// Returns a human-readable string representation of the compiled expression tree
+    /// for the <typeparamref name="TSource"/> → <typeparamref name="TDestination"/> map.
+    /// Returns null when no expression tree is available (e.g. flexible delegate path or
+    /// ConvertUsing maps).
+    /// </summary>
+    public string? GetMappingExpressionText<TSource, TDestination>()
+    {
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+        if (!_typeMaps.TryGetValue(key, out var typeMap))
+            return null;
+        return typeMap.MappingExpression?.ToString();
+    }
+
     public void AssertConfigurationIsValid()
     {
         var errors = new List<string>();
