@@ -234,6 +234,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Patch / partial mapping via `mapper.Patch<S,D>(src, dest)`
 - ✅ Inline validation rules via `.Validate()` (collects all failures before throwing)
 - ✅ IQueryable projection via `ProjectTo<S,D>(config)` for EF Core / LINQ providers
+- ✅ auto-update README features list and wiki docs on every release
 <!-- FEATURES_END -->
 
 ## Documentation
