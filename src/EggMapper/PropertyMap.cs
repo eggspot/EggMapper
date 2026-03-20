@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace EggMapper;
@@ -20,4 +21,6 @@ internal sealed class PropertyMap
     public string? SourceMemberName { get; set; }
     // DI-based value resolver factory: (IServiceProvider) => resolver func
     public Func<IServiceProvider, Func<object, object?, object?, ResolutionContext, object?>>? ValueResolverFactory { get; set; }
+    /// <summary>Original uncompiled lambda — used by ProjectionBuilder to build LINQ-translatable expressions.</summary>
+    public LambdaExpression? MapFromExpression { get; set; }
 }

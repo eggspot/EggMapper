@@ -284,6 +284,7 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
 
     public void MapFrom<TSourceMember>(Expression<Func<TSource, TSourceMember>> mapExpression)
     {
+        _propMap.MapFromExpression = mapExpression;
         var compiled = mapExpression.Compile();
         _propMap.CustomResolver = (src, dest) => compiled((TSource)src);
     }
@@ -370,6 +371,7 @@ internal sealed class PathConfigurationExpression<TSource, TDestination, TMember
 
     public void MapFrom<TSourceMember>(Expression<Func<TSource, TSourceMember>> mapExpression)
     {
+        _propMap.MapFromExpression = mapExpression;
         var compiled = mapExpression.Compile();
         _propMap.CustomResolver = (src, dest) => compiled((TSource)src);
     }
