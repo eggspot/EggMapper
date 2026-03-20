@@ -30,8 +30,10 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-START_MARKER = "<!-- BENCHMARK_RESULTS_START -->"
-END_MARKER   = "<!-- BENCHMARK_RESULTS_END -->"
+START_MARKER   = "<!-- BENCHMARK_RESULTS_START -->"
+END_MARKER     = "<!-- BENCHMARK_RESULTS_END -->"
+SUMMARY_START  = "<!-- SUMMARY_TABLE_START -->"
+SUMMARY_END    = "<!-- SUMMARY_TABLE_END -->"
 
 # Canonical order and short labels for the README summary
 BENCHMARK_ORDER: list[tuple[str, str]] = [
@@ -44,6 +46,27 @@ BENCHMARK_ORDER: list[tuple[str, str]] = [
     ("LargeCollectionBenchmark",  "⚫ Large Collection (1,000 items)"),
     ("StartupBenchmark",          "⚪ Startup / Config"),
 ]
+
+# Short scenario labels used in the summary table (omits Startup)
+SUMMARY_SCENARIOS: list[tuple[str, str]] = [
+    ("FlatMappingBenchmark",      "Flat (10 props)"),
+    ("FlatteningBenchmark",       "Flattening"),
+    ("DeepTypeBenchmark",         "Deep (2 nested)"),
+    ("ComplexTypeBenchmark",      "Complex (nest+coll)"),
+    ("CollectionBenchmark",       "Collection (100)"),
+    ("DeepCollectionBenchmark",   "Deep Coll (100)"),
+    ("LargeCollectionBenchmark",  "Large Coll (1000)"),
+]
+
+# Maps lowercase BDN method names → summary column keys
+_METHOD_KEYS: dict[str, str] = {
+    "manual":      "manual",
+    "eggmapper":   "egg",
+    "eggmap":      "egg",   # some benchmarks use the shorter alias
+    "automapper":  "am",
+    "mapster":     "ms",
+    "mapperlymap": "mly",
+}
 
 COLUMN_LEGEND = (
     "> **Column guide:** "
@@ -102,6 +125,90 @@ def _extract_table(filepath: str) -> str:
         return "\n".join(ln.rstrip() for ln in lines if ln.startswith("|"))
     except (OSError, UnicodeDecodeError) as exc:
         return f"*Error reading report: {exc}*"
+
+
+# ── Summary table builder ──────────────────────────────────────────────────
+
+def _parse_bdn_table(filepath: str) -> dict[str, tuple[str, str]]:
+    """
+    Parse a BDN markdown report and return {method_key: (mean_str, ratio_str)}.
+    Returns an empty dict on any error.
+    """
+    try:
+        with open(filepath, encoding="utf-8") as fh:
+            rows = [ln.rstrip() for ln in fh if ln.startswith("|")]
+    except OSError:
+        return {}
+
+    if len(rows) < 3:
+        return {}
+
+    # Header row: find column indices
+    header_cells = [c.strip() for c in rows[0].split("|")[1:-1]]
+    try:
+        mi = header_cells.index("Method")
+        vi = header_cells.index("Mean")
+        ri = header_cells.index("Ratio")
+    except ValueError:
+        return {}
+
+    results: dict[str, tuple[str, str]] = {}
+    for row in rows[2:]:  # skip header + separator
+        cells = [c.strip() for c in row.split("|")[1:-1]]
+        if len(cells) <= max(mi, vi, ri):
+            continue
+        key = _METHOD_KEYS.get(cells[mi].lower())
+        if key:
+            results[key] = (cells[vi], cells[ri])
+    return results
+
+
+def _fmt_cell(data: dict[str, tuple[str, str]], key: str) -> str:
+    """Format a summary cell as 'mean (ratio×)', rounding ratio to 1 dp."""
+    if key not in data:
+        return "—"
+    mean, ratio = data[key]
+    try:
+        r = round(float(ratio), 1)
+        return f"{mean} ({r}×)"
+    except ValueError:
+        return mean
+
+
+def build_summary_table(md_files: list[str]) -> str:
+    """
+    Build the compact summary table from BDN artifacts.
+    Returns the full markdown block (without the HTML markers).
+    """
+    lines = [
+        "| Scenario | Manual | EggMapper | Mapster | AutoMapper | Mapperly* |",
+        "|----------|--------|-----------|---------|------------|-----------|",
+    ]
+
+    for md_file in md_files:
+        label = None
+        for cls_name, short_label in SUMMARY_SCENARIOS:
+            if _match_class(cls_name, md_file):
+                label = short_label
+                break
+        if label is None:
+            continue  # skip Startup and unknown benchmarks
+
+        data = _parse_bdn_table(md_file)
+        if not data or "manual" not in data or "egg" not in data:
+            continue
+
+        manual_mean = data["manual"][0]
+        lines.append(
+            f"| **{label}** "
+            f"| {manual_mean} "
+            f"| **{_fmt_cell(data, 'egg')}** "
+            f"| {_fmt_cell(data, 'ms')} "
+            f"| {_fmt_cell(data, 'am')} "
+            f"| {_fmt_cell(data, 'mly')} |"
+        )
+
+    return "\n".join(lines)
 
 
 # ── Section builder ────────────────────────────────────────────────────────
@@ -171,22 +278,30 @@ def update_readme(artifacts_dir: str, readme_path: str) -> None:
     with open(readme_path, encoding="utf-8") as fh:
         content = fh.read()
 
-    new_section = build_performance_section(artifacts_dir)
+    md_files = _find_md_files(artifacts_dir)
+    new_content = content
 
-    if START_MARKER in content and END_MARKER in content:
-        # Precise marker-based replacement — always preferred.
+    # ── Detailed results section ─────────────────────────────────────────
+    new_section = build_performance_section(artifacts_dir)
+    if START_MARKER in new_content and END_MARKER in new_content:
         pattern = re.escape(START_MARKER) + r".*?" + re.escape(END_MARKER)
-        new_content = re.sub(pattern, new_section, content, flags=re.DOTALL)
+        new_content = re.sub(pattern, new_section, new_content, flags=re.DOTALL)
     else:
-        # Fallback: replace everything from the ## Performance heading until
-        # the next ## heading (or end of file).
         pattern = r"(## Performance\n)(.*?)(\n## |\Z)"
         new_content = re.sub(
             pattern,
             lambda m: m.group(1) + "\n" + new_section + "\n" + m.group(3),
-            content,
+            new_content,
             flags=re.DOTALL,
         )
+
+    # ── Summary table ────────────────────────────────────────────────────
+    if md_files and SUMMARY_START in new_content and SUMMARY_END in new_content:
+        table = build_summary_table(md_files)
+        if table:
+            replacement = f"{SUMMARY_START}\n{table}\n{SUMMARY_END}"
+            pattern = re.escape(SUMMARY_START) + r".*?" + re.escape(SUMMARY_END)
+            new_content = re.sub(pattern, replacement, new_content, flags=re.DOTALL)
 
     with open(readme_path, "w", encoding="utf-8") as fh:
         fh.write(new_content)

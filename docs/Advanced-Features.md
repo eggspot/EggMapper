@@ -288,12 +288,3 @@ You can also get the raw expression for inspection or composition:
 Expression<Func<Order, OrderDto>> expr = config.BuildProjection<Order, OrderDto>();
 ```
 
----
-
-## auto-update README features list and wiki docs on every release
-
-<!-- TODO: expand this section with usage examples -->
-
-```csharp
-// See the release notes and unit tests for usage examples.
-```

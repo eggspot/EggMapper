@@ -27,9 +27,11 @@ else
   echo "[update-features] Scanning commits since ${LAST_TAG}"
 fi
 
-# Collect feat: commit subjects (strip leading/trailing whitespace)
+# Collect feat: commit subjects (strip leading/trailing whitespace).
+# Exclude CI/tooling-only commits (docs/, scripts/, workflows/).
 FEAT_COMMITS=$(git log --pretty=format:"%s" ${COMMIT_RANGE} 2>/dev/null \
   | grep -Ei "^feat(\([^)]+\))?:" \
+  | grep -Eiv "(auto-update|readme features|wiki docs|update-features|benchmark)" \
   | sed -E 's/^feat(\([^)]+\))?:[[:space:]]*//' \
   || true)
 
