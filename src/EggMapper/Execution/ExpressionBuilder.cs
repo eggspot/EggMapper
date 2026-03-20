@@ -2285,6 +2285,168 @@ internal static class ExpressionBuilder
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // Patch / partial mapping  (Feature 6)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Builds a <c>Func&lt;TSrc, TDest, TDest&gt;</c> that copies only non-null
+    /// (reference types) or HasValue (Nullable&lt;T&gt;) source properties onto
+    /// an existing destination instance.  Non-nullable value-type source
+    /// properties are always assigned.
+    /// Returns null when the map cannot be expressed as a patch delegate
+    /// (ConvertUsing, inheritance, or collection source/dest types).
+    /// </summary>
+    public static Delegate? TryBuildPatchDelegate(TypeMap typeMap)
+    {
+        if (typeMap.ConvertUsingFunc != null) return null;
+        if (typeMap.BaseMapTypePair.HasValue) return null;
+        if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return null;
+        if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return null;
+
+        var srcType = typeMap.SourceType;
+        var destType = typeMap.DestinationType;
+        var srcDetails = TypeDetails.Get(srcType);
+        var destDetails = TypeDetails.Get(destType);
+
+        var srcParam  = Expression.Parameter(srcType,  "src");
+        var destParam = Expression.Parameter(destType, "dest");
+        var stmts = new List<Expression>();
+
+        var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var propMap in typeMap.PropertyMaps)
+        {
+            processedProps.Add(propMap.DestinationProperty.Name);
+            if (propMap.Ignored) continue;
+
+            // Skip complex resolvers — patch only handles simple value projection
+            if (propMap.CustomResolver != null || propMap.ContextResolver != null
+                || propMap.ValueResolverFactory != null) continue;
+
+            if (propMap.HasUseValue)
+            {
+                // Fixed value — always apply
+                try
+                {
+                    stmts.Add(Expression.Assign(
+                        Expression.Property(destParam, propMap.DestinationProperty),
+                        Expression.Convert(Expression.Constant(propMap.UseValue),
+                            propMap.DestinationProperty.PropertyType)));
+                }
+                catch { }
+                continue;
+            }
+
+            if (propMap.SourceMemberName != null)
+            {
+                srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var srcProp);
+                if (srcProp == null) continue;
+                var expr = TryBuildPatchAssign(srcParam, destParam, srcProp, propMap.DestinationProperty);
+                if (expr != null) stmts.Add(expr);
+            }
+        }
+
+        foreach (var destProp in destDetails.WritableProperties)
+        {
+            if (processedProps.Contains(destProp.Name)) continue;
+            processedProps.Add(destProp.Name);
+
+            srcDetails.ReadableByName.TryGetValue(destProp.Name, out var srcProp);
+            if (srcProp == null) continue;
+
+            var expr = TryBuildPatchAssign(srcParam, destParam, srcProp, destProp);
+            if (expr != null) stmts.Add(expr);
+        }
+
+        stmts.Add(destParam);
+        var body = stmts.Count == 1
+            ? (Expression)destParam
+            : Expression.Block(stmts);
+        var funcType = typeof(Func<,,>).MakeGenericType(srcType, destType, destType);
+        return Expression.Lambda(funcType, body, srcParam, destParam).Compile();
+    }
+
+    private static Expression? TryBuildPatchAssign(
+        ParameterExpression srcParam, ParameterExpression destParam,
+        PropertyInfo srcProp, PropertyInfo destProp)
+    {
+        var srcType   = srcProp.PropertyType;
+        var destType  = destProp.PropertyType;
+        var srcAccess = Expression.Property(srcParam,  srcProp);
+        var destAccess = Expression.Property(destParam, destProp);
+
+        var innerAssign = BuildPatchInnerAssign(srcAccess, destAccess, srcType, destType);
+        if (innerAssign == null) return null;
+
+        // Reference type: guard with null check
+        if (!srcType.IsValueType)
+        {
+            return Expression.IfThen(
+                Expression.ReferenceNotEqual(
+                    Expression.Convert(srcAccess, typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                innerAssign);
+        }
+
+        // Nullable<T>: guard with HasValue
+        if (Nullable.GetUnderlyingType(srcType) != null)
+        {
+            return Expression.IfThen(
+                Expression.Property(srcAccess, "HasValue"),
+                innerAssign);
+        }
+
+        // Non-nullable value type: always assign
+        return innerAssign;
+    }
+
+    private static Expression? BuildPatchInnerAssign(
+        Expression srcAccess, Expression destAccess, Type srcType, Type destType)
+    {
+        if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
+            return null;
+
+        var srcUnderlying  = Nullable.GetUnderlyingType(srcType);
+        var destUnderlying = Nullable.GetUnderlyingType(destType);
+
+        if (srcType == destType)
+            return Expression.Assign(destAccess, srcAccess);
+
+        if (destType.IsAssignableFrom(srcType))
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        // Nullable<T> → T: HasValue is already guarded above; use .Value
+        if (srcUnderlying != null
+            && (destType == srcUnderlying || destType.IsAssignableFrom(srcUnderlying)))
+            return Expression.Assign(destAccess,
+                Expression.Convert(Expression.Property(srcAccess, "Value"), destType));
+
+        // T → Nullable<T>
+        if (destUnderlying != null
+            && (srcType == destUnderlying || destUnderlying.IsAssignableFrom(srcType)))
+            return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
+
+        // Enum ↔ string
+        {
+            var srcCore  = srcUnderlying  ?? srcType;
+            var destCore = destUnderlying ?? destType;
+            if (srcCore.IsEnum && destType == typeof(string))
+                return BuildEnumToStringAssign(srcAccess, destAccess, srcUnderlying);
+            if (srcType == typeof(string) && destCore.IsEnum)
+                return BuildStringToEnumAssign(srcAccess, destAccess, destType, destCore);
+        }
+
+        // Numeric value-type conversions
+        if (srcType.IsValueType && destType.IsValueType)
+        {
+            try { return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType)); }
+            catch { return null; }
+        }
+
+        return null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     // Constructor matching helpers (Feature 5: Record / parameterized-ctor support)
     // ══════════════════════════════════════════════════════════════════════════
 

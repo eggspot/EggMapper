@@ -22,6 +22,9 @@ public sealed class MapperConfiguration
     // Inlines the entire collection + element mapping loop — zero per-element delegate call.
     internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = null!;
 
+    // Patch delegates: Func<TSrc, TDest, TDest> — copies only non-null/HasValue props.
+    internal Dictionary<TypePair, Delegate> FrozenPatchMaps = null!;
+
     internal Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; private set; }
 
     internal int DefaultMaxDepth { get; private set; }
@@ -48,14 +51,16 @@ public sealed class MapperConfiguration
         // fall back to the full typed-delegate build, then try list delegate — all in one loop.
         var ctxFree = new Dictionary<TypePair, Delegate>();
         var ctxFreeList = new Dictionary<TypePair, Delegate>();
+        var patch = new Dictionary<TypePair, Delegate>();
 
         foreach (var typeMap in TopologicalOrder(_typeMaps))
-            CompileMap(typeMap, ctxFree, ctxFreeList, DefaultMaxDepth);
+            CompileMap(typeMap, ctxFree, ctxFreeList, patch, DefaultMaxDepth);
 
         // Snapshot: no further writes will occur after construction.
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
         FrozenCtxFreeMaps = ctxFree;
         FrozenCtxFreeListMaps = ctxFreeList;
+        FrozenPatchMaps = patch;
     }
 
     private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)
@@ -91,6 +96,7 @@ public sealed class MapperConfiguration
         TypeMap typeMap,
         Dictionary<TypePair, Delegate> ctxFree,
         Dictionary<TypePair, Delegate> ctxFreeList,
+        Dictionary<TypePair, Delegate> patch,
         int defaultMaxDepth)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
@@ -132,6 +138,11 @@ public sealed class MapperConfiguration
         var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps);
         if (listDel != null)
             ctxFreeList[key] = listDel;
+
+        // Patch delegate — null-guarded partial mapping.
+        var patchDel = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap);
+        if (patchDel != null)
+            patch[key] = patchDel;
     }
 
     private void ResolveIncludeAllDerived()
