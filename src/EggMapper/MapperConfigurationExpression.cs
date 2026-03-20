@@ -69,9 +69,11 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         AddProfiles(markerTypes.Select(t => t.Assembly).Distinct());
 
     public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
+    public int DefaultMaxDepth { get; set; } = 32;
 
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
     internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
+    internal int GetDefaultMaxDepth() => DefaultMaxDepth;
 }
 
 internal sealed class MappingExpression<TSource, TDestination> : IMappingExpression<TSource, TDestination>
