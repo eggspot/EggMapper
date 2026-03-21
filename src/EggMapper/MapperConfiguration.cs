@@ -29,12 +29,17 @@ public sealed class MapperConfiguration
 
     internal int DefaultMaxDepth { get; private set; }
 
+    // Global type converters: Func<TSource, TDest> indexed by (TSource, TDest) type pair.
+    // Inlined into expression trees during compilation — zero runtime overhead.
+    private readonly Dictionary<TypePair, Delegate> _globalConverters;
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
         configure(expr);
         ShouldMapProperty = expr.GetShouldMapProperty();
         DefaultMaxDepth = expr.GetDefaultMaxDepth();
+        _globalConverters = expr.GetGlobalConverters();
 
         foreach (var typeMap in expr.GetTypeMaps())
         {
@@ -54,7 +59,7 @@ public sealed class MapperConfiguration
         var patch = new Dictionary<TypePair, Delegate>();
 
         foreach (var typeMap in TopologicalOrder(_typeMaps))
-            CompileMap(typeMap, ctxFree, ctxFreeList, patch, DefaultMaxDepth);
+            CompileMap(typeMap, ctxFree, ctxFreeList, patch, DefaultMaxDepth, _globalConverters);
 
         // Snapshot: no further writes will occur after construction.
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
@@ -97,7 +102,8 @@ public sealed class MapperConfiguration
         Dictionary<TypePair, Delegate> ctxFree,
         Dictionary<TypePair, Delegate> ctxFreeList,
         Dictionary<TypePair, Delegate> patch,
-        int defaultMaxDepth)
+        int defaultMaxDepth,
+        Dictionary<TypePair, Delegate> globalConverters)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
         if (_compiledMaps.ContainsKey(key)) return;
@@ -113,7 +119,7 @@ public sealed class MapperConfiguration
         // Try ctx-free-with-dest: single Compile() that handles both create-new and update-existing.
         // Derive the boxed FrozenMaps entry and the typed FrozenCtxFreeMaps entry from it
         // via zero-cost closures — no second expression-tree compilation.
-        var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps);
+        var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps, globalConverters);
         if (ctxFreeWithDest != null)
         {
             // Func<TSrc,TDest,TDest> stored directly — FastCache calls it as f(src, default!)
@@ -129,13 +135,13 @@ public sealed class MapperConfiguration
         else
         {
             // Complex map (hooks, conditions, inheritance…) — fall back to full compilation.
-            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps, defaultMaxDepth);
+            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps, defaultMaxDepth, globalConverters);
             _compiledMaps[key] = compiledDelegate;
             typeMap.MappingDelegate = compiledDelegate;
         }
 
         // Ctx-free list delegate — entire collection loop inlined (independent of above path).
-        var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps);
+        var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps, globalConverters);
         if (listDel != null)
             ctxFreeList[key] = listDel;
 

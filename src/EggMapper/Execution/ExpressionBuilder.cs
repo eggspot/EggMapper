@@ -91,13 +91,14 @@ internal static class ExpressionBuilder
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
-        int defaultMaxDepth = 32)
+        int defaultMaxDepth = 32,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         // Fast path: compile a single typed Expression tree (no per-property delegate
         // calls, no boxing of value types in the hot loop).  Falls back to the
         // flexible action-array approach when complex features (conditions, hooks,
         // custom resolvers, inheritance) are present.
-        if (TryBuildTypedDelegate(typeMap, allTypeMaps, compiledMaps, out var fastDel))
+        if (TryBuildTypedDelegate(typeMap, allTypeMaps, compiledMaps, out var fastDel, globalConverters))
             return fastDel!;
 
         return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps, defaultMaxDepth);
@@ -116,7 +117,8 @@ internal static class ExpressionBuilder
     /// </summary>
     public static Delegate? TryBuildCtxFreeDelegate(
         TypeMap typeMap,
-        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         if (typeMap.ConvertUsingFunc != null) return null;
         if (typeMap.ShouldMapProperty != null) return null;
@@ -216,7 +218,7 @@ internal static class ExpressionBuilder
                 srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var srcProp);
                 if (srcProp == null) continue;
 
-                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty, allTypeMaps);
+                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty, allTypeMaps, globalConverters);
                 if (assignExpr == null) return null;
                 stmts.Add(assignExpr);
             }
@@ -250,7 +252,7 @@ internal static class ExpressionBuilder
                 continue;
             }
 
-            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
+            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
             if (assignExpr == null) return null;
             stmts.Add(assignExpr);
         }
@@ -278,7 +280,8 @@ internal static class ExpressionBuilder
     /// </summary>
     public static Delegate? TryBuildCtxFreeListDelegate(
         TypeMap elemTypeMap,
-        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcElem = elemTypeMap.SourceType;
         var destElem = elemTypeMap.DestinationType;
@@ -346,7 +349,7 @@ internal static class ExpressionBuilder
             {
                 srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var sp);
                 if (sp == null) continue;
-                var a = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, sp, propMap.DestinationProperty, allTypeMaps);
+                var a = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, sp, propMap.DestinationProperty, allTypeMaps, globalConverters);
                 if (a == null) return null;
                 elemStmts.Add(a);
             }
@@ -376,7 +379,7 @@ internal static class ExpressionBuilder
                 continue;
             }
 
-            var assign = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, srcProp, destProp, allTypeMaps);
+            var assign = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, srcProp, destProp, allTypeMaps, globalConverters);
             if (assign == null) return null;
             elemStmts.Add(assign);
         }
@@ -439,7 +442,8 @@ internal static class ExpressionBuilder
         ParameterExpression dVar,
         PropertyInfo srcProp,
         PropertyInfo destProp,
-        Dictionary<TypePair, TypeMap>? allTypeMaps = null)
+        Dictionary<TypePair, TypeMap>? allTypeMaps = null,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType    = srcProp.PropertyType;
         var destType   = destProp.PropertyType;
@@ -466,6 +470,18 @@ internal static class ExpressionBuilder
         // Same type: direct assignment (no boxing, no conversion)
         if (srcType == destType)
             return Expression.Assign(destAccess, srcAccess);
+
+        // ── Global type converter (registered via cfg.AddTypeConverter<S,D>()) ──
+        if (globalConverters != null)
+        {
+            var converterPair = new TypePair(srcType, destType);
+            if (globalConverters.TryGetValue(converterPair, out var converterDel))
+            {
+                var funcType = typeof(Func<,>).MakeGenericType(srcType, destType);
+                return Expression.Assign(destAccess,
+                    Expression.Invoke(Expression.Constant(converterDel, funcType), srcAccess));
+            }
+        }
 
         // Directly assignable (subclass → base, etc.)
         if (destType.IsAssignableFrom(srcType))
@@ -865,7 +881,8 @@ internal static class ExpressionBuilder
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
-        out Func<object, object?, ResolutionContext, object>? result)
+        out Func<object, object?, ResolutionContext, object>? result,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         result = null;
 
@@ -968,7 +985,7 @@ internal static class ExpressionBuilder
 
                 var assignExpr = TryBuildTypedAssign(
                     sVar, dVar, srcProp, propMap.DestinationProperty,
-                    allTypeMaps, compiledMaps, ctxParam);
+                    allTypeMaps, compiledMaps, ctxParam, globalConverters);
                 if (assignExpr == null) return false;
                 stmts.Add(assignExpr);
             }
@@ -998,7 +1015,7 @@ internal static class ExpressionBuilder
             }
 
             var assignExpr = TryBuildTypedAssign(
-                sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam);
+                sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam, globalConverters);
             if (assignExpr == null) return false;
             stmts.Add(assignExpr);
         }
@@ -1028,7 +1045,8 @@ internal static class ExpressionBuilder
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
-        ParameterExpression ctxParam)
+        ParameterExpression ctxParam,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType    = srcProp.PropertyType;
         var destType   = destProp.PropertyType;
@@ -1096,6 +1114,18 @@ internal static class ExpressionBuilder
         // ── Same type: direct assignment (NO boxing for int/bool/double/etc.) ─
         if (srcType == destType)
             return Expression.Assign(destAccess, srcAccess);
+
+        // ── Global type converter (registered via cfg.AddTypeConverter<S,D>()) ──
+        if (globalConverters != null)
+        {
+            var converterPair = new TypePair(srcType, destType);
+            if (globalConverters.TryGetValue(converterPair, out var converterDel))
+            {
+                var funcType = typeof(Func<,>).MakeGenericType(srcType, destType);
+                return Expression.Assign(destAccess,
+                    Expression.Invoke(Expression.Constant(converterDel, funcType), srcAccess));
+            }
+        }
 
         // ── Directly assignable (e.g. subclass → base class) ─────────────────
         if (destType.IsAssignableFrom(srcType))

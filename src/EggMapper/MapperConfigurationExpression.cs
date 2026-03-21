@@ -8,6 +8,7 @@ namespace EggMapper;
 internal sealed class MapperConfigurationExpression : IMapperConfigurationExpression
 {
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
+    private readonly Dictionary<TypePair, Delegate> _globalConverters = new();
 
     public IMappingExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
     {
@@ -71,9 +72,16 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
     public int DefaultMaxDepth { get; set; } = 32;
 
+    public void AddTypeConverter<TSource, TDest>(Func<TSource, TDest> converter)
+    {
+        var key = new TypePair(typeof(TSource), typeof(TDest));
+        _globalConverters[key] = converter;
+    }
+
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
     internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
     internal int GetDefaultMaxDepth() => DefaultMaxDepth;
+    internal Dictionary<TypePair, Delegate> GetGlobalConverters() => _globalConverters;
 }
 
 internal sealed class MappingExpression<TSource, TDestination> : IMappingExpression<TSource, TDestination>
