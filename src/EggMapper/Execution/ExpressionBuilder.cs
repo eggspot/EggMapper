@@ -156,7 +156,8 @@ internal static class ExpressionBuilder
         var destParam = Expression.Parameter(destType, "existingDest");
         var dVar      = Expression.Variable(destType, "d");
 
-        var stmts = new List<Expression>();
+        // Pre-size to avoid resizing during compilation: 1 init + N properties + 1 return.
+        var stmts = new List<Expression>(typeMap.PropertyMaps.Count + destDetails.WritableProperties.Length + 2);
 
         // d = existingDest ?? new TDest()  (or new TDest(matchedArgs) for records)
         Expression newDestExpr;
@@ -310,7 +311,7 @@ internal static class ExpressionBuilder
         // Build element mapping body inline
         var elemSrcParam = Expression.Parameter(srcElem, "es");
         var elemDestVar = Expression.Variable(destElem, "ed");
-        var elemStmts = new List<Expression>();
+        var elemStmts = new List<Expression>(elemTypeMap.PropertyMaps.Count + destDetails.WritableProperties.Length + 2);
 
         Expression newDestExpr;
         if (elemTypeMap.CustomConstructor != null)
@@ -943,7 +944,7 @@ internal static class ExpressionBuilder
         var sVar = Expression.Variable(srcType,  "s");
         var dVar = Expression.Variable(destType, "d");
 
-        var stmts = new List<Expression>();
+        var stmts = new List<Expression>(typeMap.PropertyMaps.Count + destDetails.WritableProperties.Length + 3);
 
         // s = (TSrc)src
         stmts.Add(Expression.Assign(sVar, Expression.Convert(srcParam, srcType)));
@@ -1718,7 +1719,7 @@ internal static class ExpressionBuilder
             allTypeMaps.TryGetValue(typeMap.BaseMapTypePair.Value, out var baseTypeMap))
         {
             // Build a set of overriding property names upfront — avoids O(n*m) .Any() scan
-            var overriddenNames = new HashSet<string>(typeMap.PropertyMaps.Count, StringComparer.OrdinalIgnoreCase);
+            var overriddenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int oi = 0; oi < typeMap.PropertyMaps.Count; oi++)
                 overriddenNames.Add(typeMap.PropertyMaps[oi].DestinationProperty.Name);
 

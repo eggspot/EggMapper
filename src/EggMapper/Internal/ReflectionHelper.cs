@@ -129,14 +129,15 @@ internal static class ReflectionHelper
         for (int i = 0; i < readable.Length; i++)
         {
             var srcProp = readable[i];
-            if (!destPropName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            var remainder = destPropName.Substring(srcProp.Name.Length);
-            if (string.IsNullOrEmpty(remainder)) continue;
+            var navName = srcProp.Name;
+            if (!destPropName.StartsWith(navName, StringComparison.OrdinalIgnoreCase)) continue;
+            var remainder = destPropName.Substring(navName.Length);
+            if (remainder.Length == 0) continue;
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
             var nestedProps = nestedDetails.ReadableProperties;
             for (int j = 0; j < nestedProps.Length; j++)
             {
-                if (string.Equals(nestedProps[j].Name, remainder, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(remainder, nestedProps[j].Name, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
         }
