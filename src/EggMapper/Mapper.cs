@@ -82,6 +82,19 @@ public sealed class Mapper : IMapper
             return (TDestination)del(source, null, ctx);
         }
 
+        // Open generic on-demand compilation
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openBoxed, out var openCtxFree))
+        {
+            if (openCtxFree != null)
+            {
+                var typed = (Func<TSource, TDestination, TDestination>)openCtxFree;
+                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                return typed(source, default!);
+            }
+            var ctx = GetContext();
+            return (TDestination)openBoxed!(source, null, ctx);
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
             $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
@@ -96,6 +109,11 @@ public sealed class Mapper : IMapper
         {
             var ctx = GetContext();
             return (TDestination)del(source, destination, ctx);
+        }
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
+        {
+            var ctx = GetContext();
+            return (TDestination)openDel!(source, destination, ctx);
         }
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
@@ -205,10 +223,42 @@ public sealed class Mapper : IMapper
             return result;
         }
 
-        // Ctx-aware boxed delegate
+        // Ctx-aware boxed delegate — or open generic on-demand compilation
         if (!_config.FrozenMaps.TryGetValue(key, out var del))
-            throw new InvalidOperationException(
-                $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}.");
+        {
+            if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out var openCtxFree))
+            {
+                if (openCtxFree != null)
+                {
+                    var typedDel = (Func<TSource, TDestination, TDestination>)openCtxFree;
+                    FastCache<TSource, TDestination>.Entry =
+                        new FastCache<TSource, TDestination>.CacheEntry(typedDel, _generation);
+                    if (source is IList<TSource> openLst)
+                    {
+                        var count = openLst.Count;
+                        var r = new List<TDestination>(count);
+                        for (int i = 0; i < count; i++)
+                        {
+                            var item = openLst[i];
+                            r.Add(item == null ? default! : typedDel(item, default!));
+                        }
+                        return r;
+                    }
+                    var result2 = source is ICollection<TSource> col3
+                        ? new List<TDestination>(col3.Count)
+                        : new List<TDestination>();
+                    foreach (var item in source)
+                        result2.Add(item == null ? default! : typedDel(item, default!));
+                    return result2;
+                }
+                del = openDel!;
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}.");
+            }
+        }
         var ctx = GetContext();
 
         if (source is IList<TSource> list)
@@ -247,6 +297,14 @@ public sealed class Mapper : IMapper
             var ctx = GetContext();
             return del(source, destination, ctx);
         }
+
+        // Open generic on-demand compilation
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
+        {
+            var ctx = GetContext();
+            return openDel!(source, destination, ctx);
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {sourceType.Name} -> {destinationType.Name}. " +
             $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");

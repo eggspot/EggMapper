@@ -33,6 +33,12 @@ public sealed class MapperConfiguration
     // Inlined into expression trees during compilation — zero runtime overhead.
     private readonly Dictionary<TypePair, Delegate> _globalConverters;
 
+    // Open generic templates: (srcGenericDef, destGenericDef) → TypeMap with open types.
+    private readonly Dictionary<(Type, Type), TypeMap> _openGenericRegistrations;
+    // On-demand compiled delegates for closed generic pairs.
+    private readonly ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> _runtimeOpenGenericMaps = new();
+    private readonly ConcurrentDictionary<TypePair, Delegate> _runtimeCtxFreeOpenGenericMaps = new();
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
@@ -40,6 +46,7 @@ public sealed class MapperConfiguration
         ShouldMapProperty = expr.GetShouldMapProperty();
         DefaultMaxDepth = expr.GetDefaultMaxDepth();
         _globalConverters = expr.GetGlobalConverters();
+        _openGenericRegistrations = expr.GetOpenGenericTypeMaps();
 
         foreach (var typeMap in expr.GetTypeMaps())
         {
@@ -179,6 +186,121 @@ public sealed class MapperConfiguration
     }
 
     public IMapper CreateMapper() => new Mapper(this);
+
+    /// <summary>
+    /// Attempts to find (or compile on first call) a delegate for a closed generic pair whose
+    /// open generic definition was registered via <c>CreateMap(typeof(T&lt;&gt;), typeof(U&lt;&gt;))</c>.
+    /// Thread-safe: uses ConcurrentDictionary for on-demand compiled results.
+    /// </summary>
+    internal bool TryGetOrCompileOpenGenericMap(TypePair key,
+        out Func<object, object?, ResolutionContext, object>? boxedDel,
+        out Delegate? ctxFreeDel)
+    {
+        // Fast path: already compiled on a previous call
+        if (_runtimeOpenGenericMaps.TryGetValue(key, out boxedDel))
+        {
+            _runtimeCtxFreeOpenGenericMaps.TryGetValue(key, out ctxFreeDel);
+            return true;
+        }
+
+        boxedDel = null;
+        ctxFreeDel = null;
+
+        var srcType  = key.SourceType;
+        var destType = key.DestinationType;
+
+        if (!srcType.IsGenericType || !destType.IsGenericType)
+            return false;
+
+        var srcDef  = srcType.GetGenericTypeDefinition();
+        var destDef = destType.GetGenericTypeDefinition();
+
+        if (!_openGenericRegistrations.TryGetValue((srcDef, destDef), out var template))
+            return false;
+
+        // Close the TypeMap: substitute the concrete generic arguments.
+        var closedTypeMap = CloseGenericTypeMap(template, srcType, destType);
+        closedTypeMap.ShouldMapProperty = ShouldMapProperty;
+
+        // ConvertUsing overrides all property mapping — no expression tree needed.
+        if (closedTypeMap.ConvertUsingFunc != null)
+        {
+            _runtimeOpenGenericMaps[key] = closedTypeMap.ConvertUsingFunc;
+            boxedDel = closedTypeMap.ConvertUsingFunc;
+            return true;
+        }
+
+        // Try ctx-free path first (avoids boxing and ResolutionContext allocation).
+        var ctxFreeResult = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(
+            closedTypeMap, _typeMaps, _globalConverters);
+        if (ctxFreeResult != null)
+        {
+            var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(srcType, destType, ctxFreeResult);
+            _runtimeCtxFreeOpenGenericMaps[key] = ctxFreeResult;
+            _runtimeOpenGenericMaps[key] = boxed;
+            boxedDel  = boxed;
+            ctxFreeDel = ctxFreeResult;
+            return true;
+        }
+
+        // Fall back to flexible delegate path.
+        var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
+            closedTypeMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
+        _runtimeOpenGenericMaps[key] = compiled;
+        boxedDel = compiled;
+        return true;
+    }
+
+    private static TypeMap CloseGenericTypeMap(TypeMap template, Type srcType, Type destType)
+    {
+        var closedMap = new TypeMap
+        {
+            SourceType           = srcType,
+            DestinationType      = destType,
+            ConvertUsingFunc     = template.ConvertUsingFunc,
+            CustomConstructor    = template.CustomConstructor,
+            BeforeMapAction      = template.BeforeMapAction,
+            AfterMapAction       = template.AfterMapAction,
+            BeforeMapCtxAction   = template.BeforeMapCtxAction,
+            AfterMapCtxAction    = template.AfterMapCtxAction,
+            MaxDepth             = template.MaxDepth,
+            IncludeAllDerivedFlag = template.IncludeAllDerivedFlag,
+            BaseMapTypePair      = template.BaseMapTypePair,
+            ValidationRules      = template.ValidationRules,
+        };
+
+        // Copy PropertyMaps: update DestinationProperty to reflect the closed destination type.
+        if (template.PropertyMaps.Count > 0)
+        {
+            var closedDestDetails = Internal.TypeDetails.Get(destType);
+            foreach (var pm in template.PropertyMaps)
+            {
+                var closedDestProp = closedDestDetails.WritableProperties
+                    .FirstOrDefault(p => p.Name == pm.DestinationProperty.Name);
+                if (closedDestProp == null) continue;
+
+                closedMap.PropertyMaps.Add(new PropertyMap
+                {
+                    DestinationProperty  = closedDestProp,
+                    Ignored              = pm.Ignored,
+                    CustomResolver       = pm.CustomResolver,
+                    ContextResolver      = pm.ContextResolver,
+                    Condition            = pm.Condition,
+                    FullCondition        = pm.FullCondition,
+                    PreCondition         = pm.PreCondition,
+                    NullSubstitute       = pm.NullSubstitute,
+                    HasNullSubstitute    = pm.HasNullSubstitute,
+                    UseValue             = pm.UseValue,
+                    HasUseValue          = pm.HasUseValue,
+                    UseDestinationValue  = pm.UseDestinationValue,
+                    SourceMemberName     = pm.SourceMemberName,
+                    ValueResolverFactory = pm.ValueResolverFactory,
+                });
+            }
+        }
+
+        return closedMap;
+    }
 
     internal Func<object, object?, ResolutionContext, object>? GetMapDelegate(TypePair typePair)
     {

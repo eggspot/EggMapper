@@ -9,6 +9,9 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 {
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
     private readonly Dictionary<TypePair, Delegate> _globalConverters = new();
+    // Open generic templates: (srcGenericDef, destGenericDef) → TypeMap with open types.
+    // Compiled on-demand when a closed generic pair is first mapped.
+    private readonly Dictionary<(Type, Type), TypeMap> _openGenericTypeMaps = new();
 
     public IMappingExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
     {
@@ -59,8 +62,19 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
             SourceType = sourceType,
             DestinationType = destinationType
         };
-        var key = new TypePair(sourceType, destinationType);
-        _typeMaps[key] = typeMap;
+
+        // Open generic template (e.g. CreateMap(typeof(ApiResponse<>), typeof(ApiResponseDto<>)))
+        // — store separately; compiled on-demand at first Map() call for a closed pair.
+        if (sourceType.IsGenericTypeDefinition && destinationType.IsGenericTypeDefinition)
+        {
+            _openGenericTypeMaps[(sourceType, destinationType)] = typeMap;
+        }
+        else
+        {
+            var key = new TypePair(sourceType, destinationType);
+            _typeMaps[key] = typeMap;
+        }
+
         return new NonGenericMappingExpression(typeMap, RegisterTypeMap);
     }
 
@@ -82,6 +96,7 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
     internal int GetDefaultMaxDepth() => DefaultMaxDepth;
     internal Dictionary<TypePair, Delegate> GetGlobalConverters() => _globalConverters;
+    internal Dictionary<(Type, Type), TypeMap> GetOpenGenericTypeMaps() => _openGenericTypeMaps;
 }
 
 internal sealed class MappingExpression<TSource, TDestination> : IMappingExpression<TSource, TDestination>
