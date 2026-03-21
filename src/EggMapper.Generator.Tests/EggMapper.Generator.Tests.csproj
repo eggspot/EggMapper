@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>EggMapper.Generator.Tests</AssemblyName>
+    <RootNamespace>EggMapper.Generator.Tests</RootNamespace>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"              Version="17.11.1" />
+    <PackageReference Include="xunit"                               Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio"           Version="2.8.2" PrivateAssets="all" />
+    <PackageReference Include="FluentAssertions"                    Version="6.12.2" />
+    <!-- Roslyn testing helpers -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"       Version="4.12.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers"    Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EggMapper.Generator\EggMapper.Generator.csproj" />
+  </ItemGroup>
+</Project>

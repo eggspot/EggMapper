@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>EggMapper.Abstractions</AssemblyName>
+    <RootNamespace>EggMapper</RootNamespace>
+    <PackageId>EggMapper.Abstractions</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Eggspot</Authors>
+    <Company>Eggspot</Company>
+    <Product>EggMapper</Product>
+    <Description>Attributes for compile-time object mapping with EggMapper.Generator. Decorate source types with [MapTo] to auto-generate type-safe extension methods.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mapper;source-generator;compile-time;attributes;dto;extension-methods</PackageTags>
+    <Copyright>Copyright © Eggspot</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591</NoWarn>
+    <TargetFrameworks>netstandard2.0;net462;net8.0;net9.0;net10.0</TargetFrameworks>
+  </PropertyGroup>
+</Project>
