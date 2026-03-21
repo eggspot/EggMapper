@@ -40,11 +40,11 @@ public sealed class Mapper : IMapper
     {
         if (source != null)
         {
-            // Ultra-fast path: single static field read + null check.
-            // Generation is embedded in the func — if mapper changed, func is null.
-            var fast = FastCache<TSource, TDestination>.Func;
-            if (fast != null & FastCache<TSource, TDestination>.Generation == _generation)
-                return fast(source, default!);
+            // Ultra-fast path: single volatile field read + null check.
+            // Entry bundles Func+Generation atomically — no torn reads between them.
+            var entry = FastCache<TSource, TDestination>.Entry;
+            if (entry != null && entry.Generation == _generation)
+                return entry.Func(source, default!);
 
             return MapSlow<TSource, TDestination>(source);
         }
@@ -71,8 +71,7 @@ public sealed class Mapper : IMapper
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
             var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
-            FastCache<TSource, TDestination>.Func = typed;
-            FastCache<TSource, TDestination>.Generation = _generation;
+            FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
             return typed(source, default!);
         }
 
@@ -111,9 +110,9 @@ public sealed class Mapper : IMapper
     {
         if (source == null) return destination;
 
-        var fast = PatchCache<TSource, TDestination>.Func;
-        if (fast != null & PatchCache<TSource, TDestination>.Generation == _generation)
-            return fast(source, destination);
+        var entry = PatchCache<TSource, TDestination>.Entry;
+        if (entry != null && entry.Generation == _generation)
+            return entry.Func(source, destination);
 
         return PatchSlow<TSource, TDestination>(source, destination);
     }
@@ -125,8 +124,7 @@ public sealed class Mapper : IMapper
         if (_config.FrozenPatchMaps.TryGetValue(key, out var raw))
         {
             var patchDel = (Func<TSource, TDestination, TDestination>)raw;
-            PatchCache<TSource, TDestination>.Func = patchDel;
-            PatchCache<TSource, TDestination>.Generation = _generation;
+            PatchCache<TSource, TDestination>.Entry = new PatchCache<TSource, TDestination>.CacheEntry(patchDel, _generation);
             return patchDel(source, destination);
         }
         throw new InvalidOperationException(
@@ -141,18 +139,18 @@ public sealed class Mapper : IMapper
         // Ultra-fast path: inlined-loop list delegate (entire collection in one compiled call)
         if (source is List<TSource> directList)
         {
-            var listFunc = FastListCache<TSource, TDestination>.Func;
-            if (listFunc != null & FastListCache<TSource, TDestination>.Generation == _generation)
-                return listFunc(directList);
+            var listEntry = FastListCache<TSource, TDestination>.Entry;
+            if (listEntry != null && listEntry.Generation == _generation)
+                return listEntry.Func(directList);
 
             // Per-item FastCache fallback for List<T>
-            var itemFunc = FastCache<TSource, TDestination>.Func;
-            if (itemFunc != null & FastCache<TSource, TDestination>.Generation == _generation)
+            var itemEntry = FastCache<TSource, TDestination>.Entry;
+            if (itemEntry != null && itemEntry.Generation == _generation)
             {
                 var count = directList.Count;
                 var result = new List<TDestination>(count);
                 for (int i = 0; i < count; i++)
-                    result.Add(itemFunc(directList[i], default!));
+                    result.Add(itemEntry.Func(directList[i], default!));
                 return result;
             }
         }
@@ -169,14 +167,13 @@ public sealed class Mapper : IMapper
             && _config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDelRaw))
         {
             var listDel = (Func<List<TSource>, List<TDestination>>)listDelRaw;
-            FastListCache<TSource, TDestination>.Func = listDel;
-            FastListCache<TSource, TDestination>.Generation = _generation;
+            FastListCache<TSource, TDestination>.Entry = new FastListCache<TSource, TDestination>.CacheEntry(listDel, _generation);
 
             // Also warm the per-item FastCache so MapList<> next call uses the fast path
-            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeRaw))
+            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var itemDelRaw))
             {
-                FastCache<TSource, TDestination>.Func = (Func<TSource, TDestination, TDestination>)ctxFreeRaw;
-                FastCache<TSource, TDestination>.Generation = _generation;
+                var itemDel = (Func<TSource, TDestination, TDestination>)itemDelRaw;
+                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(itemDel, _generation);
             }
 
             return listDel(srcList);
@@ -186,8 +183,7 @@ public sealed class Mapper : IMapper
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
             var typedDel = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
-            FastCache<TSource, TDestination>.Func = typedDel;
-            FastCache<TSource, TDestination>.Generation = _generation;
+            FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typedDel, _generation);
 
             if (source is IList<TSource> lst)
             {
@@ -265,30 +261,43 @@ public sealed class Mapper : IMapper
     /// <summary>
     /// Lock-free single-slot global cache for Map&lt;S,D&gt;. Zero overhead after first call.
     /// JIT specializes each (TSource,TDestination) pair into a direct static field read.
-    /// Stores Func&lt;TSrc,TDest,TDest&gt; — the compiled ctx-free delegate — to avoid the
-    /// extra closure call that a NoDestWrapper would add.
+    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
     /// </summary>
     private static class FastCache<TSource, TDestination>
     {
-        public static Func<TSource, TDestination, TDestination>? Func;
-        public static int Generation;
+        public static volatile CacheEntry? Entry;
+        internal sealed class CacheEntry(Func<TSource, TDestination, TDestination> func, int generation)
+        {
+            public readonly Func<TSource, TDestination, TDestination> Func = func;
+            public readonly int Generation = generation;
+        }
     }
 
     /// <summary>
     /// Lock-free single-slot global cache for MapList. Zero overhead after first call.
+    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
     /// </summary>
     private static class FastListCache<TSource, TDestination>
     {
-        public static Func<List<TSource>, List<TDestination>>? Func;
-        public static int Generation;
+        public static volatile CacheEntry? Entry;
+        internal sealed class CacheEntry(Func<List<TSource>, List<TDestination>> func, int generation)
+        {
+            public readonly Func<List<TSource>, List<TDestination>> Func = func;
+            public readonly int Generation = generation;
+        }
     }
 
     /// <summary>
     /// Lock-free single-slot global cache for Patch&lt;S,D&gt;. Zero overhead after first call.
+    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
     /// </summary>
     private static class PatchCache<TSource, TDestination>
     {
-        public static Func<TSource, TDestination, TDestination>? Func;
-        public static int Generation;
+        public static volatile CacheEntry? Entry;
+        internal sealed class CacheEntry(Func<TSource, TDestination, TDestination> func, int generation)
+        {
+            public readonly Func<TSource, TDestination, TDestination> Func = func;
+            public readonly int Generation = generation;
+        }
     }
 }

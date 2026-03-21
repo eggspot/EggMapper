@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>EggMapper.Analyzers.Tests</AssemblyName>
+    <RootNamespace>EggMapper.Analyzers.Tests</RootNamespace>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk"              Version="17.11.1" />
+    <PackageReference Include="xunit"                               Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio"           Version="2.8.2" PrivateAssets="all" />
+    <PackageReference Include="FluentAssertions"                    Version="6.12.2" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp"       Version="4.12.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers"    Version="3.11.0" PrivateAssets="all" />
+    <!-- Roslyn test framework for analyzer unit tests -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" Version="1.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EggMapper.Analyzers\EggMapper.Analyzers.csproj" />
+  </ItemGroup>
+</Project>
