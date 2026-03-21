@@ -129,6 +129,7 @@ internal static class ExpressionBuilder
         if (typeMap.MaxDepth > 0) return null;
         if (typeMap.BaseMapTypePair.HasValue) return null;
         if (typeMap.ValidationRules?.Count > 0) return null;  // validators need flexible path
+        if (typeMap.CustomConstructorWithCtx != null) return null;  // needs ResolutionContext
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return null;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return null;
 
@@ -227,8 +228,8 @@ internal static class ExpressionBuilder
         // ── Convention mapping for remaining writable destination properties ──
         // Flattened assignments are grouped by navigation property so one null check
         // and one local variable covers all fields from the same navigation path.
-        var flatGroups = new Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>(
-            StringComparer.OrdinalIgnoreCase);
+        // Lazily allocated — most maps have no flattened properties.
+        Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>? flatGroups = null;
 
         foreach (var destProp in destDetails.WritableProperties)
         {
@@ -242,6 +243,7 @@ internal static class ExpressionBuilder
                 if (flatInfo != null)
                 {
                     var (navProp, nestedProp) = flatInfo.Value;
+                    flatGroups ??= new Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>(StringComparer.OrdinalIgnoreCase);
                     if (!flatGroups.TryGetValue(navProp.Name, out var group))
                         flatGroups[navProp.Name] = group = (navProp, new List<(PropertyInfo, PropertyInfo)>());
                     group.Items.Add((nestedProp, destProp));
@@ -258,8 +260,9 @@ internal static class ExpressionBuilder
         }
 
         // Emit grouped flattened assignments — one null check + one local var per nav property
-        foreach (var g in flatGroups.Values)
-            EmitGroupedFlattenedAssigns(srcParam, dVar, g.NavProp, g.Items, stmts);
+        if (flatGroups != null)
+            foreach (var g in flatGroups.Values)
+                EmitGroupedFlattenedAssigns(srcParam, dVar, g.NavProp, g.Items, stmts);
 
         // return d
         stmts.Add(dVar);
@@ -355,8 +358,8 @@ internal static class ExpressionBuilder
             }
         }
 
-        var elemFlatGroups = new Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>(
-            StringComparer.OrdinalIgnoreCase);
+        // Lazily allocated — most element maps have no flattened properties.
+        Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>? elemFlatGroups = null;
 
         foreach (var destProp in destDetails.WritableProperties)
         {
@@ -370,6 +373,7 @@ internal static class ExpressionBuilder
                 if (flatInfo != null)
                 {
                     var (navProp, nestedProp) = flatInfo.Value;
+                    elemFlatGroups ??= new Dictionary<string, (PropertyInfo NavProp, List<(PropertyInfo NestedProp, PropertyInfo DestProp)> Items)>(StringComparer.OrdinalIgnoreCase);
                     if (!elemFlatGroups.TryGetValue(navProp.Name, out var group))
                         elemFlatGroups[navProp.Name] = group = (navProp, new List<(PropertyInfo, PropertyInfo)>());
                     group.Items.Add((nestedProp, destProp));
@@ -384,8 +388,9 @@ internal static class ExpressionBuilder
             elemStmts.Add(assign);
         }
 
-        foreach (var g in elemFlatGroups.Values)
-            EmitGroupedFlattenedAssigns(elemSrcParam, elemDestVar, g.NavProp, g.Items, elemStmts);
+        if (elemFlatGroups != null)
+            foreach (var g in elemFlatGroups.Values)
+                EmitGroupedFlattenedAssigns(elemSrcParam, elemDestVar, g.NavProp, g.Items, elemStmts);
 
         elemStmts.Add(elemDestVar);
 
@@ -826,10 +831,18 @@ internal static class ExpressionBuilder
         // IList<T>.Count is inherited from ICollection<T>
         var icolType = typeof(ICollection<>).MakeGenericType(srcElem);
         var countProp = icolType.GetProperty("Count")!;
-        // IList<T> indexer: this[int index]
-        var itemProp = ilistSrcType.GetProperties()
-            .FirstOrDefault(p => p.GetIndexParameters().Length == 1
-                && p.GetIndexParameters()[0].ParameterType == typeof(int));
+        // IList<T> indexer: this[int index] — cached to avoid repeated reflection per compilation
+        var itemProp = _ilistIndexerCache.GetOrAdd(ilistSrcType, t =>
+        {
+            var props = t.GetProperties();
+            for (int pi = 0; pi < props.Length; pi++)
+            {
+                var idxParams = props[pi].GetIndexParameters();
+                if (idxParams.Length == 1 && idxParams[0].ParameterType == typeof(int))
+                    return props[pi];
+            }
+            return null;
+        });
         if (itemProp == null) return null;
         var listCtor = listDestType.GetConstructor(new[] { typeof(int) })!;
         var addMethod = listDestType.GetMethod("Add")!;
@@ -901,6 +914,7 @@ internal static class ExpressionBuilder
         if (typeMap.ConvertUsingFunc != null) return false;
         if (typeMap.ShouldMapProperty != null) return false;
         if (typeMap.ValidationRules?.Count > 0) return false;  // validators need flexible path
+        if (typeMap.CustomConstructorWithCtx != null) return false;  // needs ResolutionContext
         if (ReflectionHelper.IsCollectionType(typeMap.SourceType)) return false;
         if (ReflectionHelper.IsCollectionType(typeMap.DestinationType)) return false;
 
@@ -1519,10 +1533,9 @@ internal static class ExpressionBuilder
             if (string.IsNullOrEmpty(remainder)) continue;
 
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            var nestedProp = nestedDetails.ReadableProperties.FirstOrDefault(p =>
-                string.Equals(p.Name, remainder, StringComparison.OrdinalIgnoreCase));
-
-            if (nestedProp == null) continue;
+            // Use O(1) dict lookup instead of LINQ scan
+            if (!nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp))
+                continue;
 
             var destType = destProp.PropertyType;
             var nestedType = nestedProp.PropertyType;
@@ -1654,6 +1667,10 @@ internal static class ExpressionBuilder
         typeof(ExpressionBuilder).GetMethod(nameof(MapListTyped),
             BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public)!;
 
+    // Cache for IList<T> indexer PropertyInfo keyed by the closed IList<T> type.
+    // Avoids GetProperties().FirstOrDefault() reflection on every collection property compilation.
+    private static readonly ConcurrentDictionary<Type, PropertyInfo?> _ilistIndexerCache = new();
+
     // ══════════════════════════════════════════════════════════════════════════
     // Ctx-free → boxed wrapper  (avoids a second Compile() call per eligible map)
     // ══════════════════════════════════════════════════════════════════════════
@@ -1690,6 +1707,7 @@ internal static class ExpressionBuilder
         int defaultMaxDepth = 32)
     {
         var factory = BuildFactory(typeMap);
+        var ctxCtor = typeMap.CustomConstructorWithCtx;
         var srcDetails = TypeDetails.Get(typeMap.SourceType);
         var destDetails = TypeDetails.Get(typeMap.DestinationType);
 
@@ -1699,11 +1717,16 @@ internal static class ExpressionBuilder
         if (typeMap.BaseMapTypePair.HasValue &&
             allTypeMaps.TryGetValue(typeMap.BaseMapTypePair.Value, out var baseTypeMap))
         {
+            // Build a set of overriding property names upfront — avoids O(n*m) .Any() scan
+            var overriddenNames = new HashSet<string>(typeMap.PropertyMaps.Count, StringComparer.OrdinalIgnoreCase);
+            for (int oi = 0; oi < typeMap.PropertyMaps.Count; oi++)
+                overriddenNames.Add(typeMap.PropertyMaps[oi].DestinationProperty.Name);
+
             foreach (var basePropMap in baseTypeMap.PropertyMaps)
             {
                 var propName = basePropMap.DestinationProperty.Name;
                 if (processedDestProps.Contains(propName)) continue;
-                if (!typeMap.PropertyMaps.Any(p => p.DestinationProperty.Name == propName))
+                if (!overriddenNames.Contains(propName))
                 {
                     processedDestProps.Add(propName);
                     if (basePropMap.Ignored) continue;
@@ -1748,7 +1771,7 @@ internal static class ExpressionBuilder
             if (maxDepth > 0 && ctx.Depth >= maxDepth)
                 return dest!;
 
-            var typedDest = dest ?? factory(src);
+            var typedDest = dest ?? (ctxCtor != null ? ctxCtor(src, ctx) : factory(src));
 
             try
             {
@@ -2120,10 +2143,9 @@ internal static class ExpressionBuilder
             if (string.IsNullOrEmpty(remainder)) continue;
 
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            var nestedProp = nestedDetails.ReadableProperties.FirstOrDefault(p =>
-                string.Equals(p.Name, remainder, StringComparison.OrdinalIgnoreCase));
-
-            if (nestedProp == null) continue;
+            // Use O(1) dict lookup instead of LINQ scan
+            if (!nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp))
+                continue;
 
             var srcGetter = GetOrBuildGetter(srcProp);
             var nestedGetter = GetOrBuildGetter(nestedProp);

@@ -266,18 +266,19 @@ public sealed class MapperConfiguration
     {
         var closedMap = new TypeMap
         {
-            SourceType           = srcType,
-            DestinationType      = destType,
-            ConvertUsingFunc     = template.ConvertUsingFunc,
-            CustomConstructor    = template.CustomConstructor,
-            BeforeMapAction      = template.BeforeMapAction,
-            AfterMapAction       = template.AfterMapAction,
-            BeforeMapCtxAction   = template.BeforeMapCtxAction,
-            AfterMapCtxAction    = template.AfterMapCtxAction,
-            MaxDepth             = template.MaxDepth,
-            IncludeAllDerivedFlag = template.IncludeAllDerivedFlag,
-            BaseMapTypePair      = template.BaseMapTypePair,
-            ValidationRules      = template.ValidationRules,
+            SourceType                = srcType,
+            DestinationType           = destType,
+            ConvertUsingFunc          = template.ConvertUsingFunc,
+            CustomConstructor         = template.CustomConstructor,
+            CustomConstructorWithCtx  = template.CustomConstructorWithCtx,
+            BeforeMapAction           = template.BeforeMapAction,
+            AfterMapAction            = template.AfterMapAction,
+            BeforeMapCtxAction        = template.BeforeMapCtxAction,
+            AfterMapCtxAction         = template.AfterMapCtxAction,
+            MaxDepth                  = template.MaxDepth,
+            IncludeAllDerivedFlag     = template.IncludeAllDerivedFlag,
+            BaseMapTypePair           = template.BaseMapTypePair,
+            ValidationRules           = template.ValidationRules,
         };
 
         // Copy PropertyMaps: update DestinationProperty to reflect the closed destination type.

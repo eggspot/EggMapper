@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Reflection;
 
 namespace EggMapper.Internal;
@@ -12,6 +13,14 @@ internal static class ReflectionHelper
         typeof(float), typeof(double), typeof(decimal)
     };
 
+    // Per-type caches — computed once, reused across all map compilations.
+    // Eliminates repeated GetInterfaces() calls (each allocates an array) for
+    // every property type encountered during startup compilation.
+    private static readonly ConcurrentDictionary<Type, bool> _isDictCache = new();
+    private static readonly ConcurrentDictionary<Type, bool> _isCollCache = new();
+    private static readonly ConcurrentDictionary<Type, (Type Key, Type Value)> _dictKvCache = new();
+    private static readonly ConcurrentDictionary<Type, Type?> _collElemCache = new();
+
     public static bool IsNumericType(Type type) => NumericTypes.Contains(type);
 
     public static bool IsNullableType(Type type) =>
@@ -20,7 +29,10 @@ internal static class ReflectionHelper
     public static Type GetUnderlyingType(Type type) =>
         Nullable.GetUnderlyingType(type) ?? type;
 
-    public static bool IsDictionaryType(Type type)
+    public static bool IsDictionaryType(Type type) =>
+        _isDictCache.GetOrAdd(type, ComputeIsDictionaryType);
+
+    private static bool ComputeIsDictionaryType(Type type)
     {
         if (!type.IsGenericType && type.GetInterfaces().Length == 0) return false;
         if (type.IsGenericType)
@@ -38,7 +50,10 @@ internal static class ReflectionHelper
         return false;
     }
 
-    public static (Type KeyType, Type ValueType) GetDictionaryKeyValueTypes(Type type)
+    public static (Type KeyType, Type ValueType) GetDictionaryKeyValueTypes(Type type) =>
+        _dictKvCache.GetOrAdd(type, ComputeDictionaryKeyValueTypes);
+
+    private static (Type, Type) ComputeDictionaryKeyValueTypes(Type type)
     {
         if (type.IsGenericType)
         {
@@ -49,20 +64,26 @@ internal static class ReflectionHelper
                 return (args[0], args[1]);
             }
         }
-        var iface = type.GetInterfaces()
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
-        if (iface != null)
+        var interfaces = type.GetInterfaces();
+        for (int i = 0; i < interfaces.Length; i++)
         {
-            var args = iface.GetGenericArguments();
-            return (args[0], args[1]);
+            var iface = interfaces[i];
+            if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IDictionary<,>))
+            {
+                var args = iface.GetGenericArguments();
+                return (args[0], args[1]);
+            }
         }
         throw new InvalidOperationException($"{type.Name} is not a dictionary type");
     }
 
-    public static bool IsCollectionType(Type type)
+    public static bool IsCollectionType(Type type) =>
+        _isCollCache.GetOrAdd(type, ComputeIsCollectionType);
+
+    private static bool ComputeIsCollectionType(Type type)
     {
         if (type == typeof(string)) return false;
-        // Dictionaries are not treated as plain collections
+        // IsDictionaryType result is already cached from the first call
         if (IsDictionaryType(type)) return false;
         if (type.IsArray) return true;
         var interfaces = type.GetInterfaces();
@@ -75,7 +96,10 @@ internal static class ReflectionHelper
         return false;
     }
 
-    public static Type? GetCollectionElementType(Type type)
+    public static Type? GetCollectionElementType(Type type) =>
+        _collElemCache.GetOrAdd(type, ComputeCollectionElementType);
+
+    private static Type? ComputeCollectionElementType(Type type)
     {
         if (type.IsArray) return type.GetElementType();
         if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
@@ -101,15 +125,20 @@ internal static class ReflectionHelper
 
     public static bool HasFlattenedSource(string destPropName, TypeDetails srcDetails)
     {
-        foreach (var srcProp in srcDetails.ReadableProperties)
+        var readable = srcDetails.ReadableProperties;
+        for (int i = 0; i < readable.Length; i++)
         {
+            var srcProp = readable[i];
             if (!destPropName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
             var remainder = destPropName.Substring(srcProp.Name.Length);
             if (string.IsNullOrEmpty(remainder)) continue;
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            if (nestedDetails.ReadableProperties.Any(p =>
-                string.Equals(p.Name, remainder, StringComparison.OrdinalIgnoreCase)))
-                return true;
+            var nestedProps = nestedDetails.ReadableProperties;
+            for (int j = 0; j < nestedProps.Length; j++)
+            {
+                if (string.Equals(nestedProps[j].Name, remainder, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
         }
         return false;
     }

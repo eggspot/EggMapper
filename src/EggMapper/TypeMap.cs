@@ -9,6 +9,8 @@ internal sealed class TypeMap
     public Type DestinationType { get; set; } = null!;
     public List<PropertyMap> PropertyMaps { get; set; } = new();
     public Func<object, object>? CustomConstructor { get; set; }
+    /// <summary>Context-aware constructor — takes precedence over <see cref="CustomConstructor"/>.</summary>
+    public Func<object, ResolutionContext, object>? CustomConstructorWithCtx { get; set; }
     public Action<object, object>? BeforeMapAction { get; set; }
     public Action<object, object>? AfterMapAction { get; set; }
     // Context-aware hooks (3-arg: src, dest, ResolutionContext)
