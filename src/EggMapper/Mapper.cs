@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using EggMapper.Internal;
@@ -131,6 +132,33 @@ public sealed class Mapper : IMapper
     public object Map(object source, Type sourceType, Type destinationType)
         => MapInternal(source, sourceType, destinationType, null);
 
+    public TDestination Map<TDestination>(object source, Action<IMappingOperationOptions<object, TDestination>> opts)
+    {
+        if (source == null) throw new ArgumentNullException(nameof(source));
+        var mapped = (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
+        if (opts != null)
+        {
+            var options = new MappingOperationOptions<object, TDestination>();
+            opts(options);
+            options.RunBeforeMapActions(source, mapped);
+            options.RunAfterMapActions(source, mapped);
+        }
+        return mapped;
+    }
+
+    public TDestination Map<TSource, TDestination>(TSource source, Action<IMappingOperationOptions<TSource, TDestination>> opts)
+    {
+        var mapped = Map<TSource, TDestination>(source);
+        if (opts != null)
+        {
+            var options = new MappingOperationOptions<TSource, TDestination>();
+            opts(options);
+            options.RunBeforeMapActions(source, mapped);
+            options.RunAfterMapActions(source, mapped);
+        }
+        return mapped;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TDestination Patch<TSource, TDestination>(TSource source, TDestination destination)
     {
@@ -147,7 +175,8 @@ public sealed class Mapper : IMapper
     private TDestination PatchSlow<TSource, TDestination>(TSource source, TDestination destination)
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
-        if (_config.FrozenPatchMaps.TryGetValue(key, out var raw))
+        var raw = _config.GetOrCompilePatchDelegate(key);
+        if (raw != null)
         {
             var patchDel = (Func<TSource, TDestination, TDestination>)raw;
             PatchCache<TSource, TDestination>.Entry = new PatchCache<TSource, TDestination>.CacheEntry(patchDel, _generation);
@@ -189,20 +218,23 @@ public sealed class Mapper : IMapper
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
         // Ctx-free list delegate — entire loop inlined; also populate FastListCache for next call
-        if (source is List<TSource> srcList
-            && _config.FrozenCtxFreeListMaps.TryGetValue(key, out var listDelRaw))
+        if (source is List<TSource> srcList)
         {
-            var listDel = (Func<List<TSource>, List<TDestination>>)listDelRaw;
-            FastListCache<TSource, TDestination>.Entry = new FastListCache<TSource, TDestination>.CacheEntry(listDel, _generation);
-
-            // Also warm the per-item FastCache so MapList<> next call uses the fast path
-            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var itemDelRaw))
+            var listDelRaw = _config.GetOrCompileListDelegate(key);
+            if (listDelRaw != null)
             {
-                var itemDel = (Func<TSource, TDestination, TDestination>)itemDelRaw;
-                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(itemDel, _generation);
-            }
+                var listDel = (Func<List<TSource>, List<TDestination>>)listDelRaw;
+                FastListCache<TSource, TDestination>.Entry = new FastListCache<TSource, TDestination>.CacheEntry(listDel, _generation);
 
-            return listDel(srcList);
+                // Also warm the per-item FastCache so MapList<> next call uses the fast path
+                if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var itemDelRaw))
+                {
+                    var itemDel = (Func<TSource, TDestination, TDestination>)itemDelRaw;
+                    FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(itemDel, _generation);
+                }
+
+                return listDel(srcList);
+            }
         }
 
         // Ctx-free per-item delegate — also populate FastCache for next call
@@ -303,12 +335,36 @@ public sealed class Mapper : IMapper
             return openDel!(source, destination, ctx);
         }
 
+        // Collection auto-mapping: Map<IList<T>>(List<S>) → List<T> using registered element map S→T.
+        // Supports IList<T>, ICollection<T>, IEnumerable<T>, List<T> as destination types.
+        if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
+        {
+            var destElemType = ReflectionHelper.GetCollectionElementType(destinationType);
+            var srcElemType  = ReflectionHelper.GetCollectionElementType(sourceType);
+            if (destElemType != null && srcElemType != null)
+            {
+                var elemKey = new TypePair(srcElemType, destElemType);
+                if (_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
+                {
+                    var resultList = (IList)Activator.CreateInstance(
+                        typeof(List<>).MakeGenericType(destElemType))!;
+                    var ctx = GetContext();
+                    foreach (var item in srcEnum)
+                    {
+                        if (item == null) { resultList.Add(null); continue; }
+                        ctx.Depth = 0;
+                        resultList.Add(elemDel(item, null, ctx));
+                    }
+                    return resultList;
+                }
+            }
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {sourceType.Name} -> {destinationType.Name}. " +
             $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");
     }
 
-    /// <summary>
     // Global generation counter — incremented every time a new Mapper is created.
     // Cached delegates are only valid for the current generation.
     private static int _globalGeneration;
@@ -355,5 +411,37 @@ public sealed class Mapper : IMapper
             public readonly Func<TSource, TDestination, TDestination> Func = func;
             public readonly int Generation = generation;
         }
+    }
+}
+
+/// <summary>
+/// Collects BeforeMap/AfterMap callbacks registered via the call-site opts delegate and
+/// runs them after the core mapping completes.
+/// </summary>
+internal sealed class MappingOperationOptions<TSource, TDestination> : IMappingOperationOptions<TSource, TDestination>
+{
+    private List<Action<TSource, TDestination>>? _beforeActions;
+    private List<Action<TSource, TDestination>>? _afterActions;
+
+    public IDictionary<string, object> Items { get; } = new Dictionary<string, object>();
+
+    public void BeforeMap(Action<TSource, TDestination> beforeFunction)
+        => (_beforeActions ??= new List<Action<TSource, TDestination>>()).Add(beforeFunction);
+
+    public void AfterMap(Action<TSource, TDestination> afterFunction)
+        => (_afterActions ??= new List<Action<TSource, TDestination>>()).Add(afterFunction);
+
+    internal void RunBeforeMapActions(TSource source, TDestination destination)
+    {
+        if (_beforeActions == null) return;
+        for (int i = 0; i < _beforeActions.Count; i++)
+            _beforeActions[i](source, destination);
+    }
+
+    internal void RunAfterMapActions(TSource source, TDestination destination)
+    {
+        if (_afterActions == null) return;
+        for (int i = 0; i < _afterActions.Count; i++)
+            _afterActions[i](source, destination);
     }
 }

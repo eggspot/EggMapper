@@ -86,6 +86,13 @@ internal static class ReflectionHelper
         // IsDictionaryType result is already cached from the first call
         if (IsDictionaryType(type)) return false;
         if (type.IsArray) return true;
+        // Check if the type itself is a generic collection interface (IEnumerable<T>, IList<T>, etc.)
+        if (type.IsGenericType)
+        {
+            var def = type.GetGenericTypeDefinition();
+            if (def == typeof(IEnumerable<>) || def == typeof(IList<>) || def == typeof(ICollection<>))
+                return true;
+        }
         var interfaces = type.GetInterfaces();
         for (int i = 0; i < interfaces.Length; i++)
         {

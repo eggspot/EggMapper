@@ -74,4 +74,25 @@ public class ProfileTests
         var profile = new FlatMappingProfile();
         profile.ProfileName.Should().Be(nameof(FlatMappingProfile));
     }
+
+    [Fact]
+    public void Profile_CreateMap_nongeneric_Type_Type_registers_map()
+    {
+        // Verifies that Profile.CreateMap(Type, Type) is accessible so that
+        // open-generic patterns like SequenceIdMapperProfile compile correctly.
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.AddProfile<NonGenericCreateMapProfile>()).CreateMapper();
+
+        var src = new FlatSource { Name = "Test", Age = 5 };
+        var dest = mapper.Map(src, typeof(FlatSource), typeof(FlatDest));
+        ((FlatDest)dest).Name.Should().Be("Test");
+    }
+}
+
+file class NonGenericCreateMapProfile : Profile
+{
+    public NonGenericCreateMapProfile()
+    {
+        CreateMap(typeof(FlatSource), typeof(FlatDest));
+    }
 }
