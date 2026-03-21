@@ -35,9 +35,19 @@ public sealed class MapperConfiguration
 
     // Open generic templates: (srcGenericDef, destGenericDef) → TypeMap with open types.
     private readonly Dictionary<(Type, Type), TypeMap> _openGenericRegistrations;
-    // On-demand compiled delegates for closed generic pairs.
-    private readonly ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> _runtimeOpenGenericMaps = new();
-    private readonly ConcurrentDictionary<TypePair, Delegate> _runtimeCtxFreeOpenGenericMaps = new();
+
+    // Bundles both delegates for a compiled closed generic pair into one cache entry,
+    // reducing on-demand lookups from two ConcurrentDictionary reads to one.
+    private sealed class OpenGenericEntry(
+        Func<object, object?, ResolutionContext, object> boxed,
+        Delegate? ctxFree)
+    {
+        public readonly Func<object, object?, ResolutionContext, object> Boxed = boxed;
+        public readonly Delegate? CtxFree = ctxFree;
+    }
+
+    // On-demand compiled delegates for closed generic pairs — single dict, bundled entry.
+    private readonly ConcurrentDictionary<TypePair, OpenGenericEntry> _runtimeOpenGenericEntries = new();
 
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
@@ -196,14 +206,15 @@ public sealed class MapperConfiguration
         out Func<object, object?, ResolutionContext, object>? boxedDel,
         out Delegate? ctxFreeDel)
     {
-        // Fast path: already compiled on a previous call
-        if (_runtimeOpenGenericMaps.TryGetValue(key, out boxedDel))
+        // Fast path: single ConcurrentDictionary lookup for the bundled entry.
+        if (_runtimeOpenGenericEntries.TryGetValue(key, out var cached))
         {
-            _runtimeCtxFreeOpenGenericMaps.TryGetValue(key, out ctxFreeDel);
+            boxedDel   = cached.Boxed;
+            ctxFreeDel = cached.CtxFree;
             return true;
         }
 
-        boxedDel = null;
+        boxedDel   = null;
         ctxFreeDel = null;
 
         var srcType  = key.SourceType;
@@ -225,7 +236,8 @@ public sealed class MapperConfiguration
         // ConvertUsing overrides all property mapping — no expression tree needed.
         if (closedTypeMap.ConvertUsingFunc != null)
         {
-            _runtimeOpenGenericMaps[key] = closedTypeMap.ConvertUsingFunc;
+            var entry = new OpenGenericEntry(closedTypeMap.ConvertUsingFunc, null);
+            _runtimeOpenGenericEntries[key] = entry;
             boxedDel = closedTypeMap.ConvertUsingFunc;
             return true;
         }
@@ -236,9 +248,8 @@ public sealed class MapperConfiguration
         if (ctxFreeResult != null)
         {
             var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(srcType, destType, ctxFreeResult);
-            _runtimeCtxFreeOpenGenericMaps[key] = ctxFreeResult;
-            _runtimeOpenGenericMaps[key] = boxed;
-            boxedDel  = boxed;
+            _runtimeOpenGenericEntries[key] = new OpenGenericEntry(boxed, ctxFreeResult);
+            boxedDel   = boxed;
             ctxFreeDel = ctxFreeResult;
             return true;
         }
@@ -246,7 +257,7 @@ public sealed class MapperConfiguration
         // Fall back to flexible delegate path.
         var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
             closedTypeMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
-        _runtimeOpenGenericMaps[key] = compiled;
+        _runtimeOpenGenericEntries[key] = new OpenGenericEntry(compiled, null);
         boxedDel = compiled;
         return true;
     }
