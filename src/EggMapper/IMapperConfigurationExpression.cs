@@ -31,4 +31,12 @@ public interface IMapperConfigurationExpression
     /// Prevents stack exhaustion from deeply or infinitely nested object graphs (CVE-class issue).
     /// </summary>
     int DefaultMaxDepth { get; set; }
+
+    /// <summary>
+    /// Registers a global type converter that applies automatically whenever a source property
+    /// of type <typeparamref name="TSource"/> must be assigned to a destination property of
+    /// type <typeparamref name="TDest"/> and no per-map <c>ForMember</c> override is present.
+    /// The converter is inlined into the compiled expression tree — no boxing, no extra allocations.
+    /// </summary>
+    void AddTypeConverter<TSource, TDest>(Func<TSource, TDest> converter);
 }
