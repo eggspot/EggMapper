@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using EggMapper.Benchmarks.Configs;
+using EggMapper.Benchmarks.Generated;
 using EggMapper.Benchmarks.Models;
 using Mapster;
 
@@ -11,6 +12,7 @@ public class FlatMappingBenchmark
 {
     private ModelObject _source = null!;
     private static readonly MapperlyMapper Mapperly = new();
+    private static readonly ModelObjectMapper ClassMapper = ModelObjectMapper.Instance;
 
     [GlobalSetup]
     public void Setup()
@@ -60,4 +62,20 @@ public class FlatMappingBenchmark
 
     [Benchmark]
     public ModelDto AgileMapper() => AgileObjects.AgileMapper.Mapper.Map(_source).ToANew<ModelDto>();
+
+    // ── Compile-time (Tier 2 & 3) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// EggMapper.Generator (Tier 2): [MapTo(typeof(ModelDto))] on ModelObject.
+    /// Extension method generated at compile time — zero reflection, zero allocation.
+    /// </summary>
+    [Benchmark]
+    public ModelDto EggMapperGenerator() => _source.ToModelDto();
+
+    /// <summary>
+    /// EggMapper.ClassMapper (Tier 3): [EggMapper] partial class mapper.
+    /// Partial method implemented at compile time — zero reflection, zero allocation.
+    /// </summary>
+    [Benchmark]
+    public ModelDto EggMapperClassMapper() => ClassMapper.Map(_source);
 }
