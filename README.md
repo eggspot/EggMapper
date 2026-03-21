@@ -238,11 +238,35 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ IQueryable projection via `ProjectTo<S,D>(config)` for EF Core / LINQ providers
 <!-- FEATURES_END -->
 
+## Mapping Tiers
+
+EggMapper supports three complementary mapping approaches. Choose based on your use case:
+
+| | **Runtime** (`EggMapper`) | **Tier 2** (`EggMapper.Generator`) | **Tier 3** (`EggMapper.ClassMapper`) |
+|---|---|---|---|
+| **API** | `MapperConfiguration` + `CreateMap` | `[MapTo(typeof(Dest))]` attribute | `[EggMapper]` partial class |
+| **Mapping errors detected** | Runtime | ✅ Build time | ✅ Build time |
+| **Reflection at map time** | None (expression trees) | ✅ None (generated code) | ✅ None (generated code) |
+| **Startup cost** | Compilation (once) | ✅ None | ✅ None |
+| **Custom logic** | Full (`ForMember`, hooks, etc.) | `AfterMap` hook | Full custom methods |
+| **Reverse mapping** | `ReverseMap()` | Separate `[MapTo]` annotation | Declare both `partial` methods |
+| **DI-friendly instance** | `IMapper` | N/A (extension methods) | ✅ `Instance` + constructors |
+| **Migration from AutoMapper** | ✅ Drop-in | Via EGG1003 suggestion | New API |
+| **Best for** | Complex/conditional mapping | Simple 1:1 copies | Custom logic + compile safety |
+
+See [Migration Guide](docs/Migration-Guide.md) to move from runtime to compile-time APIs.
+
+---
+
 ## Documentation
 
 | Page | Description |
 |------|-------------|
-| [Getting Started](https://github.com/eggspot/EggMapper/wiki/Getting-Started) | Installation and your first mapping |
+| [Getting Started](https://github.com/eggspot/EggMapper/wiki/Getting-Started) | Installation and your first runtime mapping |
+| [Tier 2 Getting Started](docs/Tier2-Getting-Started.md) | Compile-time extension methods with `[MapTo]` |
+| [Tier 3 Getting Started](docs/Tier3-Getting-Started.md) | Compile-time partial mapper classes with `[EggMapper]` |
+| [Migration Guide](docs/Migration-Guide.md) | Moving from runtime to compile-time APIs |
+| [Diagnostic Reference](docs/diagnostics/) | All EGG diagnostic codes explained |
 | [Configuration](https://github.com/eggspot/EggMapper/wiki/Configuration) | `MapperConfiguration` options |
 | [Profiles](https://github.com/eggspot/EggMapper/wiki/Profiles) | Organising maps with `Profile` |
 | [Dependency Injection](https://github.com/eggspot/EggMapper/wiki/Dependency-Injection) | ASP.NET Core / DI integration |
