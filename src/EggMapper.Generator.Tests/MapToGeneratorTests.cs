@@ -293,5 +293,169 @@ public class OrderDto
             var generated = result.GetSource("OrderToOrderDtoExtensions");
             generated.Should().NotContain("namespace ");
         }
+
+        // ── Flattening ───────────────────────────────────────────────────────
+
+        [Fact]
+        public void Flattening_BasicCase_GeneratesNullSafeExpression()
+        {
+            const string source = @"
+using EggMapper;
+
+namespace MyApp
+{
+    [MapTo(typeof(OrderDto))]
+    public class Order
+    {
+        public int Id { get; set; }
+        public Address ShippingAddress { get; set; }
+    }
+
+    public class Address
+    {
+        public string Street { get; set; } = """";
+        public string City { get; set; } = """";
+    }
+
+    public class OrderDto
+    {
+        public int Id { get; set; }
+        public string ShippingAddressStreet { get; set; } = """";
+        public string ShippingAddressCity { get; set; } = """";
+    }
+}";
+
+            var result = GeneratorTestHelper.Run(source);
+
+            result.Diagnostics.Should().BeEmpty();
+            var generated = result.GetSource("OrderToOrderDtoExtensions");
+            generated.Should().NotBeNull();
+            generated.Should().Contain("ShippingAddressStreet = source.ShippingAddress != null ? source.ShippingAddress.Street : default");
+            generated.Should().Contain("ShippingAddressCity = source.ShippingAddress != null ? source.ShippingAddress.City : default");
+        }
+
+        [Fact]
+        public void Flattening_ValueTypeNavProp_NoNullGuard()
+        {
+            const string source = @"
+using EggMapper;
+
+namespace MyApp
+{
+    [MapTo(typeof(PointDto))]
+    public class Shape
+    {
+        public Point Center { get; set; }
+    }
+
+    public struct Point
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+
+    public class PointDto
+    {
+        public int CenterX { get; set; }
+        public int CenterY { get; set; }
+    }
+}";
+
+            var result = GeneratorTestHelper.Run(source);
+
+            result.Diagnostics.Should().BeEmpty();
+            var generated = result.GetSource("ShapeToPointDtoExtensions");
+            generated.Should().Contain("CenterX = source.Center.X");
+            generated.Should().Contain("CenterY = source.Center.Y");
+            generated.Should().NotContain("Center != null");
+        }
+
+        [Fact]
+        public void Flattening_NoEgg2001_ForFlattenedProperties()
+        {
+            const string source = @"
+using EggMapper;
+
+namespace MyApp
+{
+    [MapTo(typeof(Dto))]
+    public class Source
+    {
+        public Address Address { get; set; }
+    }
+
+    public class Address { public string Street { get; set; } = """"; }
+
+    public class Dto
+    {
+        public string AddressStreet { get; set; } = """";
+    }
+}";
+
+            var result = GeneratorTestHelper.Run(source);
+
+            result.Diagnostics.Should().NotContain(d => d.Id == "EGG2001");
+        }
+
+        [Fact]
+        public void Flattening_MapIgnoreOnNavProp_SuppressesFlattening()
+        {
+            const string source = @"
+using EggMapper;
+
+namespace MyApp
+{
+    [MapTo(typeof(Dto))]
+    public class Source
+    {
+        [MapIgnore]
+        public Address Address { get; set; }
+        public string Other { get; set; } = """";
+    }
+
+    public class Address { public string Street { get; set; } = """"; }
+
+    public class Dto
+    {
+        public string Other { get; set; } = """";
+        public string AddressStreet { get; set; } = """";
+    }
+}";
+
+            var result = GeneratorTestHelper.Run(source);
+
+            // EGG2001 fires for AddressStreet because Address is ignored
+            result.Diagnostics.Should().Contain(d => d.Id == "EGG2001" && d.GetMessage().Contains("AddressStreet"));
+        }
+
+        [Fact]
+        public void Flattening_MapPropertyOnNavProp_PreventsFlattening()
+        {
+            const string source = @"
+using EggMapper;
+
+namespace MyApp
+{
+    [MapTo(typeof(Dto))]
+    public class Source
+    {
+        [MapProperty(""DeliveryAddress"")]
+        public Address ShippingAddress { get; set; }
+    }
+
+    public class Address { public string Street { get; set; } = """"; }
+
+    public class Dto
+    {
+        public Address DeliveryAddress { get; set; }
+        public string ShippingAddressStreet { get; set; } = """";
+    }
+}";
+
+            var result = GeneratorTestHelper.Run(source);
+
+            // ShippingAddress is redirected to DeliveryAddress, so ShippingAddressStreet can't be flattened
+            result.Diagnostics.Should().Contain(d => d.Id == "EGG2001" && d.GetMessage().Contains("ShippingAddressStreet"));
+        }
     }
 }

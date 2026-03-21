@@ -108,6 +108,7 @@ namespace EggMapper.Generator
             // Build lookup: destination name → source property (after [MapProperty] / [MapIgnore])
             var assignments = new List<(string destPropName, string srcExpression, bool needsCast, IPropertySymbol destProp, IPropertySymbol? srcProp)>();
             var ignoredSrcNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var redirectedSrcNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Index source props by their effective destination name
             var srcByDestName = new Dictionary<string, IPropertySymbol>(StringComparer.OrdinalIgnoreCase);
@@ -122,10 +123,23 @@ namespace EggMapper.Generator
                 string effectiveName = sp.Name;
                 var mapProp = GetMapPropertyAttribute(sp, MapPropertyFqn);
                 if (mapProp is not null)
+                {
                     effectiveName = mapProp;
+                    redirectedSrcNames.Add(sp.Name); // [MapProperty] redirects this prop — exclude from flattening
+                }
 
                 // Last one wins if multiple source props redirect to same dest name
                 srcByDestName[effectiveName] = sp;
+            }
+
+            // Source props eligible as navigation properties for flattening:
+            // not ignored, not [MapProperty]-redirected to a specific dest name
+            var navCandidates = new List<IPropertySymbol>();
+            foreach (var sp in srcProps)
+            {
+                if (ignoredSrcNames.Contains(sp.Name)) continue;
+                if (redirectedSrcNames.Contains(sp.Name)) continue;
+                navCandidates.Add(sp);
             }
 
             // Collect destination writable properties
@@ -135,7 +149,15 @@ namespace EggMapper.Generator
             {
                 if (!srcByDestName.TryGetValue(dp.Name, out var sp))
                 {
-                    // No matching source property
+                    // Try flattened path: e.g. dest "AddressStreet" ← source.Address.Street
+                    var flat = TryFlattenMatch(dp, navCandidates, compilation);
+                    if (flat is not null)
+                    {
+                        assignments.Add((dp.Name, flat.Value.srcExpr, flat.Value.needsCast, dp, null));
+                        continue;
+                    }
+
+                    // No direct match and no flattened path → EGG2001
                     diagnostics.Add(Diagnostic.Create(
                         Diagnostics.UnmappedDestinationProperty,
                         Location.None,
@@ -240,6 +262,81 @@ namespace EggMapper.Generator
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Tries to resolve a destination property via flattening convention:
+        /// <c>destProp.Name = "AddressStreet"</c> → <c>source.Address.Street</c>.
+        /// Returns the source expression (with null guard for reference-type nav props)
+        /// or null if no flattened path exists.
+        /// </summary>
+        private static (string srcExpr, bool needsCast)? TryFlattenMatch(
+            IPropertySymbol destProp,
+            IReadOnlyList<IPropertySymbol> navCandidates,
+            Compilation compilation)
+        {
+            string destName = destProp.Name;
+
+            foreach (var nav in navCandidates)
+            {
+                if (!destName.StartsWith(nav.Name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string remainder = destName.Substring(nav.Name.Length);
+                if (string.IsNullOrEmpty(remainder))
+                    continue; // exact name match — handled by direct lookup
+
+                if (nav.Type is not INamedTypeSymbol navType)
+                    continue;
+
+                var nested = FindReadableProperty(navType, remainder);
+                if (nested == null)
+                    continue;
+
+                // Check type compatibility between nested prop and dest prop
+                var conv = compilation.ClassifyConversion(nested.Type, destProp.Type);
+                if (!conv.IsIdentity && !conv.IsImplicit && !conv.IsExplicit)
+                    continue; // incompatible types — try next candidate
+
+                bool needsCast = !conv.IsIdentity && !conv.IsImplicit;
+                string castPrefix = needsCast
+                    ? $"({destProp.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})"
+                    : "";
+
+                // Value-type nav props can never be null — no null guard needed
+                bool navCanBeNull = !nav.Type.IsValueType ||
+                    (navType.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T);
+
+                string srcExpr = navCanBeNull
+                    ? $"source.{nav.Name} != null ? {castPrefix}source.{nav.Name}.{nested.Name} : default"
+                    : $"{castPrefix}source.{nav.Name}.{nested.Name}";
+
+                return (srcExpr, needsCast);
+            }
+
+            return null;
+        }
+
+        /// <summary>Case-insensitive search for a readable public instance property on <paramref name="type"/>.</summary>
+        private static IPropertySymbol? FindReadableProperty(INamedTypeSymbol type, string name)
+        {
+            for (var t = type; t is not null; t = t.BaseType)
+            {
+                foreach (var member in t.GetMembers())
+                {
+                    if (member is IPropertySymbol prop
+                        && !prop.IsStatic
+                        && !prop.IsIndexer
+                        && prop.GetMethod is not null
+                        && prop.DeclaredAccessibility == Accessibility.Public
+                        && string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return prop;
+                    }
+                }
+                if (t.SpecialType == SpecialType.System_Object) break;
+            }
+            return null;
+        }
 
         private static IReadOnlyList<IPropertySymbol> GetReadableProperties(INamedTypeSymbol type)
         {
