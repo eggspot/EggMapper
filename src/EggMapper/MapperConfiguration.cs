@@ -49,6 +49,11 @@ public sealed class MapperConfiguration
     // On-demand compiled delegates for closed generic pairs — single dict, bundled entry.
     private readonly ConcurrentDictionary<TypePair, OpenGenericEntry> _runtimeOpenGenericEntries = new();
 
+    // Lazy list/patch delegates — compiled on first MapList<>/Patch<> call.
+    // Keeping startup proportional to Map<> call sites, not total registered pairs.
+    private readonly ConcurrentDictionary<TypePair, Delegate> _runtimeListMaps  = new();
+    private readonly ConcurrentDictionary<TypePair, Delegate> _runtimePatchMaps = new();
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         var expr = new MapperConfigurationExpression();
@@ -69,20 +74,63 @@ public sealed class MapperConfiguration
         // find derived type maps and auto-set their BaseMapTypePair.
         ResolveIncludeAllDerived();
 
-        // Single topological pass: try ctx-free first to avoid a redundant Compile() call,
-        // fall back to the full typed-delegate build, then try list delegate — all in one loop.
-        var ctxFree = new Dictionary<TypePair, Delegate>();
-        var ctxFreeList = new Dictionary<TypePair, Delegate>();
-        var patch = new Dictionary<TypePair, Delegate>();
+        var orderedMaps = TopologicalOrder(_typeMaps).ToList();
+        var ctxFree = new Dictionary<TypePair, Delegate>(orderedMaps.Count);
 
-        foreach (var typeMap in TopologicalOrder(_typeMaps))
-            CompileMap(typeMap, ctxFree, ctxFreeList, patch, DefaultMaxDepth, _globalConverters);
+        // ── Phase 1: ctx-free compilation in parallel ────────────────────────
+        // TryBuildCtxFreeDelegate reads only _typeMaps (immutable at this point)
+        // and writes only to its own TypeMap.MappingExpression — fully thread-safe.
+        var parallelResults =
+            new ConcurrentDictionary<TypePair, (Delegate CtxFree, Func<object, object?, ResolutionContext, object> Boxed)>();
 
-        // Snapshot: no further writes will occur after construction.
+        Parallel.ForEach(orderedMaps, typeMap =>
+        {
+            if (typeMap.ConvertUsingFunc != null) return;
+            var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
+            var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(
+                typeMap, _typeMaps, _globalConverters);
+            if (ctxFreeWithDest != null)
+            {
+                var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(
+                    typeMap.SourceType, typeMap.DestinationType, ctxFreeWithDest);
+                parallelResults[key] = (ctxFreeWithDest, boxed);
+            }
+        });
+
+        // ── Phase 2: commit results; sequential fallback for complex maps ────
+        // Maps that couldn't take ctx-free path (AfterMap, conditions, inheritance…)
+        // may need earlier delegates in _compiledMaps — topological order is required.
+        foreach (var typeMap in orderedMaps)
+        {
+            var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
+
+            if (typeMap.ConvertUsingFunc != null)
+            {
+                _compiledMaps[key] = typeMap.ConvertUsingFunc;
+                typeMap.MappingDelegate = typeMap.ConvertUsingFunc;
+            }
+            else if (parallelResults.TryGetValue(key, out var r))
+            {
+                ctxFree[key] = r.CtxFree;
+                _compiledMaps[key] = r.Boxed;
+                typeMap.MappingDelegate = r.Boxed;
+            }
+            else
+            {
+                var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
+                    typeMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
+                _compiledMaps[key] = compiled;
+                typeMap.MappingDelegate = compiled;
+            }
+            // List and patch delegates are compiled lazily on first MapList<>/Patch<> call.
+        }
+
+        // Snapshot: plain Dictionary is faster than ConcurrentDictionary for reads.
         FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
         FrozenCtxFreeMaps = ctxFree;
-        FrozenCtxFreeListMaps = ctxFreeList;
-        FrozenPatchMaps = patch;
+        // Empty: list/patch are compiled lazily via GetOrCompileListDelegate / GetOrCompilePatchDelegate.
+        FrozenCtxFreeListMaps = new Dictionary<TypePair, Delegate>(0);
+        FrozenPatchMaps       = new Dictionary<TypePair, Delegate>(0);
     }
 
     private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)
@@ -114,60 +162,6 @@ public sealed class MapperConfiguration
         return result;
     }
 
-    private void CompileMap(
-        TypeMap typeMap,
-        Dictionary<TypePair, Delegate> ctxFree,
-        Dictionary<TypePair, Delegate> ctxFreeList,
-        Dictionary<TypePair, Delegate> patch,
-        int defaultMaxDepth,
-        Dictionary<TypePair, Delegate> globalConverters)
-    {
-        var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-        if (_compiledMaps.ContainsKey(key)) return;
-
-        // ConvertUsing overrides the entire mapping delegate; ctx-free not applicable.
-        if (typeMap.ConvertUsingFunc != null)
-        {
-            _compiledMaps[key] = typeMap.ConvertUsingFunc;
-            typeMap.MappingDelegate = typeMap.ConvertUsingFunc;
-            return;
-        }
-
-        // Try ctx-free-with-dest: single Compile() that handles both create-new and update-existing.
-        // Derive the boxed FrozenMaps entry and the typed FrozenCtxFreeMaps entry from it
-        // via zero-cost closures — no second expression-tree compilation.
-        var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps, globalConverters);
-        if (ctxFreeWithDest != null)
-        {
-            // Func<TSrc,TDest,TDest> stored directly — FastCache calls it as f(src, default!)
-            // eliminating the extra closure call a NoDestWrapper would add.
-            ctxFree[key] = ctxFreeWithDest;
-
-            // Func<object,object?,ResolutionContext,object> — handles dest != null too
-            var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(
-                typeMap.SourceType, typeMap.DestinationType, ctxFreeWithDest);
-            _compiledMaps[key] = boxed;
-            typeMap.MappingDelegate = boxed;
-        }
-        else
-        {
-            // Complex map (hooks, conditions, inheritance…) — fall back to full compilation.
-            var compiledDelegate = Execution.ExpressionBuilder.BuildMappingDelegate(typeMap, _typeMaps, _compiledMaps, defaultMaxDepth, globalConverters);
-            _compiledMaps[key] = compiledDelegate;
-            typeMap.MappingDelegate = compiledDelegate;
-        }
-
-        // Ctx-free list delegate — entire collection loop inlined (independent of above path).
-        var listDel = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps, globalConverters);
-        if (listDel != null)
-            ctxFreeList[key] = listDel;
-
-        // Patch delegate — null-guarded partial mapping.
-        var patchDel = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap);
-        if (patchDel != null)
-            patch[key] = patchDel;
-    }
-
     private void ResolveIncludeAllDerived()
     {
         // Find all base maps with IncludeAllDerived flag
@@ -196,6 +190,30 @@ public sealed class MapperConfiguration
     }
 
     public IMapper CreateMapper() => new Mapper(this);
+
+    /// <summary>
+    /// Returns (compiling on first call) the ctx-free list delegate for <paramref name="key"/>.
+    /// Thread-safe: uses ConcurrentDictionary.GetOrAdd for atomic first-compile.
+    /// </summary>
+    internal Delegate? GetOrCompileListDelegate(TypePair key)
+    {
+        if (_runtimeListMaps.TryGetValue(key, out var cached)) return cached;
+        if (!_typeMaps.TryGetValue(key, out var typeMap)) return null;
+        var del = Execution.ExpressionBuilder.TryBuildCtxFreeListDelegate(typeMap, _typeMaps, _globalConverters);
+        return del == null ? null : _runtimeListMaps.GetOrAdd(key, del);
+    }
+
+    /// <summary>
+    /// Returns (compiling on first call) the patch delegate for <paramref name="key"/>.
+    /// Thread-safe: uses ConcurrentDictionary.GetOrAdd for atomic first-compile.
+    /// </summary>
+    internal Delegate? GetOrCompilePatchDelegate(TypePair key)
+    {
+        if (_runtimePatchMaps.TryGetValue(key, out var cached)) return cached;
+        if (!_typeMaps.TryGetValue(key, out var typeMap)) return null;
+        var del = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap);
+        return del == null ? null : _runtimePatchMaps.GetOrAdd(key, del);
+    }
 
     /// <summary>
     /// Attempts to find (or compile on first call) a delegate for a closed generic pair whose

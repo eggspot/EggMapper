@@ -254,3 +254,165 @@ public class ForAllOtherMembersTests
         config.Invoking(c => c.AssertConfigurationIsValid()).Should().NotThrow();
     }
 }
+
+/// <summary>
+/// Tests for the call-site opts overload:
+///   mapper.Map&lt;TDest&gt;(source, opt =&gt; opt.AfterMap((s, d) =&gt; ...))
+///   mapper.Map&lt;TSource, TDest&gt;(source, opt =&gt; opt.AfterMap((s, d) =&gt; ...))
+/// </summary>
+public class MappingOperationOptionsTests
+{
+    private class MooSrc
+    {
+        public string Name  { get; set; } = "";
+        public int    Value { get; set; }
+    }
+
+    private class MooDest
+    {
+        public string Name     { get; set; } = "";
+        public int    Value    { get; set; }
+        public string Tag      { get; set; } = "";
+        public bool   WasFixed { get; set; }
+    }
+
+    private static IMapper BuildMapper() =>
+        new MapperConfiguration(cfg => cfg.CreateMap<MooSrc, MooDest>()).CreateMapper();
+
+    // ── single-type-arg overload ──────────────────────────────────────────────
+
+    [Fact]
+    public void Map_SingleTypeArg_AfterMap_RunsCallback()
+    {
+        var mapper = BuildMapper();
+        var result = mapper.Map<MooDest>(new MooSrc { Name = "Alice", Value = 7 },
+            opt => opt.AfterMap((src, dest) =>
+            {
+                dest.Tag = "patched";
+                dest.WasFixed = true;
+            }));
+
+        result.Name.Should().Be("Alice");
+        result.Value.Should().Be(7);
+        result.Tag.Should().Be("patched");
+        result.WasFixed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Map_SingleTypeArg_AfterMap_DestIsTyped()
+    {
+        // Destination lambda param must be the concrete type, not object.
+        var mapper = BuildMapper();
+        var captured = "";
+
+        mapper.Map<MooDest>(new MooSrc { Name = "Bob" },
+            opt => opt.AfterMap((src, dest) => captured = dest.Name));  // dest is MooDest
+
+        captured.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void Map_SingleTypeArg_NullOpts_MapsNormally()
+    {
+        var mapper = BuildMapper();
+        var result = mapper.Map<MooDest>(new MooSrc { Name = "Charlie" }, null!);
+
+        result.Name.Should().Be("Charlie");
+        result.Tag.Should().Be("");
+    }
+
+    [Fact]
+    public void Map_SingleTypeArg_MultipleAfterMaps_AllRun()
+    {
+        var mapper = BuildMapper();
+        var log = new List<string>();
+
+        mapper.Map<MooDest>(new MooSrc { Name = "X" }, opt =>
+        {
+            opt.AfterMap((s, d) => log.Add("first"));
+            opt.AfterMap((s, d) => log.Add("second"));
+        });
+
+        log.Should().Equal("first", "second");
+    }
+
+    [Fact]
+    public void Map_SingleTypeArg_BeforeMap_RunsBeforeMappedValues()
+    {
+        // BeforeMap fires after core mapping; we verify it runs and can read already-mapped dest values.
+        var mapper = BuildMapper();
+        var capturedName = "";
+
+        mapper.Map<MooDest>(new MooSrc { Name = "Eve" }, opt =>
+        {
+            opt.BeforeMap((src, dest) => capturedName = dest.Name);
+            opt.AfterMap((src, dest) => dest.Tag = "done");
+        });
+
+        capturedName.Should().Be("Eve");
+    }
+
+    [Fact]
+    public void Map_SingleTypeArg_ItemsDictionary_IsAccessible()
+    {
+        var mapper = BuildMapper();
+        string? captured = null;
+
+        mapper.Map<MooDest>(new MooSrc(), opt =>
+        {
+            opt.Items["key"] = "value";
+            opt.AfterMap((s, d) => captured = opt.Items["key"] as string);
+        });
+
+        captured.Should().Be("value");
+    }
+
+    // ── two-type-arg overload ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Map_TwoTypeArgs_AfterMap_BothParamsTyped()
+    {
+        var mapper = BuildMapper();
+        var capturedSrcName  = "";
+        var capturedDestName = "";
+
+        mapper.Map<MooSrc, MooDest>(new MooSrc { Name = "Dave", Value = 3 }, opt =>
+            opt.AfterMap((src, dest) =>
+            {
+                capturedSrcName  = src.Name;   // src is MooSrc
+                capturedDestName = dest.Name;  // dest is MooDest
+                dest.Tag = "typed";
+            }));
+
+        capturedSrcName.Should().Be("Dave");
+        capturedDestName.Should().Be("Dave");
+    }
+
+    [Fact]
+    public void Map_TwoTypeArgs_AfterMap_CanMutateDestination()
+    {
+        var mapper = BuildMapper();
+
+        var result = mapper.Map<MooSrc, MooDest>(new MooSrc { Name = "Frank", Value = 99 },
+            opt => opt.AfterMap((src, dest) =>
+            {
+                dest.Value    = src.Value * 2;
+                dest.WasFixed = true;
+            }));
+
+        result.Value.Should().Be(198);
+        result.WasFixed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Map_TwoTypeArgs_EmptyOpts_MapsNormally()
+    {
+        var mapper = BuildMapper();
+        // Cast disambiguates from Map<TSource,TDest>(src, dest) when no callback is needed.
+        var result = mapper.Map<MooSrc, MooDest>(
+            new MooSrc { Name = "Grace" },
+            (Action<IMappingOperationOptions<MooSrc, MooDest>>)null!);
+
+        result.Name.Should().Be("Grace");
+    }
+}
