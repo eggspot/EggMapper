@@ -454,7 +454,7 @@ internal static class ExpressionBuilder
         if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
         {
             if (allTypeMaps == null) return null;
-            return TryBuildCtxFreeCollectionAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
+            return TryBuildCtxFreeCollectionAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
         }
         if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
             return null;
@@ -521,7 +521,7 @@ internal static class ExpressionBuilder
         // ── Nested reference type — try to inline child map ──────────────────
         if (!srcType.IsValueType && allTypeMaps != null)
         {
-            var nested = TryBuildCtxFreeNestedAssign(srcParam, dVar, srcProp, destProp, allTypeMaps);
+            var nested = TryBuildCtxFreeNestedAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
             if (nested != null) return nested;
         }
 
@@ -602,7 +602,8 @@ internal static class ExpressionBuilder
         ParameterExpression dVar,
         PropertyInfo srcProp,
         PropertyInfo destProp,
-        Dictionary<TypePair, TypeMap> allTypeMaps)
+        Dictionary<TypePair, TypeMap> allTypeMaps,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -614,10 +615,13 @@ internal static class ExpressionBuilder
         // Only inline simple child maps
         if (childTypeMap.BeforeMapAction != null || childTypeMap.AfterMapAction != null) return null;
         if (childTypeMap.MaxDepth > 0 || childTypeMap.BaseMapTypePair.HasValue) return null;
-        if (childTypeMap.PropertyMaps.Any(pm =>
-            pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-            || pm.HasNullSubstitute || pm.CustomResolver != null))
-            return null;
+        for (int i = 0; i < childTypeMap.PropertyMaps.Count; i++)
+        {
+            var pm = childTypeMap.PropertyMaps[i];
+            if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+                || pm.HasNullSubstitute || pm.CustomResolver != null)
+                return null;
+        }
 
         // Self-referencing guard
         if (srcType == destType) return null;
@@ -676,7 +680,7 @@ internal static class ExpressionBuilder
             {
                 childSrcDetails.ReadableByName.TryGetValue(pm.SourceMemberName, out var cSrcProp);
                 if (cSrcProp == null) continue;
-                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
+                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty, globalConverters);
                 if (assign == null) return null;
                 innerStmts.Add(assign);
             }
@@ -690,7 +694,7 @@ internal static class ExpressionBuilder
             childSrcDetails.ReadableByName.TryGetValue(cDestProp.Name, out var cSrcProp);
             if (cSrcProp == null) continue;
 
-            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
+            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp, globalConverters);
             if (assign == null) return null;
             innerStmts.Add(assign);
         }
@@ -717,7 +721,8 @@ internal static class ExpressionBuilder
         ParameterExpression dVar,
         PropertyInfo srcProp,
         PropertyInfo destProp,
-        Dictionary<TypePair, TypeMap> allTypeMaps)
+        Dictionary<TypePair, TypeMap> allTypeMaps,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -745,13 +750,15 @@ internal static class ExpressionBuilder
             var elemCtor = TypeDetails.Get(destElem).ParameterlessCtor;
             if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
             if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
-            if (elemTypeMap.PropertyMaps.Any(pm =>
-                pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-                || pm.HasNullSubstitute || pm.CustomResolver != null))
-                return null;
+            for (int i = 0; i < elemTypeMap.PropertyMaps.Count; i++)
+            {
+                var pm = elemTypeMap.PropertyMaps[i];
+                if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+                    || pm.HasNullSubstitute || pm.CustomResolver != null)
+                    return null;
+            }
 
-            // We'll build the mapping as a helper method call
-            // Actually, for simplicity and maximum speed, build a Func<TSrcElem, TDestElem>
+            // For maximum speed, build a Func<TSrcElem, TDestElem>
             var elemSrcParam = Expression.Parameter(srcElem, "es");
             var elemDestVar = Expression.Variable(destElem, "ed");
             var elemStmts = new List<Expression>();
@@ -781,7 +788,7 @@ internal static class ExpressionBuilder
                 {
                     elemSrcDetails.ReadableByName.TryGetValue(pm.SourceMemberName, out var sp);
                     if (sp == null) continue;
-                    var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, pm.DestinationProperty);
+                    var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, pm.DestinationProperty, globalConverters);
                     if (a == null) return null;
                     elemStmts.Add(a);
                 }
@@ -793,7 +800,7 @@ internal static class ExpressionBuilder
                 processed.Add(dp.Name);
                 elemSrcDetails.ReadableByName.TryGetValue(dp.Name, out var sp);
                 if (sp == null) continue;
-                var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, dp);
+                var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, dp, globalConverters);
                 if (a == null) return null;
                 elemStmts.Add(a);
             }
@@ -1159,7 +1166,7 @@ internal static class ExpressionBuilder
             // Try to inline the child map's property assignments directly into the
             // parent expression tree — eliminates delegate call + boxing overhead.
             var inlinedExpr = TryBuildInlinedNestedAssign(
-                sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam);
+                sVar, dVar, srcProp, destProp, allTypeMaps, compiledMaps, ctxParam, globalConverters);
             if (inlinedExpr != null)
                 return inlinedExpr;
 
@@ -1215,7 +1222,8 @@ internal static class ExpressionBuilder
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
-        ParameterExpression ctxParam)
+        ParameterExpression ctxParam,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -1229,10 +1237,13 @@ internal static class ExpressionBuilder
         if (childTypeMap.AfterMapAction != null) return null;
         if (childTypeMap.MaxDepth > 0) return null;
         if (childTypeMap.BaseMapTypePair.HasValue) return null;
-        if (childTypeMap.PropertyMaps.Any(pm =>
-            pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-            || pm.HasNullSubstitute || pm.CustomResolver != null))
-            return null;
+        for (int i = 0; i < childTypeMap.PropertyMaps.Count; i++)
+        {
+            var pm = childTypeMap.PropertyMaps[i];
+            if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+                || pm.HasNullSubstitute || pm.CustomResolver != null)
+                return null;
+        }
 
         var childDestDetailsTn = TypeDetails.Get(destType);
         var childDestCtor = childDestDetailsTn.ParameterlessCtor;
@@ -1293,8 +1304,8 @@ internal static class ExpressionBuilder
                 childSrcDetails.ReadableByName.TryGetValue(pm.SourceMemberName, out var cSrcProp);
                 if (cSrcProp == null) continue;
 
-                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty);
-                if (assign == null) return null; // Property needs complex handling; bail out
+                var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, pm.DestinationProperty, globalConverters);
+                if (assign == null) return null;
                 innerStmts.Add(assign);
             }
         }
@@ -1308,8 +1319,8 @@ internal static class ExpressionBuilder
             childSrcDetails.ReadableByName.TryGetValue(cDestProp.Name, out var cSrcProp);
             if (cSrcProp == null) continue;
 
-            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp);
-            if (assign == null) return null; // Property needs complex handling; bail out
+            var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp, globalConverters);
+            if (assign == null) return null;
             innerStmts.Add(assign);
         }
 
@@ -1332,7 +1343,8 @@ internal static class ExpressionBuilder
     /// </summary>
     private static Expression? TryBuildSimpleInlineAssign(
         ParameterExpression srcVar, ParameterExpression destVar,
-        PropertyInfo srcProp, PropertyInfo destProp)
+        PropertyInfo srcProp, PropertyInfo destProp,
+        Dictionary<TypePair, Delegate>? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -1345,6 +1357,18 @@ internal static class ExpressionBuilder
 
         if (srcType == destType)
             return Expression.Assign(destAccess, srcAccess);
+
+        // ── Global type converter ─────────────────────────────────────────────
+        if (globalConverters != null)
+        {
+            var converterPair = new TypePair(srcType, destType);
+            if (globalConverters.TryGetValue(converterPair, out var converterDel))
+            {
+                var funcType = typeof(Func<,>).MakeGenericType(srcType, destType);
+                return Expression.Assign(destAccess,
+                    Expression.Invoke(Expression.Constant(converterDel, funcType), srcAccess));
+            }
+        }
 
         if (destType.IsAssignableFrom(srcType))
             return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
@@ -1442,10 +1466,10 @@ internal static class ExpressionBuilder
             return;
         }
 
-        // Reference type: one null check, one local var, all assignments inside
+        // Reference type: assign nav to local var once, null-check the local var,
+        // then emit all assignments inside the IfThen — single property getter call.
         var navVar = Expression.Variable(navType, navProp.Name.ToLowerInvariant() + "_nav");
-        var innerStmts = new List<Expression>(items.Count + 1);
-        innerStmts.Add(Expression.Assign(navVar, navAccess));
+        var innerStmts = new List<Expression>(items.Count);
 
         foreach (var (nestedProp, destProp) in items)
         {
@@ -1454,11 +1478,14 @@ internal static class ExpressionBuilder
             innerStmts.Add(BuildFlattenedAssignExpr(nestedAccess, destAccess, nestedProp.PropertyType, destProp.PropertyType));
         }
 
-        stmts.Add(Expression.IfThen(
-            Expression.ReferenceNotEqual(
-                Expression.Convert(navAccess, typeof(object)),
-                Expression.Constant(null, typeof(object))),
-            Expression.Block(new[] { navVar }, innerStmts)));
+        stmts.Add(Expression.Block(
+            new[] { navVar },
+            Expression.Assign(navVar, navAccess),
+            Expression.IfThen(
+                Expression.ReferenceNotEqual(
+                    Expression.Convert(navVar, typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                Expression.Block(innerStmts))));
     }
 
     private static Expression BuildFlattenedAssignExpr(

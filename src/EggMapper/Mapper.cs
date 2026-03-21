@@ -105,13 +105,21 @@ public sealed class Mapper : IMapper
     {
         if (source == null) return destination;
         var key = new TypePair(typeof(TSource), typeof(TDestination));
+
+        // Ctx-free typed delegate: zero boxing, zero ResolutionContext allocation.
+        // The Func<TSrc, TDest, TDest> signature already accepts an existing destination.
+        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+            return ((Func<TSource, TDestination, TDestination>)ctxFreeDel)(source, destination);
+
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
             var ctx = GetContext();
             return (TDestination)del(source, destination, ctx);
         }
-        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out var openCtxFree))
         {
+            if (openCtxFree != null)
+                return ((Func<TSource, TDestination, TDestination>)openCtxFree)(source, destination);
             var ctx = GetContext();
             return (TDestination)openDel!(source, destination, ctx);
         }
@@ -202,25 +210,7 @@ public sealed class Mapper : IMapper
         {
             var typedDel = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
             FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typedDel, _generation);
-
-            if (source is IList<TSource> lst)
-            {
-                var count = lst.Count;
-                var r = new List<TDestination>(count);
-                for (int i = 0; i < count; i++)
-                {
-                    var item = lst[i];
-                    r.Add(item == null ? default! : typedDel(item, default!));
-                }
-                return r;
-            }
-
-            var result = source is ICollection<TSource> col
-                ? new List<TDestination>(col.Count)
-                : new List<TDestination>();
-            foreach (var item in source)
-                result.Add(item == null ? default! : typedDel(item, default!));
-            return result;
+            return MapListWithCtxFreeDelegate(typedDel, source);
         }
 
         // Ctx-aware boxed delegate — or open generic on-demand compilation
@@ -233,23 +223,7 @@ public sealed class Mapper : IMapper
                     var typedDel = (Func<TSource, TDestination, TDestination>)openCtxFree;
                     FastCache<TSource, TDestination>.Entry =
                         new FastCache<TSource, TDestination>.CacheEntry(typedDel, _generation);
-                    if (source is IList<TSource> openLst)
-                    {
-                        var count = openLst.Count;
-                        var r = new List<TDestination>(count);
-                        for (int i = 0; i < count; i++)
-                        {
-                            var item = openLst[i];
-                            r.Add(item == null ? default! : typedDel(item, default!));
-                        }
-                        return r;
-                    }
-                    var result2 = source is ICollection<TSource> col3
-                        ? new List<TDestination>(col3.Count)
-                        : new List<TDestination>();
-                    foreach (var item in source)
-                        result2.Add(item == null ? default! : typedDel(item, default!));
-                    return result2;
+                    return MapListWithCtxFreeDelegate(typedDel, source);
                 }
                 del = openDel!;
             }
@@ -287,6 +261,30 @@ public sealed class Mapper : IMapper
             }
             return resultList;
         }
+    }
+
+    private static List<TDestination> MapListWithCtxFreeDelegate<TSource, TDestination>(
+        Func<TSource, TDestination, TDestination> typedDel,
+        IEnumerable<TSource> source)
+    {
+        if (source is IList<TSource> lst)
+        {
+            var count = lst.Count;
+            var r = new List<TDestination>(count);
+            for (int i = 0; i < count; i++)
+            {
+                var item = lst[i];
+                r.Add(item == null ? default! : typedDel(item, default!));
+            }
+            return r;
+        }
+
+        var result = source is ICollection<TSource> col
+            ? new List<TDestination>(col.Count)
+            : new List<TDestination>();
+        foreach (var item in source)
+            result.Add(item == null ? default! : typedDel(item, default!));
+        return result;
     }
 
     private object MapInternal(object source, Type sourceType, Type destinationType, object? destination)
