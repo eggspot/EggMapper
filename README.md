@@ -198,11 +198,26 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 
 #### ⚪ Startup / Config
 
+> **Note:** These numbers measure config *construction only* and are **not comparable** across libraries.
+> EggMapper compiles all expression tree delegates eagerly at construction time (pays upfront).
+> AutoMapper and Mapster defer compilation to the first `Map()` call (pays on first use).
+> See **Cold Start** below for the fair end-to-end comparison.
+
 | Method            | Mean         | Error      | StdDev     | Min          | Median       | Max          | Ratio | Rank | Gen0    | Gen1   | Allocated | Alloc Ratio |
 |------------------ |-------------:|-----------:|-----------:|-------------:|-------------:|-------------:|------:|-----:|--------:|-------:|----------:|------------:|
 | EggMapperStartup  | 5,546.378 μs | 21.0287 μs | 17.5599 μs | 5,517.859 μs | 5,548.003 μs | 5,583.931 μs | 1.000 |    3 | 15.6250 | 7.8125 | 336.36 KB |        1.00 |
 | AutoMapperStartup |   280.519 μs |  2.5210 μs |  2.2348 μs |   277.808 μs |   280.045 μs |   284.729 μs | 0.051 |    2 |  5.8594 |      - | 103.88 KB |        0.31 |
 | MapsterStartup    |     2.469 μs |  0.0245 μs |  0.0229 μs |     2.436 μs |     2.459 μs |     2.506 μs | 0.000 |    1 |  0.7019 | 0.0267 |  11.51 KB |        0.03 |
+
+#### ⚪ Cold Start (Config + First Map per Type Pair)
+
+> Measures total time from zero to having mapped one instance of each registered type pair —
+> the real-world cost of bringing a mapper online. AutoMapper and Mapster pay their deferred
+> compilation cost here; EggMapper's Map() calls are instant (already compiled above).
+
+<!-- COLD_START_RESULTS_START -->
+*Results pending — will be populated on next CI run.*
+<!-- COLD_START_RESULTS_END -->
 
 ---
 
