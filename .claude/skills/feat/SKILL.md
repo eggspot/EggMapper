@@ -19,8 +19,8 @@ Implement a feature for EggMapper following the two-loop development process: co
 ### Phase 1: Understand
 
 1. **Check the roadmap issue** for implementation details:
-   - Read the plan file if it exists: `~/.claude/plans/wise-plotting-shore.md`
-   - Search GitHub issues for context: `gh issue list --search "$ARGUMENTS"`
+   - Search GitHub issues for context: `gh issue list --search "$ARGUMENTS" --repo eggspot/EggMapper`
+   - If a plan file exists for this session, read it first
 
 2. **Read the affected files** before writing any code. Understand existing patterns:
    - `src/EggMapper/Execution/ExpressionBuilder.cs` — the three delegate paths
