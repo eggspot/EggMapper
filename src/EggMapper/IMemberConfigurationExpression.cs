@@ -10,6 +10,11 @@ public interface IMemberConfigurationExpression<TSource, TDestination, TMember>
     void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, TSourceMember> mapFunction);
     // 4-arg with context: (src, dest, destMember, context) => value
     void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, ResolutionContext, TSourceMember> mapFunction);
+    /// <summary>
+    /// Resolve the destination member from a source property by name.
+    /// Equivalent to AutoMapper's <c>MapFrom("SourcePropertyName")</c>.
+    /// </summary>
+    void MapFrom(string sourceMemberName);
 
     /// <summary>
     /// Resolve the destination member using a DI-injected <see cref="IMemberValueResolver{TSource,TDestination,TSourceMember,TDestMember}"/>.

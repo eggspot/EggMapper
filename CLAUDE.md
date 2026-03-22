@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 EggMapper is a high-performance .NET object-to-object mapping library targeting **zero runtime reflection** and **zero extra allocations**. All mapping delegates are compiled as expression trees during `MapperConfiguration` construction. The goal is to be **the fastest runtime mapper** — faster than AutoMapper, Mapster, and AgileMapper on every benchmark scenario.
 
+## Claude Skills
+
+Shorthand slash commands available in this project:
+
+| Skill | Description |
+|-------|-------------|
+| `/test [filter]` | Run unit tests, optionally filtered by class/method name |
+| `/bench [filter]` | Run benchmarks and compare EggMapper vs all competitors |
+| `/feat <description>` | Implement a new feature following the correctness→performance loop |
+| `/perf-check` | Verify no regression after code changes |
+| `/ship` | Create a PR with benchmark evidence |
+| `/expr-debug <types>` | Inspect the compiled expression tree for a type pair |
+| `/pr [action]` | List open PRs, check CI, or merge |
+
 ## Commands
 
 ```bash

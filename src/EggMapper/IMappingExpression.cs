@@ -15,6 +15,7 @@ public interface IMappingExpression<TSource, TDestination>
     IMappingExpression<TSource, TDestination> ReverseMap();
 
     IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, TDestination> ctor);
+    IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, ResolutionContext, TDestination> ctor);
 
     IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination> beforeFunction);
     IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, ResolutionContext> beforeFunction);
@@ -35,6 +36,14 @@ public interface IMappingExpression<TSource, TDestination>
     IMappingExpression<TSource, TDestination> ConvertUsing(Type converterType);
 
     IMappingExpression<TSource, TDestination> ForAllMembers(
+        Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions);
+
+    /// <summary>
+    /// Applies <paramref name="memberOptions"/> to every writable destination property that has
+    /// not already been explicitly configured via <c>ForMember</c>.  Useful for patterns such as
+    /// "ignore all unmapped members" without having to enumerate them individually.
+    /// </summary>
+    IMappingExpression<TSource, TDestination> ForAllOtherMembers(
         Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions);
 
     /// <summary>

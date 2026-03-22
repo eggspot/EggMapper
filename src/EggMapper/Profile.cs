@@ -9,5 +9,8 @@ public abstract class Profile
     protected IMappingExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
         => _cfg.CreateMap<TSource, TDestination>();
 
+    protected IMappingExpression CreateMap(Type sourceType, Type destinationType)
+        => _cfg.CreateMap(sourceType, destinationType);
+
     internal IEnumerable<TypeMap> GetTypeMaps() => _cfg.GetTypeMaps();
 }

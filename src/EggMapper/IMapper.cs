@@ -7,6 +7,23 @@ public interface IMapper
     TDestination Map<TDestination>(object source);
     TDestination Map<TSource, TDestination>(TSource source);
     TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
+
+    /// <summary>
+    /// Maps <paramref name="source"/> to <typeparamref name="TDestination"/> and then runs any
+    /// AfterMap/BeforeMap callbacks registered in <paramref name="opts"/>.
+    /// Compatible with AutoMapper's single-type-arg call-site pattern:
+    /// <c>mapper.Map&lt;TDest&gt;(src, opt =&gt; opt.AfterMap((s, d) =&gt; ...))</c>.
+    /// The source parameter of the callback is typed as <c>object</c>; cast it if needed.
+    /// </summary>
+    TDestination Map<TDestination>(object source, Action<IMappingOperationOptions<object, TDestination>> opts);
+
+    /// <summary>
+    /// Maps <paramref name="source"/> to <typeparamref name="TDestination"/> and then runs any
+    /// AfterMap/BeforeMap callbacks registered in <paramref name="opts"/>.
+    /// Compatible with AutoMapper's two-type-arg call-site pattern:
+    /// <c>mapper.Map&lt;TSource, TDest&gt;(src, opt =&gt; opt.AfterMap((s, d) =&gt; ...))</c>.
+    /// </summary>
+    TDestination Map<TSource, TDestination>(TSource source, Action<IMappingOperationOptions<TSource, TDestination>> opts);
     object Map(object source, Type sourceType, Type destinationType);
 
     /// <summary>

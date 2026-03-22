@@ -127,4 +127,54 @@ public class CollectionMappingTests
         var dest = mapper.Map<IntListSource, IntHashSetDest>(src);
         dest.Numbers.Should().BeEmpty();
     }
+
+    // ── Collection auto-mapping (Map<IList<T>>, Map<IEnumerable<T>>) ─────────
+    // AutoMapper compatibility: mapper.Map<IList<TDest>>(List<TSrc>) routes to
+    // the registered element map TSrc→TDest and returns a List<TDest>.
+
+    [Fact]
+    public void Map_IList_dest_uses_element_map()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        var src = new List<ItemSource> { new() { Id = 1, Label = "A" }, new() { Id = 2, Label = "B" } };
+        var dest = mapper.Map<IList<ItemDest>>(src);
+
+        dest.Should().HaveCount(2);
+        dest[0].Id.Should().Be(1);
+        dest[1].Label.Should().Be("B");
+    }
+
+    [Fact]
+    public void Map_IEnumerable_dest_uses_element_map()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        var src = new List<ItemSource> { new() { Id = 7, Label = "X" } };
+        var dest = mapper.Map<IEnumerable<ItemDest>>(src);
+
+        dest.Should().ContainSingle(d => d.Id == 7 && d.Label == "X");
+    }
+
+    [Fact]
+    public void Map_IList_dest_with_AfterMap_opts_runs_callback()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        var src = new List<ItemSource> { new() { Id = 3, Label = "C" } };
+        var callbackRan = false;
+
+        var dest = mapper.Map<IList<ItemDest>>(src,
+            opt => opt.AfterMap((s, d) =>
+            {
+                callbackRan = true;
+                d[0].Label = "patched";
+            }));
+
+        callbackRan.Should().BeTrue();
+        dest[0].Label.Should().Be("patched");
+    }
 }

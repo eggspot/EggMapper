@@ -176,6 +176,12 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, ResolutionContext, TDestination> ctor)
+    {
+        _typeMap.CustomConstructorWithCtx = (src, ctx) => ctor((TSource)src, ctx)!;
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination> beforeFunction)
     {
         _typeMap.BeforeMapAction = (src, dest) => beforeFunction((TSource)src, (TDestination)dest);
@@ -281,6 +287,22 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    public IMappingExpression<TSource, TDestination> ForAllOtherMembers(
+        Action<IMemberConfigurationExpression<TSource, TDestination, object>> memberOptions)
+    {
+        var destDetails = TypeDetails.Get(typeof(TDestination));
+        foreach (var destProp in destDetails.WritableProperties)
+        {
+            // Skip properties already explicitly configured
+            if (_typeMap.PropertyMaps.Any(p => p.DestinationProperty.Name == destProp.Name))
+                continue;
+            var propMap = GetOrCreatePropertyMap(destProp);
+            var expr = new MemberConfigurationExpression<TSource, TDestination, object>(propMap);
+            memberOptions(expr);
+        }
+        return this;
+    }
+
     public IMappingExpression<TSource, TDestination> Validate<TMember>(
         Expression<Func<TDestination, TMember>> destinationMember,
         Func<TMember, bool> predicate,
@@ -344,6 +366,11 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
                 return resolver.Resolve(src, dest!, srcMember, destMember is TMember dm ? dm : default!, ctx);
             };
         };
+    }
+
+    public void MapFrom(string sourceMemberName)
+    {
+        _propMap.SourceMemberName = sourceMemberName;
     }
 
     public void Ignore() => _propMap.Ignored = true;
