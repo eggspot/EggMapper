@@ -13,8 +13,11 @@ name: Publish NuGet
 #
 # Flow:
 #   Push to main → detect bump type from commits since last tag
-#     → bump version in csproj → build → test → pack → publish to NuGet
-#     → create git tag + GitHub Release → commit bumped csproj back to main
+#     → build → test → pack → publish to NuGet
+#     → create git tag + GitHub Release
+#
+# Version is always derived from the last git tag (not csproj).
+# No commits are pushed back to main — works with branch protection.
 #
 # Required secret: NUGET_API_KEY
 
@@ -53,58 +56,48 @@ jobs:
             9.0.x
             10.0.x
 
-      # ── Determine bump type from commits ─────────────────────────────────
-      - name: Determine version bump
-        id: bump
+      # ── Determine version from git tags + commit analysis ───────────────
+      - name: Determine version
+        id: version
         shell: bash
         run: |
-          CSPROJ="src/EggMapper/EggMapper.csproj"
-          CURRENT=$(grep -oP '(?<=<Version>)[^<]+' "$CSPROJ")
-          echo "CURRENT=${CURRENT}" >> "$GITHUB_OUTPUT"
+          # Current version comes from the last git tag (source of truth)
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v0.0.0")
+          CURRENT="${LAST_TAG#v}"
+          echo "Current version (from tag): ${CURRENT}"
 
           # Manual override from workflow_dispatch
           FORCE="${{ github.event.inputs.force_bump }}"
           if [[ -n "$FORCE" && "$FORCE" != "auto" ]]; then
-            echo "BUMP_TYPE=${FORCE}" >> "$GITHUB_OUTPUT"
-            echo "Forced bump type: ${FORCE}"
-            exit 0
-          fi
-
-          # Find the last release tag
-          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "")
-          if [[ -z "$LAST_TAG" ]]; then
-            COMMIT_RANGE="HEAD"
-            echo "No previous tag found — analyzing all commits"
+            BUMP="${FORCE}"
+            echo "Forced bump type: ${BUMP}"
           else
-            COMMIT_RANGE="${LAST_TAG}..HEAD"
-            echo "Analyzing commits since ${LAST_TAG}"
+            # Analyze commit messages since last tag
+            if [[ "$LAST_TAG" == "v0.0.0" ]]; then
+              COMMIT_RANGE="HEAD"
+              echo "No previous tag found — analyzing all commits"
+            else
+              COMMIT_RANGE="${LAST_TAG}..HEAD"
+              echo "Analyzing commits since ${LAST_TAG}"
+            fi
+
+            BUMP="patch"
+            COMMITS=$(git log --pretty=format:"%s" ${COMMIT_RANGE} 2>/dev/null || git log --pretty=format:"%s" HEAD~10..HEAD)
+
+            echo "Commits to analyze:"
+            echo "$COMMITS"
+
+            if echo "$COMMITS" | grep -qiE "^.*!:|BREAKING CHANGE"; then
+              BUMP="major"
+            elif echo "$COMMITS" | grep -qiE "^feat(\(.*\))?:"; then
+              BUMP="minor"
+            fi
+
+            echo "Detected bump type: ${BUMP}"
           fi
 
-          # Analyze commit messages for conventional commit prefixes
-          BUMP="patch"
-          COMMITS=$(git log --pretty=format:"%s" ${COMMIT_RANGE} 2>/dev/null || git log --pretty=format:"%s" HEAD~10..HEAD)
-
-          echo "Commits to analyze:"
-          echo "$COMMITS"
-
-          if echo "$COMMITS" | grep -qiE "^.*!:|BREAKING CHANGE"; then
-            BUMP="major"
-          elif echo "$COMMITS" | grep -qiE "^feat(\(.*\))?:"; then
-            BUMP="minor"
-          fi
-
-          echo "BUMP_TYPE=${BUMP}" >> "$GITHUB_OUTPUT"
-          echo "Detected bump type: ${BUMP}"
-
-      # ── Calculate new version ────────────────────────────────────────────
-      - name: Calculate new version
-        id: version
-        shell: bash
-        run: |
-          CURRENT="${{ steps.bump.outputs.CURRENT }}"
-          BUMP="${{ steps.bump.outputs.BUMP_TYPE }}"
+          # Calculate new version
           IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT}"
-
           case "$BUMP" in
             major) VERSION="$((MAJOR + 1)).0.0" ;;
             minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
@@ -127,14 +120,6 @@ jobs:
             echo "ALREADY_TAGGED=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ── Update csproj version ────────────────────────────────────────────
-      - name: Update csproj version
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        shell: bash
-        run: |
-          CSPROJ="src/EggMapper/EggMapper.csproj"
-          sed -i "s|<Version>${{ steps.bump.outputs.CURRENT }}</Version>|<Version>${{ steps.version.outputs.VERSION }}</Version>|" "$CSPROJ"
-
       # ── Build & test ─────────────────────────────────────────────────────
       - name: Restore
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
@@ -142,7 +127,7 @@ jobs:
 
       - name: Build
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
 
       - name: Test
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
@@ -203,28 +188,3 @@ jobs:
             --title "EggMapper ${TAG}" \
             --generate-notes \
             ./artifacts/*.nupkg ./artifacts/*.snupkg
-
-      # ── Update README features list and wiki docs ─────────────────────────
-      - name: Update feature docs
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        shell: bash
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          bash scripts/update-features.sh
-          git add README.md docs/Advanced-Features.md
-          git diff --cached --quiet \
-            && echo "Feature docs already up-to-date — nothing to commit." \
-            || git commit -m "docs: update features list for v${{ steps.version.outputs.VERSION }} [skip ci]"
-
-      # ── Commit bumped version back to main ───────────────────────────────
-      - name: Commit version bump
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
-        shell: bash
-        run: |
-          CSPROJ="src/EggMapper/EggMapper.csproj"
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$CSPROJ"
-          git commit -m "chore: release v${{ steps.version.outputs.VERSION }} [skip ci]"
-          git push origin main
