@@ -1,15 +1,9 @@
 name: Benchmarks
 
-# Runs the full benchmark suite and:
-#   • On pull_request  → posts a detailed sticky comment on the PR (net10.0 job only)
-#   • On push to main  → updates the Performance section in README.md and
-#                        commits the result back (with [skip ci] so CI doesn't loop)
-#                        (net10.0 job only — it is the canonical latest reference)
-#   • workflow_dispatch → full manual run across all .NET versions
-#
-# The matrix runs benchmarks on net8.0, net9.0, and net10.0 in parallel.
-# All three SDKs are installed in every job so the multi-TFM project builds cleanly.
-# PR comments and README updates come only from the net10.0 job.
+# Runs the benchmark suite on .NET 10 only and:
+#   • On pull_request  → posts a detailed sticky comment on the PR
+#   • On push to main  → uploads artifacts (no push-back to main)
+#   • workflow_dispatch → full manual run
 
 on:
   push:
@@ -19,39 +13,23 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write        # needed to push README updates on main
+  contents: read
   pull-requests: write   # needed to post PR comments
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-    # Skip if triggered by the bot's own README-update commit to prevent loops
     if: github.actor != 'github-actions[bot]'
-    # Hard cap: BenchmarkDotNet can run long; this prevents the 59-min GitHub limit
     timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        # On PRs run only net10.0 (latest) to keep CI fast.
-        # Full multi-TFM matrix runs on push to main and workflow_dispatch.
-        dotnet-version: ${{ github.event_name == 'pull_request' && fromJson('["10.0.x"]') || fromJson('["8.0.x","9.0.x","10.0.x"]') }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          # Use a token so we can push the README update back to main
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Install all required SDKs so every TFM (including net10.0) can be compiled
-      # regardless of which runtime version the matrix is currently testing.
-      - name: Setup .NET SDKs
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-            10.0.x
+          dotnet-version: 10.0.x
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -64,47 +42,37 @@ jobs:
       - name: Build benchmarks (Release)
         run: dotnet build src/EggMapper.Benchmarks/EggMapper.Benchmarks.csproj --configuration Release --no-restore
 
-      # ── Run benchmarks for this matrix TFM ──────────────────────────────
-      # PRs use --job Short (LaunchCount=1, WarmupCount=1, IterationCount=3) so
-      # the whole suite completes in ~5 minutes instead of 45+ minutes.
-      # Full jobs run on push to main and workflow_dispatch.
-      # Exports:
-      #   markdown → *-report-github.md  (GH-flavoured tables, all columns)
-      #   json     → *-report-full.json  (machine-readable, includes host env)
+      # ── Run benchmarks on .NET 10 ─────────────────────────────────────
+      # PRs use --job Short for fast feedback (~5 min).
+      # Push to main and workflow_dispatch run full benchmarks.
       - name: Run benchmarks
-        env:
-          # Pass --job Short on PRs to avoid hitting the 59-min GitHub Actions limit
-          BENCH_JOB_ARG: ${{ github.event_name == 'pull_request' && '--job Short' || '' }}
         run: |
-          MAJOR=$(echo "${{ matrix.dotnet-version }}" | cut -d. -f1)
-          TFM="net${MAJOR}.0"
           cd src/EggMapper.Benchmarks
-          dotnet run --configuration Release --framework "${TFM}" -- \
+          dotnet run --configuration Release --framework net10.0 -- \
             --filter '*' \
-            ${BENCH_JOB_ARG} \
+            ${{ github.event_name == 'pull_request' && '--job Short' || '' }} \
             --exporters markdown json
 
-      # ── Build the detailed combined report ──────────────────────────────
+      # ── Generate the combined report ───────────────────────────────────
       - name: Generate detailed benchmark report
         id: report
         run: |
           python3 scripts/parse-benchmarks.py \
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
             benchmark-report.md
-          echo "size=$(wc -c < benchmark-report.md)" >> "$GITHUB_OUTPUT"
 
-      # ── Upload per-TFM artifacts ─────────────────────────────────────────
+      # ── Upload artifacts ───────────────────────────────────────────────
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-dotnet-${{ matrix.dotnet-version }}-${{ github.run_number }}
+          name: benchmark-results-net10-${{ github.run_number }}
           path: |
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
             benchmark-report.md
 
-      # ── Post detailed comment on PRs (net10.0 only — canonical latest) ──────
+      # ── Post detailed comment on PRs ───────────────────────────────────
       - name: Post PR comment
-        if: github.event_name == 'pull_request' && matrix.dotnet-version == '10.0.x'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -153,50 +121,3 @@ jobs:
               });
               console.log('Created new benchmark comment.');
             }
-
-      # ── Update README on push to main (net10.0 only — canonical latest) ────
-      - name: Update README performance section
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '10.0.x'
-        run: |
-          python3 scripts/update-readme-benchmarks.py \
-            src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
-            README.md
-
-      - name: Commit README update
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.dotnet-version == '10.0.x'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md
-          # Only commit if the file actually changed
-          if git diff --cached --quiet; then
-            echo "No changes to commit."
-            exit 0
-          fi
-          git commit -m "chore: update benchmark results in README [skip ci]"
-
-          # Pull-rebase to handle concurrent pushes (e.g., publish workflow's
-          # auto-version-bump commit that landed while benchmarks were running).
-          # Retry up to 3 times in case of transient conflicts.
-          for attempt in 1 2 3; do
-            echo "Push attempt ${attempt}..."
-            if git push; then
-              echo "✅ Pushed successfully on attempt ${attempt}."
-              exit 0
-            fi
-            echo "Push failed — pulling latest changes and retrying..."
-            git pull --rebase origin main
-
-            # Re-run the README update script on the rebased tree so the
-            # content stays correct after incorporating upstream changes.
-            python3 scripts/update-readme-benchmarks.py \
-              src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
-              README.md
-            git add README.md
-            if ! git diff --cached --quiet; then
-              git commit --amend --no-edit
-            fi
-          done
-
-          echo "❌ Failed to push after 3 attempts."
-          exit 1
