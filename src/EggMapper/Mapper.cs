@@ -96,6 +96,12 @@ public sealed class Mapper : IMapper
             return (TDestination)openBoxed!(source, null, ctx);
         }
 
+        // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
+        // Delegate to MapInternal which does a base-type walk.
+        var runtimeType = source!.GetType();
+        if (runtimeType != typeof(TSource))
+            return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), null);
+
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
             $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
@@ -335,6 +341,17 @@ public sealed class Mapper : IMapper
             return openDel!(source, destination, ctx);
         }
 
+        // Base-type walk: resolve EF Core proxy / derived types to their registered base mapping.
+        for (var baseType = sourceType.BaseType; baseType != null && baseType != typeof(object); baseType = baseType.BaseType)
+        {
+            var baseKey = new TypePair(baseType, destinationType);
+            if (_config.FrozenMaps.TryGetValue(baseKey, out var baseDel))
+            {
+                var ctx = GetContext();
+                return baseDel(source, destination, ctx);
+            }
+        }
+
         // Collection auto-mapping: Map<IList<T>>(List<S>) → List<T> using registered element map S→T.
         // Supports IList<T>, ICollection<T>, IEnumerable<T>, List<T> as destination types.
         if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
@@ -344,7 +361,17 @@ public sealed class Mapper : IMapper
             if (destElemType != null && srcElemType != null)
             {
                 var elemKey = new TypePair(srcElemType, destElemType);
-                if (_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
+                if (!_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
+                {
+                    // Walk base types for collection element proxy/derived types
+                    for (var bt = srcElemType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
+                    {
+                        var bk = new TypePair(bt, destElemType);
+                        if (_config.FrozenMaps.TryGetValue(bk, out elemDel))
+                            break;
+                    }
+                }
+                if (elemDel != null)
                 {
                     var resultList = (IList)Activator.CreateInstance(
                         typeof(List<>).MakeGenericType(destElemType))!;
