@@ -36,6 +36,12 @@ on:
 permissions:
   contents: write
 
+# Serialize publish runs — prevents tag/release race conditions when
+# multiple PRs merge to main in quick succession.
+concurrency:
+  group: publish-nuget
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -113,7 +119,9 @@ jobs:
         shell: bash
         run: |
           TAG="v${{ steps.version.outputs.VERSION }}"
-          if git rev-parse --verify "refs/tags/${TAG}" > /dev/null 2>&1; then
+          # Check both local and remote tags to catch races
+          if git rev-parse --verify "refs/tags/${TAG}" > /dev/null 2>&1 \
+             || git ls-remote --tags origin "refs/tags/${TAG}" | grep -q "${TAG}"; then
             echo "Tag ${TAG} already exists — skipping."
             echo "ALREADY_TAGGED=true" >> "$GITHUB_OUTPUT"
           else
@@ -176,7 +184,12 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "${TAG}"
+          # Idempotent push — if another run already created this tag, continue gracefully
+          if ! git push origin "${TAG}" 2>&1; then
+            echo "::warning::Tag ${TAG} was already pushed (likely by a concurrent run). Continuing."
+            # Fetch the remote tag so the release step can reference it
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" --force
+          fi
 
       - name: Create GitHub Release
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
@@ -184,7 +197,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v${{ steps.version.outputs.VERSION }}"
-          gh release create "${TAG}" \
-            --title "EggMapper ${TAG}" \
-            --generate-notes \
-            ./artifacts/*.nupkg ./artifacts/*.snupkg
+          # Idempotent — skip if release already exists (e.g., from a concurrent run)
+          if gh release view "${TAG}" > /dev/null 2>&1; then
+            echo "::warning::Release ${TAG} already exists. Skipping."
+          else
+            gh release create "${TAG}" \
+              --title "EggMapper ${TAG}" \
+              --generate-notes \
+              ./artifacts/*.nupkg ./artifacts/*.snupkg
+          fi
