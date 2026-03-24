@@ -26,6 +26,7 @@ public sealed class Mapper : IMapper
         ctx.Depth = 0;
         ctx.Mapper = this;
         ctx.ServiceProvider = ServiceProvider;
+        ctx.ClearInstanceCache();
         return ctx;
     }
 

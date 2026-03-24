@@ -9,10 +9,17 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(cfg => cfg.AddProfiles(assemblies));
         services.AddSingleton(config);
-        // Scoped so each request gets the request-scoped IServiceProvider.
-        // This allows MapFrom value resolvers to inject scoped services
-        // (e.g., DbContext, scoped business services) — matching AutoMapper behavior.
-        services.AddScoped<IMapper>(sp =>
+        // Transient: each injection gets a fresh Mapper with the caller's IServiceProvider.
+        // This is critical for correct scoped service resolution in DI value resolvers
+        // (e.g., DbContext, IMediaAssetService) and matches AutoMapper's behavior.
+        // Mapper is lightweight (~32 bytes wrapping the singleton config) so per-injection
+        // allocation cost is negligible.
+        // Works correctly in all hosting models:
+        //   - ASP.NET API/MVC: per-controller injection = per-request scope
+        //   - Blazor Server: per-component injection = circuit scope
+        //   - Windows Service: per-scope when using IServiceScopeFactory
+        //   - gRPC: per-call scope
+        services.AddTransient<IMapper>(sp =>
         {
             var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
             mapper.ServiceProvider = sp;
@@ -25,7 +32,7 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(configure);
         services.AddSingleton(config);
-        services.AddScoped<IMapper>(sp =>
+        services.AddTransient<IMapper>(sp =>
         {
             var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
             mapper.ServiceProvider = sp;

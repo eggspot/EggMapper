@@ -1844,11 +1844,11 @@ internal static class ExpressionBuilder
             return (src, dest, ctx) => setter(dest, useVal);
         }
 
-        // DI-injected value resolver (resolved lazily from ServiceProvider)
+        // DI-injected value resolver (resolved fresh each call from the current scope's ServiceProvider).
+        // MUST NOT cache the resolver across calls — scoped services would be used after disposal.
         if (propMap.ValueResolverFactory != null)
         {
             var factory = propMap.ValueResolverFactory;
-            Func<object, object?, object?, ResolutionContext, object?>? cachedResolver = null;
             var getter = propMap.SourceMemberName != null && srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var resolverSrcProp)
                 ? GetOrBuildGetter(resolverSrcProp)
                 : null;
@@ -1859,8 +1859,8 @@ internal static class ExpressionBuilder
                 if (ctx.ServiceProvider == null)
                     throw new InvalidOperationException(
                         "IMemberValueResolver requires DI. Use services.AddEggMapper() for dependency injection.");
-                cachedResolver ??= factory(ctx.ServiceProvider);
-                var val = cachedResolver(src, dest, null, ctx);
+                var resolver = factory(ctx.ServiceProvider);
+                var val = resolver(src, dest, null, ctx);
                 setter(dest, ConvertValue(val, destType));
             };
         }
