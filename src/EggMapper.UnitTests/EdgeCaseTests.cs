@@ -130,9 +130,63 @@ public class EdgeCaseTests
         var result = mapper.Map<FlatDest>(null);
         result.Should().BeNull();
     }
+
+    // ── EF Core proxy / derived type resolution ──────────────────────────────
+    [Fact]
+    public void Map_DerivedSourceType_UsesBaseMapping()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<BaseEntity, BaseDto>()).CreateMapper();
+        object source = new DerivedProxy { Id = 42, Name = "test" };
+        var result = mapper.Map<BaseDto>(source);
+        result.Id.Should().Be(42);
+        result.Name.Should().Be("test");
+    }
+
+    [Fact]
+    public void Map_TypedWithDerivedRuntimeType_UsesBaseMapping()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<BaseEntity, BaseDto>()).CreateMapper();
+        BaseEntity source = new DerivedProxy { Id = 7, Name = "proxy" };
+        var result = mapper.Map<BaseEntity, BaseDto>(source);
+        result.Id.Should().Be(7);
+        result.Name.Should().Be("proxy");
+    }
+
+    [Fact]
+    public void Map_CollectionOfDerivedElements_UsesBaseMapping()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<BaseEntity, BaseDto>()).CreateMapper();
+        var source = new List<BaseEntity>
+        {
+            new DerivedProxy { Id = 1, Name = "a" },
+            new DerivedProxy { Id = 2, Name = "b" }
+        };
+        var result = mapper.MapList<BaseEntity, BaseDto>(source);
+        result.Should().HaveCount(2);
+        result[0].Id.Should().Be(1);
+        result[1].Name.Should().Be("b");
+    }
 }
 
 // ── Additional test models ──────────────────────────────────────────────────
+public class BaseEntity
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+}
+
+public class DerivedProxy : BaseEntity
+{
+    // Simulates EF Core lazy-loading proxy
+}
+
+public class BaseDto
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 public class DateTimeSource
 {
     public DateTime Created { get; set; }
