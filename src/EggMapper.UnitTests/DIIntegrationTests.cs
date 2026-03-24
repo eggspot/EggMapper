@@ -10,7 +10,7 @@ namespace EggMapper.UnitTests;
 public class DIIntegrationTests
 {
     [Fact]
-    public void AddEggMapper_configure_registers_IMapper_as_singleton()
+    public void AddEggMapper_configure_registers_IMapper_as_transient()
     {
         var services = new ServiceCollection();
         services.AddEggMapper(cfg => cfg.CreateMap<FlatSource, FlatDest>());
@@ -20,7 +20,9 @@ public class DIIntegrationTests
         var mapper2 = provider.GetRequiredService<IMapper>();
 
         mapper1.Should().NotBeNull();
-        mapper1.Should().BeSameAs(mapper2);
+        mapper2.Should().NotBeNull();
+        // Transient: each resolution gets a fresh instance (correct for scoped DI services)
+        mapper1.Should().NotBeSameAs(mapper2);
     }
 
     [Fact]

@@ -22,6 +22,17 @@ public sealed class ResolutionContext
     private Dictionary<object, object>? _instanceCache;
     internal Dictionary<object, object> InstanceCache =>
         _instanceCache ??= new Dictionary<object, object>(ReferenceEqualityObjectComparer.Instance);
+
+    /// <summary>
+    /// Clears the instance cache between top-level Map calls so stale references
+    /// from previous requests on the same thread don't leak (ThreadStatic reuse).
+    /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal void ClearInstanceCache()
+    {
+        if (_instanceCache != null && _instanceCache.Count > 0)
+            _instanceCache.Clear();
+    }
 }
 
 // Portable reference-equality comparer — works on all target frameworks including
