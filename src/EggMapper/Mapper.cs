@@ -30,9 +30,9 @@ public sealed class Mapper : IMapper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public TDestination Map<TDestination>(object source)
+    public TDestination Map<TDestination>(object? source)
     {
-        if (source == null) throw new ArgumentNullException(nameof(source));
+        if (source == null) return default!;
         return (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
     }
 
@@ -132,9 +132,9 @@ public sealed class Mapper : IMapper
     public object Map(object source, Type sourceType, Type destinationType)
         => MapInternal(source, sourceType, destinationType, null);
 
-    public TDestination Map<TDestination>(object source, Action<IMappingOperationOptions<object, TDestination>> opts)
+    public TDestination Map<TDestination>(object? source, Action<IMappingOperationOptions<object, TDestination>> opts)
     {
-        if (source == null) throw new ArgumentNullException(nameof(source));
+        if (source == null) return default!;
         var mapped = (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
         if (opts != null)
         {
