@@ -9,7 +9,10 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(cfg => cfg.AddProfiles(assemblies));
         services.AddSingleton(config);
-        services.AddSingleton<IMapper>(sp =>
+        // Scoped so each request gets the request-scoped IServiceProvider.
+        // This allows MapFrom value resolvers to inject scoped services
+        // (e.g., DbContext, scoped business services) — matching AutoMapper behavior.
+        services.AddScoped<IMapper>(sp =>
         {
             var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
             mapper.ServiceProvider = sp;
@@ -22,7 +25,7 @@ public static class EggMapperServiceCollectionExtensions
     {
         var config = new MapperConfiguration(configure);
         services.AddSingleton(config);
-        services.AddSingleton<IMapper>(sp =>
+        services.AddScoped<IMapper>(sp =>
         {
             var mapper = (Mapper)sp.GetRequiredService<MapperConfiguration>().CreateMapper();
             mapper.ServiceProvider = sp;

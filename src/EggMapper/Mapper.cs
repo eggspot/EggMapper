@@ -16,7 +16,7 @@ public sealed class Mapper : IMapper
     public Mapper(MapperConfiguration config)
     {
         _config = config;
-        _generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
+        _generation = config.Generation;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -392,9 +392,9 @@ public sealed class Mapper : IMapper
             $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");
     }
 
-    // Global generation counter — incremented every time a new Mapper is created.
-    // Cached delegates are only valid for the current generation.
-    private static int _globalGeneration;
+    // Generation is tied to MapperConfiguration, not Mapper instances.
+    // All scoped Mapper instances from the same config share a generation,
+    // so FastCache stays valid across request scopes.
     private readonly int _generation;
 
     /// <summary>

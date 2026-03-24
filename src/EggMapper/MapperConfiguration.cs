@@ -5,6 +5,12 @@ namespace EggMapper;
 
 public sealed class MapperConfiguration
 {
+    // Generation counter: each MapperConfiguration gets a unique id.
+    // All Mapper instances from the same config share this generation,
+    // so FastCache stays valid when IMapper is registered as scoped.
+    private static int _globalGeneration;
+    internal int Generation { get; }
+
     private readonly ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> _compiledMaps = new();
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
 
@@ -56,6 +62,7 @@ public sealed class MapperConfiguration
 
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
+        Generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
         var expr = new MapperConfigurationExpression();
         configure(expr);
         ShouldMapProperty = expr.GetShouldMapProperty();
