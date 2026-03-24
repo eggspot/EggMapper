@@ -4,7 +4,7 @@ namespace EggMapper;
 
 public interface IMapper
 {
-    TDestination Map<TDestination>(object source);
+    TDestination Map<TDestination>(object? source);
     TDestination Map<TSource, TDestination>(TSource source);
     TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
 
@@ -15,7 +15,7 @@ public interface IMapper
     /// <c>mapper.Map&lt;TDest&gt;(src, opt =&gt; opt.AfterMap((s, d) =&gt; ...))</c>.
     /// The source parameter of the callback is typed as <c>object</c>; cast it if needed.
     /// </summary>
-    TDestination Map<TDestination>(object source, Action<IMappingOperationOptions<object, TDestination>> opts);
+    TDestination Map<TDestination>(object? source, Action<IMappingOperationOptions<object, TDestination>> opts);
 
     /// <summary>
     /// Maps <paramref name="source"/> to <typeparamref name="TDestination"/> and then runs any

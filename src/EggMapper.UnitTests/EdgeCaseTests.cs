@@ -122,13 +122,13 @@ public class EdgeCaseTests
         act.Should().Throw<InvalidOperationException>().Which.Message.Should().Contain("No mapping configured");
     }
 
-    // ── Null source with Map<TDest>(object) ─────────────────────────────────
+    // ── Null source with Map<TDest>(object?) returns default ────────────────
     [Fact]
-    public void Map_NullObjectSource_ThrowsArgumentNullException()
+    public void Map_NullObjectSource_ReturnsDefault()
     {
         var mapper = new MapperConfiguration(cfg => cfg.CreateMap<FlatSource, FlatDest>()).CreateMapper();
-        var act = () => mapper.Map<FlatDest>(null!);
-        act.Should().Throw<ArgumentNullException>();
+        var result = mapper.Map<FlatDest>(null);
+        result.Should().BeNull();
     }
 }
 
