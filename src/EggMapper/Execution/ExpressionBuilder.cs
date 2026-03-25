@@ -2630,13 +2630,43 @@ internal static class ExpressionBuilder
         if (valueType.IsEnum && (underlying == typeof(string) || targetType == typeof(string)))
             return value.ToString();
 
+        // Implicit/explicit conversion operators (e.g., Id<T>(T entity))
         try
         {
             return Convert.ChangeType(value, underlying);
         }
-        catch
+        catch { }
+
+        // Constructor that accepts the source value (e.g., Id<Product>(Product entity))
+        var ctor = underlying.GetConstructor(new[] { valueType });
+        if (ctor != null)
         {
-            return null;
+            try { return ctor.Invoke(new[] { value }); }
+            catch { }
         }
+
+        // Walk base types of the value to find a compatible constructor
+        for (var bt = valueType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
+        {
+            ctor = underlying.GetConstructor(new[] { bt });
+            if (ctor != null)
+            {
+                try { return ctor.Invoke(new[] { value }); }
+                catch { }
+            }
+        }
+
+        // Try interfaces of the value type
+        foreach (var iface in valueType.GetInterfaces())
+        {
+            ctor = underlying.GetConstructor(new[] { iface });
+            if (ctor != null)
+            {
+                try { return ctor.Invoke(new[] { value }); }
+                catch { }
+            }
+        }
+
+        return null;
     }
 }
