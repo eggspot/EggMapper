@@ -167,7 +167,7 @@ public class EdgeCaseTests
         result[1].Name.Should().Be("b");
     }
 
-    // ── MapFrom(s => s) with constructor-based conversion (DSP Id<T> pattern) ─
+    // ── MapFrom(s => s) with constructor-based conversion (Id<T> pattern) ──────
     [Fact]
     public void Map_MapFromSourceEntity_ConvertsViaConstructor()
     {
@@ -305,7 +305,7 @@ public class EdgeCaseTests
     }
 }
 
-// ── Implicit operator test models (simulates DSP's Id<T> → int) ──────────────
+// ── Implicit operator test models (Id<T> → int via implicit operator) ────────
 public class ImplicitId
 {
     public int Value { get; }
@@ -341,7 +341,7 @@ public class BaseDto
     public string? Name { get; set; }
 }
 
-// ── Strongly-typed ID models (simulates DSP's Id<T> pattern) ─────────────────
+// ── Strongly-typed ID models (Id<T> pattern with interface constructor) ──────
 public interface IHasId { int Id { get; } }
 
 public class EntityWithId : IHasId
