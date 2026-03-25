@@ -342,6 +342,72 @@ public class EdgeCaseTests
         result.Items[0].Value.Should().Be(1);
         result.Items[1].Value.Should().Be(2);
     }
+
+    // ── Safe member access: MapFrom with null navigation property ────────
+    [Fact]
+    public void Map_MapFromNullNavigation_ReturnsNullInsteadOfThrowing()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ReportEntity, ReportDto>()
+                .ForMember(d => d.UserName, o => o.MapFrom(s => s.User.FullName))
+                .ForMember(d => d.UserEmail, o => o.MapFrom(s => s.User.Email)))
+            .CreateMapper();
+
+        var src = new ReportEntity { Id = 1, User = null! };
+        var result = mapper.Map<ReportEntity, ReportDto>(src);
+
+        result.Id.Should().Be(1);
+        result.UserName.Should().BeNull();
+        result.UserEmail.Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_MapFromNullNavigation_MethodCall_ReturnsNull()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ReportEntity, ReportDto>()
+                .ForMember(d => d.UserName, o => o.MapFrom(s => s.User.GetDisplayName())))
+            .CreateMapper();
+
+        var src = new ReportEntity { Id = 2, User = null! };
+        var result = mapper.Map<ReportEntity, ReportDto>(src);
+
+        result.UserName.Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_MapFromValidNavigation_MapsCorrectly()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ReportEntity, ReportDto>()
+                .ForMember(d => d.UserName, o => o.MapFrom(s => s.User.FullName))
+                .ForMember(d => d.UserEmail, o => o.MapFrom(s => s.User.Email)))
+            .CreateMapper();
+
+        var src = new ReportEntity { Id = 1, User = new UserEntity { FullName = "John Doe", Email = "john@test.com" } };
+        var result = mapper.Map<ReportEntity, ReportDto>(src);
+
+        result.Id.Should().Be(1);
+        result.UserName.Should().Be("John Doe");
+        result.UserEmail.Should().Be("john@test.com");
+    }
+
+    // ── Property-level error messages ────────────────────────────────────
+    [Fact]
+    public void Map_PropertyError_ExceptionIncludesMemberName()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<FlatSource, FlatDest>()
+                .ForMember(d => d.Name, o => o.MapFrom<Func<object, object, object>>((s, d) =>
+                    throw new InvalidOperationException("deliberate"))))
+            .CreateMapper();
+
+        var act = () => mapper.Map<FlatSource, FlatDest>(new FlatSource());
+        var ex = act.Should().Throw<MappingException>().Which;
+        ex.MemberName.Should().Be("Name");
+        ex.Message.Should().Contain("Name");
+        ex.Message.Should().Contain("deliberate");
+    }
 }
 
 // ── Implicit operator test models (Id<T> → int via implicit operator) ────────
@@ -419,6 +485,25 @@ public class SeqEntityToWrapperIdConverter<T> : EggMapper.ITypeConverter<ISeqEnt
     }
 }
 public class ConcreteEntityDto { public WrapperId<ConcreteEntity>? Id { get; set; } public string? Name { get; set; } }
+
+// ── Navigation property / safe member access test models ─────────────────────
+public class UserEntity
+{
+    public string FullName { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string GetDisplayName() => FullName;
+}
+public class ReportEntity
+{
+    public int Id { get; set; }
+    public UserEntity User { get; set; } = default!;
+}
+public class ReportDto
+{
+    public int Id { get; set; }
+    public string? UserName { get; set; }
+    public string? UserEmail { get; set; }
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 public class DateTimeSource

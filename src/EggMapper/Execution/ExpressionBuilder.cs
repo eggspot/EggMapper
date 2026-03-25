@@ -1713,6 +1713,7 @@ internal static class ExpressionBuilder
         var destDetails = TypeDetails.Get(typeMap.DestinationType);
 
         var mappingActions = new List<Action<object, object, ResolutionContext>>();
+        var mappingActionNames = new List<string>();
         var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (typeMap.BaseMapTypePair.HasValue &&
@@ -1733,18 +1734,25 @@ internal static class ExpressionBuilder
                     if (basePropMap.Ignored) continue;
                     var action = BuildPropertyAction(basePropMap, srcDetails, compiledMaps);
                     if (action != null)
+                    {
                         mappingActions.Add(action);
+                        mappingActionNames.Add(propName);
+                    }
                 }
             }
         }
 
         foreach (var propMap in typeMap.PropertyMaps)
         {
-            processedDestProps.Add(propMap.DestinationProperty.Name);
+            var propName = propMap.DestinationProperty.Name;
+            processedDestProps.Add(propName);
             if (propMap.Ignored) continue;
             var action = BuildPropertyAction(propMap, srcDetails, compiledMaps);
             if (action != null)
+            {
                 mappingActions.Add(action);
+                mappingActionNames.Add(propName);
+            }
         }
 
         var shouldMapProperty = typeMap.ShouldMapProperty;
@@ -1755,10 +1763,14 @@ internal static class ExpressionBuilder
             processedDestProps.Add(destProp.Name);
             var action = BuildConventionAction(destProp, srcDetails, allTypeMaps, compiledMaps);
             if (action != null)
+            {
                 mappingActions.Add(action);
+                mappingActionNames.Add(destProp.Name);
+            }
         }
 
         var actionsArray = mappingActions.ToArray();
+        var actionNamesArray = mappingActionNames.ToArray();
         var beforeMap = typeMap.BeforeMapAction;
         var afterMap = typeMap.AfterMapAction;
         var beforeMapCtx = typeMap.BeforeMapCtxAction;
@@ -1773,6 +1785,7 @@ internal static class ExpressionBuilder
                 return dest!;
 
             var typedDest = dest ?? (ctxCtor != null ? ctxCtor(src, ctx) : factory(src));
+            int actionIndex = -1;
 
             try
             {
@@ -1783,7 +1796,10 @@ internal static class ExpressionBuilder
                 try
                 {
                     for (int i = 0; i < actionsArray.Length; i++)
+                    {
+                        actionIndex = i;
                         actionsArray[i](src, typedDest, ctx);
+                    }
                 }
                 finally
                 {
@@ -1820,6 +1836,11 @@ internal static class ExpressionBuilder
             }
             catch (Exception ex)
             {
+                var memberName = actionIndex >= 0 && actionIndex < actionNamesArray.Length
+                    ? actionNamesArray[actionIndex]
+                    : null;
+                if (memberName != null)
+                    throw new MappingException(src.GetType(), typedDest.GetType(), memberName, ex);
                 throw new MappingException(src.GetType(), typedDest.GetType(), ex);
             }
 
@@ -1860,7 +1881,9 @@ internal static class ExpressionBuilder
                     throw new InvalidOperationException(
                         "IMemberValueResolver requires DI. Use services.AddEggMapper() for dependency injection.");
                 var resolver = factory(ctx.ServiceProvider);
-                var val = resolver(src, dest, null, ctx);
+                object? val;
+                try { val = resolver(src, dest, null, ctx); }
+                catch (NullReferenceException) { val = null; }
                 setter(dest, MapOrConvert(val, destType, ctx));
             };
         }
@@ -1880,7 +1903,9 @@ internal static class ExpressionBuilder
                 if (condition != null && !condition(src)) return;
                 if (fullCondition != null && !fullCondition(src, dest)) return;
 
-                var val = resolver(src, dest, null, ctx);
+                object? val;
+                try { val = resolver(src, dest, null, ctx); }
+                catch (NullReferenceException) { val = null; }
                 setter(dest, MapOrConvert(val, destType, ctx));
             };
         }
@@ -1901,7 +1926,9 @@ internal static class ExpressionBuilder
                 if (condition != null && !condition(src)) return;
                 if (fullCondition != null && !fullCondition(src, dest)) return;
 
-                var val = resolver(src, dest);
+                object? val;
+                try { val = resolver(src, dest); }
+                catch (NullReferenceException) { val = null; }
                 if (hasNullSub && val == null) val = nullSub;
                 setter(dest, MapOrConvert(val, destType, ctx));
             };
