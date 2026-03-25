@@ -131,6 +131,12 @@ public sealed class Mapper : IMapper
             var ctx = GetContext();
             return (TDestination)openDel!(source, destination, ctx);
         }
+
+        // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
+        var runtimeType = source!.GetType();
+        if (runtimeType != typeof(TSource))
+            return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), destination);
+
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
             $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
@@ -192,6 +198,24 @@ public sealed class Mapper : IMapper
             PatchCache<TSource, TDestination>.Entry = new PatchCache<TSource, TDestination>.CacheEntry(patchDel, _generation);
             return patchDel(source, destination);
         }
+
+        // Runtime-type fallback: walk base types for proxy/derived types.
+        var runtimeType = source!.GetType();
+        if (runtimeType != typeof(TSource))
+        {
+            for (var bt = runtimeType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
+            {
+                var baseKey = new TypePair(bt, typeof(TDestination));
+                var baseRaw = _config.GetOrCompilePatchDelegate(baseKey);
+                if (baseRaw != null)
+                {
+                    // Invoke via dynamic delegate — the patch func is Func<TBase,TDest,TDest>
+                    // but source is a derived type, so it's assignable.
+                    return (TDestination)baseRaw.DynamicInvoke(source, destination)!;
+                }
+            }
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
             $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
@@ -385,6 +409,16 @@ public sealed class Mapper : IMapper
                         var bk = new TypePair(bt, destElemType);
                         if (_config.FrozenMaps.TryGetValue(bk, out elemDel))
                             break;
+                    }
+                    // Walk interfaces for collection element types
+                    if (elemDel == null)
+                    {
+                        foreach (var iface in srcElemType.GetInterfaces())
+                        {
+                            var ik = new TypePair(iface, destElemType);
+                            if (_config.FrozenMaps.TryGetValue(ik, out elemDel))
+                                break;
+                        }
                     }
                 }
                 if (elemDel != null)
