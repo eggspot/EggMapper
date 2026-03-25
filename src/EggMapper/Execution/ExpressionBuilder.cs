@@ -415,10 +415,27 @@ internal static class ExpressionBuilder
 
         var loopBodyStmts = new List<Expression>();
         loopBodyStmts.Add(Expression.Assign(elemSrcParam, indexAccess));
+
+        // Null element guard: if (source[i] == null) { result.Add(default); i++; continue; }
+        var continueLabel = Expression.Label("cont");
+        if (!srcElem.IsValueType)
+        {
+            var nullAddDefault = Expression.Block(
+                Expression.Call(listVar, addMethod, Expression.Default(destElem)),
+                Expression.PostIncrementAssign(iVar),
+                Expression.Goto(continueLabel));
+            loopBodyStmts.Add(Expression.IfThen(
+                Expression.ReferenceEqual(
+                    Expression.Convert(elemSrcParam, typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                nullAddDefault));
+        }
+
         for (int idx = 0; idx < elemStmts.Count - 1; idx++)
             loopBodyStmts.Add(elemStmts[idx]);
         loopBodyStmts.Add(Expression.Call(listVar, addMethod, elemDestVar));
         loopBodyStmts.Add(Expression.PostIncrementAssign(iVar));
+        loopBodyStmts.Add(Expression.Label(continueLabel));
 
         var fullBody = Expression.Block(
             new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar },
@@ -880,11 +897,13 @@ internal static class ExpressionBuilder
                 breakLabel),
             Expression.Assign(Expression.Property(dVar, destProp), Expression.Convert(listVar, destType)));
 
-        return Expression.IfThen(
+        return Expression.IfThenElse(
             Expression.ReferenceNotEqual(
                 Expression.Convert(srcAccess, typeof(object)),
                 Expression.Constant(null, typeof(object))),
-            loop);
+            loop,
+            Expression.Assign(Expression.Property(dVar, destProp),
+                BuildEmptyCollectionExpr(destType, destElem)));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1106,11 +1125,12 @@ internal static class ExpressionBuilder
                     Expression.Constant(elemDel),
                     ctxParam);
 
-                return Expression.IfThen(
+                return Expression.IfThenElse(
                     Expression.ReferenceNotEqual(
                         Expression.Convert(srcAccess, typeof(object)),
                         Expression.Constant(null, typeof(object))),
-                    Expression.Assign(destAccess, Expression.Convert(callExpr, destType)));
+                    Expression.Assign(destAccess, Expression.Convert(callExpr, destType)),
+                    Expression.Assign(destAccess, BuildEmptyCollectionExpr(destType, destElem)));
             }
 
             // Fallback: untyped collection mapping
@@ -1126,11 +1146,12 @@ internal static class ExpressionBuilder
                 mapsConst, pairConst, destTConst, srcEConst, destEConst,
                 ctxParam);
 
-            return Expression.IfThen(
+            return Expression.IfThenElse(
                 Expression.ReferenceNotEqual(
                     Expression.Convert(srcAccess, typeof(object)),
                     Expression.Constant(null, typeof(object))),
-                Expression.Assign(destAccess, Expression.Convert(fallbackCallExpr, destType)));
+                Expression.Assign(destAccess, Expression.Convert(fallbackCallExpr, destType)),
+                Expression.Assign(destAccess, BuildEmptyCollectionExpr(destType, destElem)));
         }
 
         // ── Same type: direct assignment (NO boxing for int/bool/double/etc.) ─
@@ -1421,17 +1442,15 @@ internal static class ExpressionBuilder
     }
 
     /// <summary>
-    /// Returns the (navigation property, nested property) pair for a flattened destination
-    /// property without building an expression. E.g., AddressStreet → (Address, Street).
-    /// Returns null when no valid flattening is found or the type conversion is unsupported.
+    /// Returns the full property chain for a flattened destination property.
+    /// E.g., AddressCityName → [Address, City, Name] (recursive multi-level).
+    /// Returns null when no valid flattening is found.
     /// </summary>
-    private static (PropertyInfo NavProp, PropertyInfo NestedProp)? TryGetFlattenedPropInfo(
-        PropertyInfo destProp,
+    private static List<PropertyInfo>? TryGetFlattenedPropertyChain(
+        string destName,
+        Type destType,
         TypeDetails srcDetails)
     {
-        var destName = destProp.Name;
-        var destType = destProp.PropertyType;
-
         foreach (var srcProp in srcDetails.ReadableProperties)
         {
             if (!destName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
@@ -1439,18 +1458,40 @@ internal static class ExpressionBuilder
             if (string.IsNullOrEmpty(remainder)) continue;
 
             var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp);
-            if (nestedProp == null) continue;
 
-            var nestedType = nestedProp.PropertyType;
-            if (!destType.IsAssignableFrom(nestedType))
+            // Direct match at this level
+            if (nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp))
             {
-                if (nestedType.IsValueType && destType.IsValueType)
-                    return (srcProp, nestedProp);
-                continue;
+                var nestedType = nestedProp.PropertyType;
+                if (destType.IsAssignableFrom(nestedType) || (nestedType.IsValueType && destType.IsValueType))
+                    return new List<PropertyInfo> { srcProp, nestedProp };
             }
-            return (srcProp, nestedProp);
+
+            // Recursive: try deeper levels (e.g., AddressCityName → Address.City.Name)
+            var deepChain = TryGetFlattenedPropertyChain(remainder, destType, nestedDetails);
+            if (deepChain != null)
+            {
+                deepChain.Insert(0, srcProp);
+                return deepChain;
+            }
         }
+        return null;
+    }
+
+    /// <summary>
+    /// Backwards-compat wrapper returning (NavProp, NestedProp) for 2-level flattening.
+    /// For deeper chains, only the first nav prop and leaf prop are returned.
+    /// Used by ctx-free grouped flattening which groups by first nav property.
+    /// </summary>
+    private static (PropertyInfo NavProp, PropertyInfo NestedProp)? TryGetFlattenedPropInfo(
+        PropertyInfo destProp,
+        TypeDetails srcDetails)
+    {
+        var chain = TryGetFlattenedPropertyChain(destProp.Name, destProp.PropertyType, srcDetails);
+        if (chain == null || chain.Count < 2) return null;
+        // For 2-level, return as before
+        if (chain.Count == 2) return (chain[0], chain[1]);
+        // For deeper chains, fall through to the typed/flexible path which handles full chains
         return null;
     }
 
@@ -1517,7 +1558,7 @@ internal static class ExpressionBuilder
 
     /// <summary>
     /// Builds a typed expression for a flattened property assignment in the typed path.
-    /// E.g., dest.AddressStreet = src.Address?.Street
+    /// Supports multi-level chains: dest.AddressCityName = src.Address?.City?.Name
     /// </summary>
     private static Expression? TryBuildTypedFlattenedAssign(
         ParameterExpression sVar,
@@ -1525,75 +1566,48 @@ internal static class ExpressionBuilder
         PropertyInfo destProp,
         TypeDetails srcDetails)
     {
-        var destName = destProp.Name;
+        var chain = TryGetFlattenedPropertyChain(destProp.Name, destProp.PropertyType, srcDetails);
+        if (chain == null || chain.Count < 2) return null;
 
-        foreach (var srcProp in srcDetails.ReadableProperties)
+        var destType = destProp.PropertyType;
+        var leafType = chain[chain.Count - 1].PropertyType;
+
+        if (!destType.IsAssignableFrom(leafType) && !(leafType.IsValueType && destType.IsValueType))
+            return null;
+
+        // Build the member access chain: src.A.B.C
+        Expression current = sVar;
+        var accessExprs = new List<Expression>(chain.Count);
+        for (int i = 0; i < chain.Count; i++)
         {
-            if (!destName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            var remainder = destName.Substring(srcProp.Name.Length);
-            if (string.IsNullOrEmpty(remainder)) continue;
-
-            var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            // Use O(1) dict lookup instead of LINQ scan
-            if (!nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp))
-                continue;
-
-            var destType = destProp.PropertyType;
-            var nestedType = nestedProp.PropertyType;
-
-            // Only handle directly assignable types (avoid complex conversions)
-            if (!destType.IsAssignableFrom(nestedType))
-            {
-                // Try numeric conversion
-                if (nestedType.IsValueType && destType.IsValueType)
-                {
-                    try
-                    {
-                        var srcAccess = Expression.Property(sVar, srcProp);
-                        var nestedAccess = Expression.Property(srcAccess, nestedProp);
-                        var destAccess = Expression.Property(dVar, destProp);
-                        var converted = Expression.Convert(nestedAccess, destType);
-
-                        if (srcProp.PropertyType.IsValueType)
-                            return Expression.Assign(destAccess, converted);
-
-                        return Expression.IfThen(
-                            Expression.ReferenceNotEqual(
-                                Expression.Convert(srcAccess, typeof(object)),
-                                Expression.Constant(null, typeof(object))),
-                            Expression.Assign(destAccess, converted));
-                    }
-                    catch { continue; }
-                }
-                continue;
-            }
-
-            // Build: if (s.Address != null) d.AddressStreet = s.Address.Street;
-            {
-                var srcAccess = Expression.Property(sVar, srcProp);
-                var nestedAccess = Expression.Property(srcAccess, nestedProp);
-                var destAccess = Expression.Property(dVar, destProp);
-
-                Expression assignExpr;
-                if (nestedType == destType)
-                    assignExpr = Expression.Assign(destAccess, nestedAccess);
-                else
-                    assignExpr = Expression.Assign(destAccess, Expression.Convert(nestedAccess, destType));
-
-                // For value-type intermediate (rare), no null check needed
-                if (srcProp.PropertyType.IsValueType)
-                    return assignExpr;
-
-                // Reference type intermediate: null-check
-                return Expression.IfThen(
-                    Expression.ReferenceNotEqual(
-                        Expression.Convert(srcAccess, typeof(object)),
-                        Expression.Constant(null, typeof(object))),
-                    assignExpr);
-            }
+            current = Expression.Property(current, chain[i]);
+            accessExprs.Add(current);
         }
 
-        return null;
+        // Build the assignment
+        var destAccess = Expression.Property(dVar, destProp);
+        Expression assignExpr;
+        if (leafType == destType)
+            assignExpr = Expression.Assign(destAccess, current);
+        else
+        {
+            try { assignExpr = Expression.Assign(destAccess, Expression.Convert(current, destType)); }
+            catch { return null; }
+        }
+
+        // Wrap in null checks for each reference-type intermediate (not the leaf)
+        // Walk from innermost to outermost: if (s.A != null && s.A.B != null) assign
+        for (int i = chain.Count - 2; i >= 0; i--)
+        {
+            if (chain[i].PropertyType.IsValueType) continue;
+            assignExpr = Expression.IfThen(
+                Expression.ReferenceNotEqual(
+                    Expression.Convert(accessExprs[i], typeof(object)),
+                    Expression.Constant(null, typeof(object))),
+                assignExpr);
+        }
+
+        return assignExpr;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1608,6 +1622,63 @@ internal static class ExpressionBuilder
     private static readonly MethodInfo _mapCollectionPropHelperMethod =
         typeof(ExpressionBuilder).GetMethod(nameof(MapCollectionPropHelper),
             BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    /// <summary>
+    /// Creates an empty collection matching the destination type. Used when source collection
+    /// is null — matches AutoMapper's default AllowNullCollections=false behavior.
+    /// </summary>
+    private static object CreateEmptyCollection(Type destType)
+    {
+        var elemType = ReflectionHelper.GetCollectionElementType(destType);
+        if (elemType != null)
+        {
+            if (destType.IsArray) return Array.CreateInstance(elemType, 0);
+            var listType = typeof(List<>).MakeGenericType(elemType);
+            if (destType.IsAssignableFrom(listType))
+                return Activator.CreateInstance(listType)!;
+            var hashSetType = typeof(HashSet<>).MakeGenericType(elemType);
+            if (destType.IsAssignableFrom(hashSetType))
+                return Activator.CreateInstance(hashSetType)!;
+        }
+        return Activator.CreateInstance(destType)!;
+    }
+
+    /// <summary>
+    /// Builds an expression that creates an empty collection of the destination type.
+    /// Handles arrays, List&lt;T&gt;, HashSet&lt;T&gt;, and other collection types.
+    /// </summary>
+    private static Expression BuildEmptyCollectionExpr(Type destType, Type destElem)
+    {
+        if (destType.IsArray)
+            return Expression.NewArrayBounds(destElem, Expression.Constant(0));
+
+        var listType = typeof(List<>).MakeGenericType(destElem);
+        if (destType.IsAssignableFrom(listType))
+        {
+            var ctor = listType.GetConstructor(Type.EmptyTypes)!;
+            return Expression.Convert(Expression.New(ctor), destType);
+        }
+
+        var hashSetType = typeof(HashSet<>).MakeGenericType(destElem);
+        if (destType.IsAssignableFrom(hashSetType))
+        {
+            var ctor = hashSetType.GetConstructor(Type.EmptyTypes)!;
+            return Expression.Convert(Expression.New(ctor), destType);
+        }
+
+        // Fallback: try direct construction
+        var directCtor = destType.GetConstructor(Type.EmptyTypes);
+        if (directCtor != null)
+            return Expression.New(directCtor);
+
+        // Last resort: runtime helper
+        return Expression.Convert(
+            Expression.Call(
+                typeof(ExpressionBuilder).GetMethod(nameof(CreateEmptyCollection),
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!,
+                Expression.Constant(destType)),
+            destType);
+    }
 
     /// <summary>
     /// Called from within a typed expression tree to map a nested object property.
@@ -2004,7 +2075,7 @@ internal static class ExpressionBuilder
                     return (src, dest, ctx) =>
                     {
                         var srcVal = getter(src);
-                        if (srcVal == null) return;
+                        if (srcVal == null) { setter(dest, CreateEmptyCollection(capturedDestType)); return; }
                         setter(dest, MapCollectionInternal(
                             (IEnumerable)srcVal, capturedDestType, srcElemType, destElemType, elemPair, capturedMaps, ctx));
                     };
@@ -2019,7 +2090,7 @@ internal static class ExpressionBuilder
                     var srcVal = getter(src);
                     if (srcVal == null)
                     {
-                        if (hasNullSub) setter(dest, nullSub);
+                        setter(dest, hasNullSub ? nullSub : CreateEmptyCollection(capturedDestType));
                         return;
                     }
                     var mapped = MapCollectionInternal(
@@ -2162,54 +2233,48 @@ internal static class ExpressionBuilder
         TypeDetails srcDetails,
         ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
     {
-        var destName = destProp.Name;
+        var chain = TryGetFlattenedPropertyChain(destProp.Name, destProp.PropertyType, srcDetails);
+        if (chain == null || chain.Count < 2) return null;
 
-        foreach (var srcProp in srcDetails.ReadableProperties)
+        // Build getter chain
+        var getters = new Func<object, object?>[chain.Count];
+        for (int i = 0; i < chain.Count; i++)
+            getters[i] = GetOrBuildGetter(chain[i]);
+
+        var setter = GetOrBuildSetter(destProp);
+        var destType = destProp.PropertyType;
+        var leafType = chain[chain.Count - 1].PropertyType;
+        var capturedMaps = compiledMaps;
+
+        return (src, dest, ctx) =>
         {
-            if (!destName.StartsWith(srcProp.Name, StringComparison.OrdinalIgnoreCase)) continue;
-            var remainder = destName.Substring(srcProp.Name.Length);
-            if (string.IsNullOrEmpty(remainder)) continue;
-
-            var nestedDetails = TypeDetails.Get(srcProp.PropertyType);
-            // Use O(1) dict lookup instead of LINQ scan
-            if (!nestedDetails.ReadableByName.TryGetValue(remainder, out var nestedProp))
-                continue;
-
-            var srcGetter = GetOrBuildGetter(srcProp);
-            var nestedGetter = GetOrBuildGetter(nestedProp);
-            var setter = GetOrBuildSetter(destProp);
-            var destType = destProp.PropertyType;
-            var nestedType = nestedProp.PropertyType;
-            var capturedMaps = compiledMaps;
-
-            return (src, dest, ctx) =>
+            // Walk the chain, null-checking each reference-type intermediate
+            object? current = src;
+            for (int i = 0; i < getters.Length; i++)
             {
-                var intermediate = srcGetter(src);
-                if (intermediate == null) return;
-
-                var val = nestedGetter(intermediate);
-                if (val == null)
+                current = getters[i](current!);
+                if (current == null)
                 {
-                    if (!destType.IsValueType) setter(dest, null);
+                    // Intermediate is null — set dest to default
+                    if (i < getters.Length - 1 || !destType.IsValueType)
+                        setter(dest, null);
                     return;
                 }
+            }
 
-                if (destType.IsAssignableFrom(nestedType))
-                {
-                    setter(dest, val);
-                }
-                else if (capturedMaps.TryGetValue(new TypePair(nestedType, destType), out var nestedDel))
-                {
-                    setter(dest, nestedDel(val, null, ctx));
-                }
-                else
-                {
-                    setter(dest, MapOrConvert(val, destType, ctx));
-                }
-            };
-        }
-
-        return null;
+            if (destType.IsAssignableFrom(leafType))
+            {
+                setter(dest, current);
+            }
+            else if (capturedMaps.TryGetValue(new TypePair(leafType, destType), out var nestedDel))
+            {
+                setter(dest, nestedDel(current!, null, ctx));
+            }
+            else
+            {
+                setter(dest, MapOrConvert(current, destType, ctx));
+            }
+        };
     }
 
     // ══════════════════════════════════════════════════════════════════════════

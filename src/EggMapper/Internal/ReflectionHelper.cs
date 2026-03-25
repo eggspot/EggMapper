@@ -147,6 +147,9 @@ internal static class ReflectionHelper
                 if (string.Equals(remainder, nestedProps[j].Name, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
+            // Recursive: check deeper levels (e.g., AddressCityName → Address.City.Name)
+            if (HasFlattenedSource(remainder, nestedDetails))
+                return true;
         }
         return false;
     }

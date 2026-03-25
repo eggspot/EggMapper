@@ -20,12 +20,13 @@ public sealed class Mapper : IMapper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private ResolutionContext GetContext()
+    private ResolutionContext GetContext(IDictionary<string, object>? items = null)
     {
         var ctx = _sharedCtx ??= new ResolutionContext();
         ctx.Depth = 0;
         ctx.Mapper = this;
         ctx.ServiceProvider = ServiceProvider;
+        ctx.Items = items;
         ctx.ClearInstanceCache();
         return ctx;
     }
@@ -69,39 +70,48 @@ public sealed class Mapper : IMapper
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        // Try ctx-free typed delegate
-        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+        try
         {
-            var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
-            FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
-            return typed(source, default!);
-        }
-
-        // Fallback: ctx-aware boxed delegate
-        if (_config.FrozenMaps.TryGetValue(key, out var del))
-        {
-            var ctx = GetContext();
-            return (TDestination)del(source, null, ctx);
-        }
-
-        // Open generic on-demand compilation
-        if (_config.TryGetOrCompileOpenGenericMap(key, out var openBoxed, out var openCtxFree))
-        {
-            if (openCtxFree != null)
+            // Try ctx-free typed delegate
+            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
             {
-                var typed = (Func<TSource, TDestination, TDestination>)openCtxFree;
+                var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
                 FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
                 return typed(source, default!);
             }
-            var ctx = GetContext();
-            return (TDestination)openBoxed!(source, null, ctx);
-        }
 
-        // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
-        // Delegate to MapInternal which does a base-type walk.
-        var runtimeType = source!.GetType();
-        if (runtimeType != typeof(TSource))
-            return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), null);
+            // Fallback: ctx-aware boxed delegate
+            if (_config.FrozenMaps.TryGetValue(key, out var del))
+            {
+                var ctx = GetContext();
+                return (TDestination)del(source, null, ctx);
+            }
+
+            // Open generic on-demand compilation
+            if (_config.TryGetOrCompileOpenGenericMap(key, out var openBoxed, out var openCtxFree))
+            {
+                if (openCtxFree != null)
+                {
+                    var typed = (Func<TSource, TDestination, TDestination>)openCtxFree;
+                    FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                    return typed(source, default!);
+                }
+                var ctx = GetContext();
+                return (TDestination)openBoxed!(source, null, ctx);
+            }
+
+            // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
+            // Delegate to MapInternal which does a base-type walk.
+            var runtimeType = source!.GetType();
+            if (runtimeType != typeof(TSource))
+                return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), null);
+        }
+        catch (MappingException) { throw; }
+        catch (MappingValidationException) { throw; }
+        catch (Exception ex)
+        {
+            throw new MappingException(typeof(TSource), typeof(TDestination), ex);
+        }
 
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
@@ -151,28 +161,47 @@ public sealed class Mapper : IMapper
     public TDestination Map<TDestination>(object? source, Action<IMappingOperationOptions<object, TDestination>> opts)
     {
         if (source == null) return default!;
-        var mapped = (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
         if (opts != null)
         {
             var options = new MappingOperationOptions<object, TDestination>();
             opts(options);
-            options.RunBeforeMapActions(source, mapped);
-            options.RunAfterMapActions(source, mapped);
+            var dest = (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null, options.Items);
+            options.RunBeforeMapActions(source, dest);
+            options.RunAfterMapActions(source, dest);
+            return dest;
         }
-        return mapped;
+        return (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
     }
 
     public TDestination Map<TSource, TDestination>(TSource source, Action<IMappingOperationOptions<TSource, TDestination>> opts)
     {
-        var mapped = Map<TSource, TDestination>(source);
         if (opts != null)
         {
             var options = new MappingOperationOptions<TSource, TDestination>();
             opts(options);
+            var mapped = MapWithItems<TSource, TDestination>(source, options.Items);
             options.RunBeforeMapActions(source, mapped);
             options.RunAfterMapActions(source, mapped);
+            return mapped;
         }
-        return mapped;
+        return Map<TSource, TDestination>(source);
+    }
+
+    private TDestination MapWithItems<TSource, TDestination>(TSource source, IDictionary<string, object>? items)
+    {
+        if (source == null) return default!;
+        var key = new TypePair(typeof(TSource), typeof(TDestination));
+        if (_config.FrozenMaps.TryGetValue(key, out var del))
+        {
+            var ctx = GetContext(items);
+            return (TDestination)del(source, null, ctx);
+        }
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
+        {
+            var ctx = GetContext(items);
+            return (TDestination)openDel!(source, null, ctx);
+        }
+        return Map<TSource, TDestination>(source);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -239,7 +268,11 @@ public sealed class Mapper : IMapper
                 var count = directList.Count;
                 var result = new List<TDestination>(count);
                 for (int i = 0; i < count; i++)
-                    result.Add(itemEntry.Func(directList[i], default!));
+                {
+                    var item = directList[i];
+                    if (item == null) { result.Add(default!); continue; }
+                    result.Add(itemEntry.Func(item, default!));
+                }
                 return result;
             }
         }
@@ -353,19 +386,20 @@ public sealed class Mapper : IMapper
         return result;
     }
 
-    private object MapInternal(object source, Type sourceType, Type destinationType, object? destination)
+    private object MapInternal(object source, Type sourceType, Type destinationType, object? destination,
+        IDictionary<string, object>? items = null)
     {
         var key = new TypePair(sourceType, destinationType);
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
-            var ctx = GetContext();
+            var ctx = GetContext(items);
             return del(source, destination, ctx);
         }
 
         // Open generic on-demand compilation
         if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
         {
-            var ctx = GetContext();
+            var ctx = GetContext(items);
             return openDel!(source, destination, ctx);
         }
 

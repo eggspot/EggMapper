@@ -66,21 +66,23 @@ public class ArraysAndListsTests
     }
 
     [Fact]
-    public void Null_list_stays_null()
+    public void Null_list_maps_to_empty()
     {
+        // Null source list maps to empty destination list (matches AutoMapper behavior)
         var mapper = CreateMapper();
         var src = new CollectionSource { Items = null };
         var dest = mapper.Map<CollectionSource, CollectionDest>(src);
-        dest.Items.Should().BeNull();
+        dest.Items.Should().NotBeNull().And.BeEmpty();
     }
 
     [Fact]
-    public void Null_array_stays_null()
+    public void Null_array_maps_to_empty()
     {
+        // Null source array maps to empty destination array (matches AutoMapper behavior)
         var mapper = CreateMapper();
         var src = new CollectionSource { ItemArray = null };
         var dest = mapper.Map<CollectionSource, CollectionDest>(src);
-        dest.ItemArray.Should().BeNull();
+        dest.ItemArray.Should().NotBeNull().And.BeEmpty();
     }
 
     [Fact]

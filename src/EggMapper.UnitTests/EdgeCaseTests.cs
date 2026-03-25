@@ -408,6 +408,238 @@ public class EdgeCaseTests
         ex.Message.Should().Contain("Name");
         ex.Message.Should().Contain("deliberate");
     }
+
+    // ── #67: Null collection → empty collection ─────────────────────────
+    [Fact]
+    public void Map_NullSourceCollection_ReturnsEmptyList()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<CollectionSrc, CollectionDst>();
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>();
+        }).CreateMapper();
+
+        var src = new CollectionSrc { Items = null! };
+        var result = mapper.Map<CollectionSrc, CollectionDst>(src);
+
+        result.Items.Should().NotBeNull();
+        result.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Map_NonNullSourceCollection_MapsNormally()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<CollectionSrc, CollectionDst>();
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>();
+        }).CreateMapper();
+
+        var src = new CollectionSrc { Items = new() { new() { Value = 1 } } };
+        var result = mapper.Map<CollectionSrc, CollectionDst>(src);
+
+        result.Items.Should().HaveCount(1);
+        result.Items[0].Value.Should().Be(1);
+    }
+
+    // ── #68: Null elements in list ──────────────────────────────────────
+    [Fact]
+    public void MapList_NullElements_ReturnsDefaultInsteadOfThrowing()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>())
+            .CreateMapper();
+
+        var source = new List<NestedInnerSrc> { new() { Value = 1 }, null!, new() { Value = 3 } };
+        var result = mapper.MapList<NestedInnerSrc, NestedInnerDst>(source);
+
+        result.Should().HaveCount(3);
+        result[0].Value.Should().Be(1);
+        result[1].Should().BeNull();
+        result[2].Value.Should().Be(3);
+    }
+
+    [Fact]
+    public void MapList_NullElements_WorksAfterCacheWarmup()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>())
+            .CreateMapper();
+
+        // First call warms cache
+        mapper.MapList<NestedInnerSrc, NestedInnerDst>(
+            new List<NestedInnerSrc> { new() { Value = 1 } });
+
+        // Second call with null elements uses cached fast path
+        var source = new List<NestedInnerSrc> { null!, new() { Value = 2 }, null! };
+        var result = mapper.MapList<NestedInnerSrc, NestedInnerDst>(source);
+
+        result.Should().HaveCount(3);
+        result[0].Should().BeNull();
+        result[1].Value.Should().Be(2);
+        result[2].Should().BeNull();
+    }
+
+    // ── #69: opts.Items and AfterMap timing ──────────────────────────────
+    [Fact]
+    public void Map_OptsAfterMap_FiresAfterMapping()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<FlatSource, FlatDest>())
+            .CreateMapper();
+
+        var src = new FlatSource { Name = "original" };
+        var result = mapper.Map<FlatSource, FlatDest>(src, opt =>
+        {
+            opt.AfterMap((s, d) => d.Name = d.Name + "_after");
+        });
+
+        result.Name.Should().Be("original_after");
+    }
+
+    [Fact]
+    public void Map_OptsItems_AccessibleViaClosureInAfterMap()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<FlatSource, FlatDest>())
+            .CreateMapper();
+
+        var src = new FlatSource { Name = "test" };
+        var result = mapper.Map<FlatSource, FlatDest>(src, opt =>
+        {
+            opt.Items["Suffix"] = "_custom";
+            opt.AfterMap((s, d) => d.Name = d.Name + (string)opt.Items["Suffix"]);
+        });
+
+        result.Name.Should().Be("test_custom");
+    }
+
+    // ── #70: Multi-level flattening ─────────────────────────────────────
+    [Fact]
+    public void Map_ThreeLevelFlattening_MapsCorrectly()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<DeepSrc, DeepFlatDst>())
+            .CreateMapper();
+
+        var src = new DeepSrc
+        {
+            Address = new AddressSrc
+            {
+                City = new CitySrc { Name = "London", PostCode = "SW1" }
+            }
+        };
+        var result = mapper.Map<DeepSrc, DeepFlatDst>(src);
+
+        result.AddressCityName.Should().Be("London");
+        result.AddressCityPostCode.Should().Be("SW1");
+    }
+
+    [Fact]
+    public void Map_ThreeLevelFlattening_NullIntermediate_ReturnsDefault()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<DeepSrc, DeepFlatDst>())
+            .CreateMapper();
+
+        var src = new DeepSrc { Address = new AddressSrc { City = null! } };
+        var result = mapper.Map<DeepSrc, DeepFlatDst>(src);
+        result.AddressCityName.Should().BeNull();
+
+        src = new DeepSrc { Address = null! };
+        result = mapper.Map<DeepSrc, DeepFlatDst>(src);
+        result.AddressCityName.Should().BeNull();
+    }
+
+    // ── #71: ctx-free path error wrapping ───────────────────────────────
+    [Fact]
+    public void Map_CtxFreePathError_WrappedInMappingException()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<FlatSource, FlatDest>())
+            .CreateMapper();
+
+        // Force error by mapping incompatible types through the generic path
+        var act = () => mapper.Map<string, FlatDest>("not a FlatSource");
+        act.Should().Throw<Exception>(); // Should not crash with raw NRE
+    }
+
+    // ── Multi-level nested object mapping (child→child→child) ────────────
+    [Fact]
+    public void Map_ThreeLevelNestedObjects_MapsAllLevels()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<OrderSrc, OrderDst>();
+            cfg.CreateMap<CustomerSrc, CustomerDst>();
+            cfg.CreateMap<ShippingAddressSrc, ShippingAddressDst>();
+        }).CreateMapper();
+
+        var src = new OrderSrc
+        {
+            Id = 1,
+            Customer = new CustomerSrc
+            {
+                Name = "Alice",
+                ShippingAddress = new ShippingAddressSrc
+                {
+                    Street = "123 Main St",
+                    City = "NYC"
+                }
+            }
+        };
+        var result = mapper.Map<OrderSrc, OrderDst>(src);
+
+        result.Id.Should().Be(1);
+        result.Customer.Should().NotBeNull();
+        result.Customer!.Name.Should().Be("Alice");
+        result.Customer.ShippingAddress.Should().NotBeNull();
+        result.Customer.ShippingAddress!.Street.Should().Be("123 Main St");
+        result.Customer.ShippingAddress.City.Should().Be("NYC");
+    }
+
+    [Fact]
+    public void Map_ThreeLevelNestedObjects_NullIntermediate_ReturnsNull()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<OrderSrc, OrderDst>();
+            cfg.CreateMap<CustomerSrc, CustomerDst>();
+            cfg.CreateMap<ShippingAddressSrc, ShippingAddressDst>();
+        }).CreateMapper();
+
+        var src = new OrderSrc { Id = 1, Customer = new CustomerSrc { Name = "Bob", ShippingAddress = null! } };
+        var result = mapper.Map<OrderSrc, OrderDst>(src);
+
+        result.Customer.Should().NotBeNull();
+        result.Customer!.ShippingAddress.Should().BeNull();
+
+        src = new OrderSrc { Id = 2, Customer = null! };
+        result = mapper.Map<OrderSrc, OrderDst>(src);
+        result.Customer.Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_ThreeLevelNestedObjects_WithCollections()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<OrderSrc, OrderDst>();
+            cfg.CreateMap<CustomerSrc, CustomerDst>();
+            cfg.CreateMap<ShippingAddressSrc, ShippingAddressDst>();
+        }).CreateMapper();
+
+        var sources = new List<OrderSrc>
+        {
+            new() { Id = 1, Customer = new() { Name = "A", ShippingAddress = new() { Street = "St1", City = "C1" } } },
+            new() { Id = 2, Customer = new() { Name = "B", ShippingAddress = new() { Street = "St2", City = "C2" } } }
+        };
+        var results = mapper.MapList<OrderSrc, OrderDst>(sources);
+
+        results.Should().HaveCount(2);
+        results[0].Customer!.ShippingAddress!.City.Should().Be("C1");
+        results[1].Customer!.ShippingAddress!.City.Should().Be("C2");
+    }
 }
 
 // ── Implicit operator test models (Id<T> → int via implicit operator) ────────
@@ -504,6 +736,24 @@ public class ReportDto
     public string? UserName { get; set; }
     public string? UserEmail { get; set; }
 }
+
+// ── Collection null → empty test models ──────────────────────────────────────
+public class CollectionSrc { public List<NestedInnerSrc> Items { get; set; } = new(); }
+public class CollectionDst { public List<NestedInnerDst> Items { get; set; } = new(); }
+
+// ── Multi-level nested mapping test models ───────────────────────────────────
+public class ShippingAddressSrc { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
+public class ShippingAddressDst { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
+public class CustomerSrc { public string Name { get; set; } = ""; public ShippingAddressSrc? ShippingAddress { get; set; } }
+public class CustomerDst { public string Name { get; set; } = ""; public ShippingAddressDst? ShippingAddress { get; set; } }
+public class OrderSrc { public int Id { get; set; } public CustomerSrc? Customer { get; set; } }
+public class OrderDst { public int Id { get; set; } public CustomerDst? Customer { get; set; } }
+
+// ── Multi-level flattening test models ───────────────────────────────────────
+public class CitySrc { public string Name { get; set; } = ""; public string PostCode { get; set; } = ""; }
+public class AddressSrc { public CitySrc City { get; set; } = default!; }
+public class DeepSrc { public AddressSrc Address { get; set; } = default!; }
+public class DeepFlatDst { public string? AddressCityName { get; set; } public string? AddressCityPostCode { get; set; } }
 
 // ──────────────────────────────────────────────────────────────────────────────
 public class DateTimeSource

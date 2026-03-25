@@ -62,14 +62,15 @@ public class CollectionMappingTests
     }
 
     [Fact]
-    public void Null_collection_maps_to_null()
+    public void Null_collection_maps_to_empty()
     {
+        // Null source collection maps to empty destination collection (matches AutoMapper behavior)
         var mapper = new MapperConfiguration(cfg =>
             cfg.CreateMap<IntListSource, IntHashSetDest>()).CreateMapper();
 
         var src = new IntListSource { Numbers = null };
         var dest = mapper.Map<IntListSource, IntHashSetDest>(src);
-        dest.Numbers.Should().BeNull();
+        dest.Numbers.Should().NotBeNull().And.BeEmpty();
     }
 
     [Fact]
