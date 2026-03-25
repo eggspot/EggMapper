@@ -215,13 +215,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 > the real-world cost of bringing a mapper online. AutoMapper and Mapster pay their deferred
 > compilation cost here; EggMapper's Map() calls are instant (already compiled above).
 
-<!-- COLD_START_RESULTS_START -->
-> EggMapper compiles **all** expression trees eagerly at config time — competitors defer to first `Map()` call.
-> Once running, EggMapper's `Map()` calls are near-instant while competitors pay on first use per type pair.
-> See the **Startup** table above for config-only cost, and the runtime tables for steady-state performance.
->
-> Full cold start results are available in the [benchmark CI artifacts](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).
-<!-- COLD_START_RESULTS_END -->
+*Cold Start results will be populated by the next [benchmark CI run](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).*
 
 ---
 
