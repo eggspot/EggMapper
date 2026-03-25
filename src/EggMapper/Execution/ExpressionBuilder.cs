@@ -1622,7 +1622,7 @@ internal static class ExpressionBuilder
     {
         if (maps.TryGetValue(pair, out var del))
             return del(srcVal, null, ctx);
-        return ConvertValue(srcVal, pair.DestinationType)!;
+        return MapOrConvert(srcVal, pair.DestinationType, ctx)!;
     }
 
     /// <summary>
@@ -2084,7 +2084,7 @@ internal static class ExpressionBuilder
                         return;
                     }
 
-                    setter(dest, ConvertValue(srcVal, destType));
+                    setter(dest, MapOrConvert(srcVal, destType, ctx));
                 };
             }
 
@@ -2107,7 +2107,7 @@ internal static class ExpressionBuilder
                     return;
                 }
 
-                setter(dest, ConvertValue(srcVal, destType));
+                setter(dest, MapOrConvert(srcVal, destType, ctx));
             };
         }
 
@@ -2115,7 +2115,7 @@ internal static class ExpressionBuilder
             var capturedDestType = destType;
 
             if (noGuards)
-                return (src, dest, ctx) => setter(dest, ConvertValue(getter(src), capturedDestType));
+                return (src, dest, ctx) => setter(dest, MapOrConvert(getter(src), capturedDestType, ctx));
 
             return (src, dest, ctx) =>
             {
@@ -2125,7 +2125,7 @@ internal static class ExpressionBuilder
 
                 var srcVal = getter(src);
                 if (hasNullSub && srcVal == null) { setter(dest, nullSub); return; }
-                setter(dest, ConvertValue(srcVal, capturedDestType));
+                setter(dest, MapOrConvert(srcVal, capturedDestType, ctx));
             };
         }
     }
@@ -2177,7 +2177,7 @@ internal static class ExpressionBuilder
                 }
                 else
                 {
-                    setter(dest, ConvertValue(val, destType));
+                    setter(dest, MapOrConvert(val, destType, ctx));
                 }
             };
         }
@@ -2294,7 +2294,7 @@ internal static class ExpressionBuilder
             else if (destValType.IsAssignableFrom(srcValType))
                 mappedVal = val;
             else
-                mappedVal = val != null ? ConvertValue(val, destValType) : null;
+                mappedVal = val != null ? MapOrConvert(val, destValType, ctx) : null;
             dest[entry.Key] = mappedVal;
         }
         return dest;
@@ -2319,7 +2319,7 @@ internal static class ExpressionBuilder
             if (elem == null) return null;
             if (elemMapper != null) return elemMapper(elem, null, ctx);
             if (destElemType.IsAssignableFrom(srcElemType)) return elem;
-            return ConvertValue(elem, destElemType);
+            return MapOrConvert(elem, destElemType, ctx);
         }
 
         if (destCollectionType.IsArray)
