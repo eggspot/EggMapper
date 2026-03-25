@@ -1861,7 +1861,7 @@ internal static class ExpressionBuilder
                         "IMemberValueResolver requires DI. Use services.AddEggMapper() for dependency injection.");
                 var resolver = factory(ctx.ServiceProvider);
                 var val = resolver(src, dest, null, ctx);
-                setter(dest, ConvertValue(val, destType));
+                setter(dest, MapOrConvert(val, destType, ctx));
             };
         }
 
@@ -1881,7 +1881,7 @@ internal static class ExpressionBuilder
                 if (fullCondition != null && !fullCondition(src, dest)) return;
 
                 var val = resolver(src, dest, null, ctx);
-                setter(dest, ConvertValue(val, destType));
+                setter(dest, MapOrConvert(val, destType, ctx));
             };
         }
 
@@ -1903,7 +1903,7 @@ internal static class ExpressionBuilder
 
                 var val = resolver(src, dest);
                 if (hasNullSub && val == null) val = nullSub;
-                setter(dest, ConvertValue(val, destType));
+                setter(dest, MapOrConvert(val, destType, ctx));
             };
         }
 
@@ -2614,6 +2614,27 @@ internal static class ExpressionBuilder
             }
         }
         return args;
+    }
+
+    /// <summary>
+    /// Resolves a value to the target type using registered mappings first, then ConvertValue.
+    /// Use this in all resolver/action paths that have a ResolutionContext available.
+    /// Handles Genre→GenreResponse, Tag→TagResponse, etc. where a registered map exists.
+    /// </summary>
+    private static object? MapOrConvert(object? value, Type targetType, ResolutionContext ctx)
+    {
+        if (value == null) return null;
+        var valueType = value.GetType();
+        if (targetType.IsAssignableFrom(valueType)) return value;
+
+        // Try registered mapping (e.g., Genre → GenreResponse)
+        if (ctx.Mapper != null)
+        {
+            try { return ctx.Mapper.Map(value, valueType, targetType); }
+            catch (InvalidOperationException) { } // no mapping registered — fall through
+        }
+
+        return ConvertValue(value, targetType);
     }
 
     private static object? ConvertValue(object? value, Type targetType)
