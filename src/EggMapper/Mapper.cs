@@ -137,7 +137,10 @@ public sealed class Mapper : IMapper
     }
 
     public object Map(object source, Type sourceType, Type destinationType)
-        => MapInternal(source, sourceType, destinationType, null);
+    {
+        if (source == null) return null!;
+        return MapInternal(source, sourceType, destinationType, null);
+    }
 
     public TDestination Map<TDestination>(object? source, Action<IMappingOperationOptions<object, TDestination>> opts)
     {
@@ -350,6 +353,18 @@ public sealed class Mapper : IMapper
             {
                 var ctx = GetContext();
                 return baseDel(source, destination, ctx);
+            }
+        }
+
+        // Interface walk: resolve interface-based mappings (e.g., CreateMap<IMyEntity, MyDto>()).
+        // Class hierarchy walk above only covers concrete base classes — interfaces need separate check.
+        foreach (var iface in sourceType.GetInterfaces())
+        {
+            var ifaceKey = new TypePair(iface, destinationType);
+            if (_config.FrozenMaps.TryGetValue(ifaceKey, out var ifaceDel))
+            {
+                var ctx = GetContext();
+                return ifaceDel(source, destination, ctx);
             }
         }
 
