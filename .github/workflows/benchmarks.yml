@@ -102,7 +102,7 @@ jobs:
 
           BRANCH="chore/update-benchmarks-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "${BRANCH}"
-          git commit -m "chore: update benchmark results in README [skip ci]"
+          git commit -m "chore: update benchmark results in README"
           git push origin "${BRANCH}"
 
           # Create PR and enable auto-merge
