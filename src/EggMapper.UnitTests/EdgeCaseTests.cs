@@ -166,6 +166,56 @@ public class EdgeCaseTests
         result[0].Id.Should().Be(1);
         result[1].Name.Should().Be("b");
     }
+
+    // ── MapFrom(s => s) with constructor-based conversion (DSP Id<T> pattern) ─
+    [Fact]
+    public void Map_MapFromSourceEntity_ConvertsViaConstructor()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<EntityWithId, StrongIdDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s)))
+            .CreateMapper();
+
+        var src = new EntityWithId { Id = 42, Name = "test" };
+        var result = mapper.Map<EntityWithId, StrongIdDto>(src);
+
+        result.Id.Should().NotBeNull();
+        result.Id!.Value.Should().Be(42);
+        result.Name.Should().Be("test");
+    }
+
+    [Fact]
+    public void Map_MapFromSourceEntity_WorksInCollectionWithAfterMap()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<EntityWithId, StrongIdDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s)))
+            .CreateMapper();
+
+        var sources = new List<EntityWithId>
+        {
+            new() { Id = 1, Name = "a" },
+            new() { Id = 2, Name = "b" }
+        };
+
+        var result = mapper.Map<List<StrongIdDto>>(sources, opt =>
+        {
+            opt.AfterMap((src, dest) =>
+            {
+                dest.ForEach(d =>
+                {
+                    var original = sources.FirstOrDefault(s => s.Id == d.Id!.Value);
+                    d.Name = original?.Name + "_mapped";
+                });
+            });
+        });
+
+        result.Should().HaveCount(2);
+        result[0].Id!.Value.Should().Be(1);
+        result[0].Name.Should().Be("a_mapped");
+        result[1].Id!.Value.Should().Be(2);
+        result[1].Name.Should().Be("b_mapped");
+    }
 }
 
 // ── Additional test models ──────────────────────────────────────────────────
@@ -183,6 +233,28 @@ public class DerivedProxy : BaseEntity
 public class BaseDto
 {
     public int Id { get; set; }
+    public string? Name { get; set; }
+}
+
+// ── Strongly-typed ID models (simulates DSP's Id<T> pattern) ─────────────────
+public interface IHasId { int Id { get; } }
+
+public class EntityWithId : IHasId
+{
+    public int Id { get; set; }
+    public string? Name { get; set; }
+}
+
+public class StrongId
+{
+    public int Value { get; }
+    public StrongId() { }
+    public StrongId(IHasId entity) { Value = entity.Id; }
+}
+
+public class StrongIdDto
+{
+    public StrongId? Id { get; set; }
     public string? Name { get; set; }
 }
 
