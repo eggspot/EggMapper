@@ -90,8 +90,9 @@ public class NestedCollectionTests
     }
 
     [Fact]
-    public void Maps_Null_NestedCollection_StaysNull()
+    public void Maps_Null_NestedCollection_To_Empty()
     {
+        // Null source collection maps to empty destination collection (matches AutoMapper behavior)
         var config = new MapperConfiguration(cfg =>
         {
             cfg.CreateMap<OrderSource, OrderDest>();
@@ -101,7 +102,7 @@ public class NestedCollectionTests
 
         var src = new OrderSource { OrderId = 1, Customer = "Alice", Lines = null! };
         var dest = mapper.Map<OrderSource, OrderDest>(src);
-        dest.Lines.Should().BeNull();
+        dest.Lines.Should().NotBeNull().And.BeEmpty();
     }
 
     [Fact]

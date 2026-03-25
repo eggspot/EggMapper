@@ -17,6 +17,12 @@ public sealed class ResolutionContext
     /// </summary>
     public IServiceProvider? ServiceProvider { get; internal set; }
 
+    /// <summary>
+    /// Per-call Items dictionary — allows passing context data (e.g., tenant ID)
+    /// from the call-site opts delegate into resolvers and mapping callbacks.
+    /// </summary>
+    public IDictionary<string, object>? Items { get; internal set; }
+
     // Allocated only when cycle-detection is actually needed; most simple mappings
     // never touch this dictionary, so we avoid the allocation on every Map call.
     private Dictionary<object, object>? _instanceCache;
