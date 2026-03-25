@@ -93,17 +93,29 @@ jobs:
             exit 0
           fi
 
+          # Close any existing benchmark PRs before creating a new one
+          EXISTING_PRS=$(gh pr list --state open --search "chore: update benchmark results" --json number --jq '.[].number' || true)
+          for pr in $EXISTING_PRS; do
+            echo "Closing stale benchmark PR #${pr}"
+            gh pr close "$pr" --delete-branch || true
+          done
+
           BRANCH="chore/update-benchmarks-$(date +%Y%m%d-%H%M%S)"
           git checkout -b "${BRANCH}"
           git commit -m "chore: update benchmark results in README [skip ci]"
           git push origin "${BRANCH}"
 
-          # Create and auto-merge the PR
-          gh pr create \
+          # Create PR and enable auto-merge
+          PR_URL=$(gh pr create \
             --title "chore: update benchmark results in README" \
             --body "Automated benchmark update from CI run #${{ github.run_number }}." \
             --head "${BRANCH}" \
-            --base main || echo "::warning::Failed to create PR — check PAT_TOKEN permissions."
+            --base main 2>&1) || echo "::warning::Failed to create PR — check PAT_TOKEN permissions."
+
+          if [ -n "$PR_URL" ]; then
+            echo "Created PR: ${PR_URL}"
+            gh pr merge "${PR_URL}" --auto --squash --delete-branch || echo "::warning::Auto-merge not available — merge manually or enable auto-merge in repo settings."
+          fi
 
       # ── Post detailed comment on PRs ───────────────────────────────────
       - name: Post PR comment

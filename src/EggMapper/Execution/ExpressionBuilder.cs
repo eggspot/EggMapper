@@ -2310,12 +2310,15 @@ internal static class ExpressionBuilder
             ? (Expression)Expression.Convert(srcAccess, srcDictIfaceType)
             : srcAccess;
 
-        return Expression.IfThen(
+        var emptyCtor = dictConcreteType.GetConstructor(Type.EmptyTypes)!;
+        return Expression.IfThenElse(
             Expression.ReferenceNotEqual(
                 Expression.Convert(srcAccess, typeof(object)),
                 Expression.Constant(null, typeof(object))),
             Expression.Assign(destAccess,
-                Expression.Convert(Expression.New(copyCtor, srcCast), destType)));
+                Expression.Convert(Expression.New(copyCtor, srcCast), destType)),
+            Expression.Assign(destAccess,
+                Expression.Convert(Expression.New(emptyCtor), destType)));
     }
 
     private static Action<object, object, ResolutionContext>? BuildDictionaryAction(
@@ -2345,7 +2348,7 @@ internal static class ExpressionBuilder
             return (src, dest, ctx) =>
             {
                 var srcVal = getter(src);
-                if (srcVal == null) return;
+                if (srcVal == null) { setter(dest, Activator.CreateInstance(destDictType)!); return; }
                 setter(dest, MapDictionaryInternal(srcVal, srcValType, destValType, destDictType, valPair, capturedMaps, ctx));
             };
         }
@@ -2359,7 +2362,7 @@ internal static class ExpressionBuilder
             var srcVal = getter(src);
             if (srcVal == null)
             {
-                if (hasNullSub) setter(dest, nullSub);
+                setter(dest, hasNullSub ? nullSub : Activator.CreateInstance(destDictType)!);
                 return;
             }
             setter(dest, MapDictionaryInternal(srcVal, srcValType, destValType, destDictType, valPair, capturedMaps, ctx));
