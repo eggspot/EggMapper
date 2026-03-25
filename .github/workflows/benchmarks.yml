@@ -74,10 +74,11 @@ jobs:
 
       # ── Update README on push to main ──────────────────────────────────
       # Creates a PR with updated benchmark tables (can't push to protected main).
+      # Uses PAT_TOKEN because GITHUB_TOKEN can't create PRs in this org.
       - name: Update README with benchmark results
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           python3 scripts/update-readme-benchmarks.py \
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
@@ -97,12 +98,12 @@ jobs:
           git commit -m "chore: update benchmark results in README [skip ci]"
           git push origin "${BRANCH}"
 
-          # Create PR (auto-merge will handle it)
+          # Create and auto-merge the PR
           gh pr create \
             --title "chore: update benchmark results in README" \
             --body "Automated benchmark update from CI run #${{ github.run_number }}." \
             --head "${BRANCH}" \
-            --base main
+            --base main || echo "::warning::Failed to create PR — check PAT_TOKEN permissions."
 
       # ── Post detailed comment on PRs ───────────────────────────────────
       - name: Post PR comment
