@@ -216,9 +216,78 @@ public class EdgeCaseTests
         result[1].Id!.Value.Should().Be(2);
         result[1].Name.Should().Be("b_mapped");
     }
+
+    // ── MapFrom returning a different type that has a registered map ───────
+    [Fact]
+    public void Map_MapFromReturnsNestedType_UsesRegisteredMapping()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<SourceWithNested, DestWithMapped>()
+                .ForMember(d => d.Nested, o => o.MapFrom(s => s.Inner));
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>();
+        }).CreateMapper();
+
+        var src = new SourceWithNested { Name = "parent", Inner = new NestedInnerSrc { Value = 42 } };
+        var result = mapper.Map<SourceWithNested, DestWithMapped>(src);
+
+        result.Name.Should().Be("parent");
+        result.Nested.Should().NotBeNull();
+        result.Nested!.Value.Should().Be(42);
+    }
+
+    [Fact]
+    public void Map_MapFromReturnsNullNestedType_ReturnsNull()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<SourceWithNested, DestWithMapped>()
+                .ForMember(d => d.Nested, o => o.MapFrom(s => s.Inner));
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>();
+        }).CreateMapper();
+
+        var src = new SourceWithNested { Name = "parent", Inner = null };
+        var result = mapper.Map<SourceWithNested, DestWithMapped>(src);
+
+        result.Name.Should().Be("parent");
+        result.Nested.Should().BeNull();
+    }
+
+    [Fact]
+    public void Map_MapFromReturnsCollection_UsesRegisteredElementMapping()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<SourceWithNestedList, DestWithMappedList>()
+                .ForMember(d => d.Items, o => o.MapFrom(s => s.Inners));
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDst>();
+        }).CreateMapper();
+
+        var src = new SourceWithNestedList
+        {
+            Inners = new List<NestedInnerSrc>
+            {
+                new() { Value = 1 },
+                new() { Value = 2 }
+            }
+        };
+        var result = mapper.Map<SourceWithNestedList, DestWithMappedList>(src);
+
+        result.Items.Should().HaveCount(2);
+        result.Items[0].Value.Should().Be(1);
+        result.Items[1].Value.Should().Be(2);
+    }
 }
 
-// ── Additional test models ──────────────────────────────────────────────────
+// ── Additional test models
+public class NestedInnerSrc { public int Value { get; set; } }
+public class NestedInnerDst { public int Value { get; set; } }
+public class SourceWithNested { public string? Name { get; set; } public NestedInnerSrc? Inner { get; set; } }
+public class DestWithMapped { public string? Name { get; set; } public NestedInnerDst? Nested { get; set; } }
+public class SourceWithNestedList { public List<NestedInnerSrc> Inners { get; set; } = []; }
+public class DestWithMappedList { public List<NestedInnerDst> Items { get; set; } = []; }
+
+// ────────────────────────────────────────────────────────────────────────────── ──────────────────────────────────────────────────
 public class BaseEntity
 {
     public int Id { get; set; }
