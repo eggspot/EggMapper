@@ -47,6 +47,7 @@ BENCHMARK_ORDER: list[tuple[str, str]] = [
     ("DeepCollectionBenchmark",   "🔴 Deep Collection (100 items, nested)"),
     ("LargeCollectionBenchmark",  "⚫ Large Collection (1,000 items)"),
     ("StartupBenchmark",          "⚪ Startup / Config"),
+    ("ColdStartBenchmark",        "⚪ Cold Start (Config + First Map per Type Pair)"),
 ]
 
 # Short scenario labels used in the summary table (omits Startup)
