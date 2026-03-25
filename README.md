@@ -216,7 +216,11 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 > compilation cost here; EggMapper's Map() calls are instant (already compiled above).
 
 <!-- COLD_START_RESULTS_START -->
-*Results pending — will be populated on next CI run.*
+> EggMapper compiles **all** expression trees eagerly at config time — competitors defer to first `Map()` call.
+> Once running, EggMapper's `Map()` calls are near-instant while competitors pay on first use per type pair.
+> See the **Startup** table above for config-only cost, and the runtime tables for steady-state performance.
+>
+> Full cold start results are available in the [benchmark CI artifacts](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml).
 <!-- COLD_START_RESULTS_END -->
 
 ---
@@ -245,7 +249,9 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Inheritance mapping
 - ✅ Enum mapping (int ↔ enum and string ↔ enum auto-conversion)
 - ✅ `ForPath` for nested destination properties
-- ✅ .NET Dependency Injection integration (built-in, no extra package)
+- ✅ .NET Dependency Injection integration (transient `IMapper`, scoped service support)
+- ✅ EF Core proxy / derived type resolution (base-type + interface walk)
+- ✅ Constructor-based type conversion in `MapFrom(s => s)` patterns
 - ✅ Configuration validation
 - ✅ `CreateMap(Type, Type)` runtime type mapping
 - ✅ `ITypeConverter<S,D>` / `ConvertUsing` custom converters

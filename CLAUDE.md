@@ -57,10 +57,11 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 
 ### Runtime (Map Time)
 
-- `Mapper.Map<S,D>()` checks `TypePairCache<S,D>` first (static generic class — zero dict lookup after warm-up)
+- `Mapper.Map<S,D>()` checks `FastCache<S,D>` first (static generic class — zero dict lookup after warm-up)
 - Falls back to `FrozenCtxFreeMaps` for typed `Func<TSource, TDestination>` (zero boxing)
 - Falls back to `FrozenMaps` with thread-static `ResolutionContext` pooling
-- `MapList<S,D>()` checks `ListCache<S,D>` → `FrozenCtxFreeListMaps` for fully-inlined collection delegates
+- Base-type walk + interface walk in `MapInternal` for EF Core proxy / derived type resolution
+- `MapList<S,D>()` checks `FastListCache<S,D>` → `FrozenCtxFreeListMaps` for fully-inlined collection delegates
 - `IList<T>` sources use index-based `for` loops (avoids enumerator allocation)
 
 ### Key Performance Techniques
@@ -68,7 +69,7 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 - **Inlined nested maps**: Child type property assignments are emitted directly into the parent expression tree (no delegate call, no boxing)
 - **Inlined flattening**: `dest.AddressStreet = src.Address.Street` compiled as direct typed property access
 - **Inlined collection loops**: Entire `List<T>` mapping loop compiled as single expression tree with inline element mapping
-- **Static generic caching**: `TypePairCache<TSource, TDestination>` and `ListCache<TSource, TDestination>` eliminate dict lookups
+- **Static generic caching**: `FastCache<TSource, TDestination>` and `FastListCache<TSource, TDestination>` eliminate dict lookups
 
 ### Key Files
 
@@ -81,6 +82,8 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 | `src/EggMapper/Internal/TypePair.cs` | Value-type dictionary key for source/dest type lookups |
 | `src/EggMapper/Internal/TypeDetails.cs` | Cached reflection metadata (properties, constructors) |
 | `src/EggMapper/Internal/ReflectionHelper.cs` | Utility: numeric/collection type detection, flattening |
+| `src/EggMapper/ServiceCollectionExtensions.cs` | DI registration (`AddEggMapper`) — transient `IMapper`, singleton config |
+| `src/EggMapper/ResolutionContext.cs` | Thread-static pooled context with DI `ServiceProvider` + cycle cache |
 
 ### Benchmark Competitors
 
@@ -119,18 +122,18 @@ Record baseline benchmark → optimize → re-benchmark → compare → repeat u
 
 ## Release Process
 
-Fully automatic — every push to `main` triggers a release with version bump detected from commit messages:
+Fully automatic tag-based versioning — every push to `main` triggers a release:
 
 1. Push / merge to `main`
 2. CI analyzes commit messages since last tag using conventional commits:
    - `fix:` / `perf:` / `chore:` → **patch** bump (1.1.0 → 1.1.1)
    - `feat:` → **minor** bump (1.1.0 → 1.2.0)
    - `BREAKING CHANGE` / `feat!:` → **major** bump (1.1.0 → 2.0.0)
-3. Bumps version in csproj → builds → tests → packs → publishes to NuGet
+3. Version derived from last git tag (not csproj) → builds with `-p:Version=` → tests → packs → publishes to NuGet
 4. Creates git tag `v<version>` + GitHub Release with artifacts
-5. Commits the bumped csproj back to main with `[skip ci]`
+5. Concurrency group serializes publish runs to prevent tag race conditions
 
-No manual version editing needed. Just use conventional commit prefixes.
+No manual version editing needed. No commits pushed back to main. Just use conventional commit prefixes.
 
 ## Working Style
 
