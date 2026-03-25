@@ -63,9 +63,10 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
             DestinationType = destinationType
         };
 
-        // Open generic template (e.g. CreateMap(typeof(ApiResponse<>), typeof(ApiResponseDto<>)))
-        // — store separately; compiled on-demand at first Map() call for a closed pair.
-        if (sourceType.IsGenericTypeDefinition && destinationType.IsGenericTypeDefinition)
+        // Open generic template — store separately; compiled on-demand at first Map() call.
+        // Supports: both open (ApiResponse<> → ApiResponseDto<>),
+        //           or one side open (ISequenceIdEntity → Id<>) for interface-to-generic patterns.
+        if (sourceType.IsGenericTypeDefinition || destinationType.IsGenericTypeDefinition)
         {
             _openGenericTypeMaps[(sourceType, destinationType)] = typeMap;
         }
@@ -469,13 +470,21 @@ internal sealed class NonGenericMappingExpression : IMappingExpression
 
     public IMappingExpression ConvertUsing(Type converterType)
     {
-        _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+        if (converterType.IsGenericTypeDefinition)
         {
-            var converter = Activator.CreateInstance(converterType)!;
-            var method = converterType.GetMethod("Convert")
-                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
-            return method.Invoke(converter, new[] { src, dest, ctx })!;
-        };
+            // Defer instantiation — will be closed in CloseGenericTypeMap
+            _typeMap.OpenGenericConverterType = converterType;
+        }
+        else
+        {
+            _typeMap.ConvertUsingFunc = (src, dest, ctx) =>
+            {
+                var converter = Activator.CreateInstance(converterType)!;
+                var method = converterType.GetMethod("Convert")
+                    ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+                return method.Invoke(converter, new[] { src, dest, ctx })!;
+            };
+        }
         return this;
     }
 }
