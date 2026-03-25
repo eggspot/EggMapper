@@ -245,13 +245,8 @@ public sealed class MapperConfiguration
         var srcType  = key.SourceType;
         var destType = key.DestinationType;
 
-        if (!srcType.IsGenericType || !destType.IsGenericType)
-            return false;
-
-        var srcDef  = srcType.GetGenericTypeDefinition();
-        var destDef = destType.GetGenericTypeDefinition();
-
-        if (!_openGenericRegistrations.TryGetValue((srcDef, destDef), out var template))
+        var template = FindOpenGenericTemplate(srcType, destType);
+        if (template == null)
             return false;
 
         // Close the TypeMap: substitute the concrete generic arguments.
@@ -287,13 +282,96 @@ public sealed class MapperConfiguration
         return true;
     }
 
+    /// <summary>
+    /// Finds an open-generic template matching the given source/dest types.
+    /// Handles three patterns:
+    ///   1. Both open generic: ApiResponse&lt;&gt; → ApiResponseDto&lt;&gt;
+    ///   2. Source non-generic (interface/class), dest open generic: ISequenceIdEntity → Id&lt;&gt;
+    ///   3. Source open generic, dest non-generic (rare)
+    /// For pattern 2, also checks if srcType implements the template's source interface.
+    /// </summary>
+    private TypeMap? FindOpenGenericTemplate(Type srcType, Type destType)
+    {
+        // Pattern 1: both generic — standard case
+        if (srcType.IsGenericType && destType.IsGenericType)
+        {
+            var srcDef  = srcType.GetGenericTypeDefinition();
+            var destDef = destType.GetGenericTypeDefinition();
+            if (_openGenericRegistrations.TryGetValue((srcDef, destDef), out var t1))
+                return t1;
+        }
+
+        // Pattern 2: source is concrete/interface, dest is generic (e.g., ISequenceIdEntity → Id<>)
+        if (destType.IsGenericType)
+        {
+            var destDef = destType.GetGenericTypeDefinition();
+            // Try exact source type first
+            if (_openGenericRegistrations.TryGetValue((srcType, destDef), out var t2))
+                return t2;
+            // Walk source interfaces (e.g., Product implements ISequenceIdEntity)
+            foreach (var iface in srcType.GetInterfaces())
+            {
+                if (_openGenericRegistrations.TryGetValue((iface, destDef), out var ti))
+                    return ti;
+            }
+            // Walk source base types
+            for (var bt = srcType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
+            {
+                if (_openGenericRegistrations.TryGetValue((bt, destDef), out var tb))
+                    return tb;
+                // Base type might also be generic
+                if (bt.IsGenericType && _openGenericRegistrations.TryGetValue((bt.GetGenericTypeDefinition(), destDef), out var tbg))
+                    return tbg;
+            }
+        }
+
+        // Pattern 3: source is generic, dest is concrete (rare)
+        if (srcType.IsGenericType)
+        {
+            var srcDef = srcType.GetGenericTypeDefinition();
+            if (_openGenericRegistrations.TryGetValue((srcDef, destType), out var t3))
+                return t3;
+        }
+
+        return null;
+    }
+
     private static TypeMap CloseGenericTypeMap(TypeMap template, Type srcType, Type destType)
     {
+        // Close open-generic ConvertUsing converter type if present
+        Func<object, object?, ResolutionContext, object>? convertFunc = template.ConvertUsingFunc;
+        if (convertFunc == null && template.OpenGenericConverterType != null)
+        {
+            // Determine the generic argument for the converter.
+            // For pattern ISequenceIdEntity → Id<T>, the dest is Id<Product>, so T = Product.
+            var genArgs = destType.IsGenericType ? destType.GetGenericArguments()
+                        : srcType.IsGenericType ? srcType.GetGenericArguments()
+                        : Array.Empty<Type>();
+            if (genArgs.Length > 0)
+            {
+                try
+                {
+                    var closedConverterType = template.OpenGenericConverterType.MakeGenericType(genArgs);
+                    var converter = Activator.CreateInstance(closedConverterType)!;
+                    var method = closedConverterType.GetMethod("Convert")
+                        ?? throw new InvalidOperationException(
+                            $"Type {closedConverterType.Name} does not have a Convert method.");
+                    convertFunc = (src, dest, ctx) => method.Invoke(converter, new[] { src, dest, ctx })!;
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to close generic converter {template.OpenGenericConverterType.Name} " +
+                        $"for {srcType.Name} -> {destType.Name}", ex);
+                }
+            }
+        }
+
         var closedMap = new TypeMap
         {
             SourceType                = srcType,
             DestinationType           = destType,
-            ConvertUsingFunc          = template.ConvertUsingFunc,
+            ConvertUsingFunc          = convertFunc,
             CustomConstructor         = template.CustomConstructor,
             CustomConstructorWithCtx  = template.CustomConstructorWithCtx,
             BeforeMapAction           = template.BeforeMapAction,

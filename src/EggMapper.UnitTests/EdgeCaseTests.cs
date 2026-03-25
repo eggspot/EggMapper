@@ -217,6 +217,45 @@ public class EdgeCaseTests
         result[1].Name.Should().Be("b_mapped");
     }
 
+    // ── Open-generic ConvertUsing with interface source (ISequenceIdEntity → Id<T>) ──
+    [Fact]
+    public void Map_OpenGenericConvertUsing_InterfaceToGeneric()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap(typeof(ISeqEntity), typeof(WrapperId<>))
+                .IncludeAllDerived()
+                .ConvertUsing(typeof(SeqEntityToWrapperIdConverter<>));
+            cfg.CreateMap<ConcreteEntity, ConcreteEntityDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s));
+        }).CreateMapper();
+
+        var src = new ConcreteEntity { Id = 42, SeqId = 100, Name = "test" };
+        var result = mapper.Map<ConcreteEntity, ConcreteEntityDto>(src);
+
+        result.Id.Should().NotBeNull();
+        result.Id!.Value.Should().Be(42);
+        result.Id.SeqId.Should().Be(100);
+        result.Name.Should().Be("test");
+    }
+
+    [Fact]
+    public void Map_OpenGenericConvertUsing_NullSource_ReturnsNull()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap(typeof(ISeqEntity), typeof(WrapperId<>))
+                .IncludeAllDerived()
+                .ConvertUsing(typeof(SeqEntityToWrapperIdConverter<>));
+            cfg.CreateMap<ConcreteEntity, ConcreteEntityDto>()
+                .ForMember(d => d.Id, o => o.MapFrom(s => s));
+        }).CreateMapper();
+
+        var src = new ConcreteEntity { Id = 0, SeqId = 0, Name = "empty" };
+        var result = mapper.Map<ConcreteEntity, ConcreteEntityDto>(src);
+        result.Name.Should().Be("empty");
+    }
+
     // ── MapFrom returning a different type that has a registered map ───────
     [Fact]
     public void Map_MapFromReturnsNestedType_UsesRegisteredMapping()
@@ -362,6 +401,24 @@ public class StrongIdDto
     public StrongId? Id { get; set; }
     public string? Name { get; set; }
 }
+
+// ── Open-generic ConvertUsing test models (ISequenceIdEntity → Id<T> pattern) ─
+public interface ISeqEntity { int Id { get; } int SeqId { get; } }
+public class ConcreteEntity : ISeqEntity { public int Id { get; set; } public int SeqId { get; set; } public string? Name { get; set; } }
+public class WrapperId<T> where T : class, ISeqEntity
+{
+    public int Value { get; set; }
+    public int SeqId { get; set; }
+}
+public class SeqEntityToWrapperIdConverter<T> : EggMapper.ITypeConverter<ISeqEntity?, WrapperId<T>?> where T : class, ISeqEntity
+{
+    public WrapperId<T>? Convert(ISeqEntity? source, WrapperId<T>? destination, EggMapper.ResolutionContext context)
+    {
+        if (source == null) return null;
+        return new WrapperId<T> { Value = source.Id, SeqId = source.SeqId };
+    }
+}
+public class ConcreteEntityDto { public WrapperId<ConcreteEntity>? Id { get; set; } public string? Name { get; set; } }
 
 // ──────────────────────────────────────────────────────────────────────────────
 public class DateTimeSource

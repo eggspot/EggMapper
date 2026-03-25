@@ -22,6 +22,8 @@ internal sealed class TypeMap
     public bool IncludeAllDerivedFlag { get; set; }
     // ConvertUsing: replaces the entire mapping with a custom converter
     public Func<object, object?, ResolutionContext, object>? ConvertUsingFunc { get; set; }
+    // Open-generic converter type for deferred closing (e.g., typeof(MyConverter<>))
+    public Type? OpenGenericConverterType { get; set; }
     public Func<object, object?, ResolutionContext, object>? MappingDelegate { get; set; }
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
     /// <summary>The compiled expression tree, stored before .Compile() for diagnostics.</summary>
