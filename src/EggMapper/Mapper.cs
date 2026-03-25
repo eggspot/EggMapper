@@ -409,7 +409,7 @@ public sealed class Mapper : IMapper
             var baseKey = new TypePair(baseType, destinationType);
             if (_config.FrozenMaps.TryGetValue(baseKey, out var baseDel))
             {
-                var ctx = GetContext();
+                var ctx = GetContext(items);
                 return baseDel(source, destination, ctx);
             }
         }
@@ -421,7 +421,7 @@ public sealed class Mapper : IMapper
             var ifaceKey = new TypePair(iface, destinationType);
             if (_config.FrozenMaps.TryGetValue(ifaceKey, out var ifaceDel))
             {
-                var ctx = GetContext();
+                var ctx = GetContext(items);
                 return ifaceDel(source, destination, ctx);
             }
         }
@@ -459,7 +459,7 @@ public sealed class Mapper : IMapper
                 {
                     var resultList = (IList)Activator.CreateInstance(
                         typeof(List<>).MakeGenericType(destElemType))!;
-                    var ctx = GetContext();
+                    var ctx = GetContext(items);
                     foreach (var item in srcEnum)
                     {
                         if (item == null) { resultList.Add(null); continue; }
