@@ -2637,6 +2637,43 @@ internal static class ExpressionBuilder
         return ConvertValue(value, targetType);
     }
 
+    /// <summary>
+    /// Searches for implicit/explicit conversion operators on both source and target types.
+    /// Handles nullable parameter types (e.g., op_Implicit(Id&lt;T&gt;? id) accepts Id&lt;T&gt; too).
+    /// </summary>
+    private static object? TryInvokeConversionOperator(object value, Type valueType, Type targetType)
+    {
+        const System.Reflection.BindingFlags staticPublic =
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+
+        // Search both source and target types
+        foreach (var searchType in new[] { valueType, targetType })
+        {
+            foreach (var opName in new[] { "op_Implicit", "op_Explicit" })
+            {
+                var methods = searchType.GetMethods(staticPublic);
+                for (int i = 0; i < methods.Length; i++)
+                {
+                    var m = methods[i];
+                    if (m.Name != opName) continue;
+                    if (!targetType.IsAssignableFrom(m.ReturnType)) continue;
+
+                    var ps = m.GetParameters();
+                    if (ps.Length != 1) continue;
+
+                    // Direct match or nullable-accepting (Id<T>? accepts Id<T>)
+                    var paramType = ps[0].ParameterType;
+                    if (paramType.IsAssignableFrom(valueType))
+                    {
+                        try { return m.Invoke(null, new[] { value }); }
+                        catch { }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private static object? ConvertValue(object? value, Type targetType)
     {
         if (value == null) return null;
@@ -2651,7 +2688,13 @@ internal static class ExpressionBuilder
         if (valueType.IsEnum && (underlying == typeof(string) || targetType == typeof(string)))
             return value.ToString();
 
-        // Implicit/explicit conversion operators (e.g., Id<T>(T entity))
+        // Implicit/explicit conversion operators (e.g., Id<Artist> → int via implicit operator)
+        // Search both source and target types for op_Implicit/op_Explicit that can convert.
+        // Handles nullable parameters (e.g., op_Implicit(Id<T>? id) → int) by checking
+        // if the parameter is assignable from the value type.
+        var result = TryInvokeConversionOperator(value, valueType, underlying);
+        if (result != null) return result;
+
         try
         {
             return Convert.ChangeType(value, underlying);

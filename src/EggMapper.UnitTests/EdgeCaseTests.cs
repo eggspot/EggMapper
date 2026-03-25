@@ -236,6 +236,32 @@ public class EdgeCaseTests
         result.Nested!.Value.Should().Be(42);
     }
 
+    // ── Implicit operator conversion (Id<T> → int pattern) ───────────────
+    [Fact]
+    public void Map_ImplicitOperatorConversion_ConvertsStrongIdToInt()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<StrongIdSource, IntIdDest>())
+            .CreateMapper();
+
+        var src = new StrongIdSource { ArtistId = new ImplicitId(42) };
+        var result = mapper.Map<StrongIdSource, IntIdDest>(src);
+        result.ArtistId.Should().Be(42);
+    }
+
+    [Fact]
+    public void Map_ImplicitOperatorConversion_WorksWithIgnoredProps()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<StrongIdSource, IntIdDest>()
+                .ForMember(d => d.ArtistId, o => o.Ignore()))
+            .CreateMapper();
+
+        var src = new StrongIdSource { ArtistId = new ImplicitId(99) };
+        var result = mapper.Map<StrongIdSource, IntIdDest>(src);
+        result.ArtistId.Should().Be(0); // ignored, stays default
+    }
+
     [Fact]
     public void Map_MapFromReturnsNullNestedType_ReturnsNull()
     {
@@ -278,6 +304,16 @@ public class EdgeCaseTests
         result.Items[1].Value.Should().Be(2);
     }
 }
+
+// ── Implicit operator test models (simulates DSP's Id<T> → int) ──────────────
+public class ImplicitId
+{
+    public int Value { get; }
+    public ImplicitId(int value) => Value = value;
+    public static implicit operator int(ImplicitId? id) => id?.Value ?? 0;
+}
+public class StrongIdSource { public ImplicitId ArtistId { get; set; } = new(0); }
+public class IntIdDest { public int ArtistId { get; set; } }
 
 // ── Additional test models
 public class NestedInnerSrc { public int Value { get; set; } }
