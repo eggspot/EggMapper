@@ -4,6 +4,7 @@ public sealed class MappingException : Exception
 {
     public Type? SourceType { get; }
     public Type? DestinationType { get; }
+    public string? MemberName { get; }
 
     public MappingException(string message) : base(message) { }
 
@@ -15,6 +16,14 @@ public sealed class MappingException : Exception
     {
         SourceType = sourceType;
         DestinationType = destinationType;
+    }
+
+    public MappingException(Type sourceType, Type destinationType, string memberName, Exception innerException)
+        : base($"Error mapping {sourceType.Name} to {destinationType.Name}, member '{memberName}': {innerException.Message}", innerException)
+    {
+        SourceType = sourceType;
+        DestinationType = destinationType;
+        MemberName = memberName;
     }
 
     public MappingException(Type sourceType, Type destinationType, string message)
