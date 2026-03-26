@@ -23,9 +23,8 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-    # Path filter (src/**, scripts/**) is the primary guard against re-triggering
-    # on README-only benchmark update merges. Actor guard is secondary safety net.
-    if: github.actor != 'github-actions[bot]'
+    # Path filter (src/**, scripts/**) on push trigger prevents re-triggering
+    # on README-only benchmark update merges.
     timeout-minutes: 50
 
     steps:

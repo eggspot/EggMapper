@@ -47,9 +47,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Path filter (src/**) is the primary guard against README-only/docs pushes.
-    # Actor guard is a secondary safety net.
-    if: github.actor != 'github-actions[bot]'
+    # Path filter (src/**) on push trigger prevents runs for README-only/docs changes.
 
     steps:
       - name: Checkout
