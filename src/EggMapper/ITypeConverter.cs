@@ -2,7 +2,7 @@ namespace EggMapper;
 
 /// <summary>
 /// Replaces the entire mapping for a source→destination type pair.
-/// Compatible with AutoMapper's ITypeConverter pattern.
+/// Implement this interface to fully control the mapping for a type pair.
 /// </summary>
 public interface ITypeConverter<in TSource, TDestination>
 {

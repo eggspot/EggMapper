@@ -45,7 +45,7 @@ public class NullBehaviorTests
     [Fact]
     public void Null_collection_property_maps_to_empty()
     {
-        // Null source collections map to empty destination collections (matches AutoMapper behavior)
+        // Null source collections map to empty destination collections (default AllowNullCollections=false)
         var mapper = new MapperConfiguration(cfg =>
         {
             cfg.CreateMap<ItemSource, ItemDest>();

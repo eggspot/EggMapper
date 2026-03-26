@@ -64,7 +64,7 @@ public class CollectionMappingTests
     [Fact]
     public void Null_collection_maps_to_empty()
     {
-        // Null source collection maps to empty destination collection (matches AutoMapper behavior)
+        // Null source collection maps to empty destination collection (default AllowNullCollections=false)
         var mapper = new MapperConfiguration(cfg =>
             cfg.CreateMap<IntListSource, IntHashSetDest>()).CreateMapper();
 
@@ -130,7 +130,7 @@ public class CollectionMappingTests
     }
 
     // ── Collection auto-mapping (Map<IList<T>>, Map<IEnumerable<T>>) ─────────
-    // AutoMapper compatibility: mapper.Map<IList<TDest>>(List<TSrc>) routes to
+    // Collection auto-mapping: mapper.Map<IList<TDest>>(List<TSrc>) routes to
     // the registered element map TSrc→TDest and returns a List<TDest>.
 
     [Fact]
@@ -177,5 +177,60 @@ public class CollectionMappingTests
 
         callbackRan.Should().BeTrue();
         dest[0].Label.Should().Be("patched");
+    }
+
+    [Fact]
+    public void Map_ListDest_from_object_source_uses_element_map()
+    {
+        // Exact pattern: mapper.Map<List<TDest>>(listOfSrc) — no explicit collection map registered
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        object src = new List<ItemSource> { new() { Id = 10, Label = "Z" }, new() { Id = 20, Label = "Y" } };
+        var dest = mapper.Map<List<ItemDest>>(src);
+
+        dest.Should().HaveCount(2);
+        dest[0].Id.Should().Be(10);
+        dest[1].Label.Should().Be("Y");
+    }
+
+    [Fact]
+    public void Map_TwoTypeArg_ListToList_uses_element_map()
+    {
+        // Map<List<TSrc>, List<TDest>>(list) — two-type-arg generic overload
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        var src = new List<ItemSource> { new() { Id = 5, Label = "Q" } };
+        var dest = mapper.Map<List<ItemSource>, List<ItemDest>>(src);
+
+        dest.Should().ContainSingle(d => d.Id == 5 && d.Label == "Q");
+    }
+
+    [Fact]
+    public void Map_Collection_with_null_elements_preserves_nulls()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        object src = new List<ItemSource> { new() { Id = 1 }, null!, new() { Id = 3 } };
+        var dest = mapper.Map<List<ItemDest>>(src);
+
+        dest.Should().HaveCount(3);
+        dest[0].Id.Should().Be(1);
+        dest[1].Should().BeNull();
+        dest[2].Id.Should().Be(3);
+    }
+
+    [Fact]
+    public void Map_Array_dest_from_object_source()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ItemSource, ItemDest>()).CreateMapper();
+
+        object src = new ItemSource[] { new() { Id = 42, Label = "arr" } };
+        var dest = mapper.Map<IEnumerable<ItemDest>>(src);
+
+        dest.Should().ContainSingle(d => d.Id == 42 && d.Label == "arr");
     }
 }

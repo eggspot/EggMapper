@@ -97,7 +97,7 @@ file class VrDest { public string Name { get; set; } = ""; public string Url { g
 file class VrSource2 { public VrAsset? MainAsset { get; set; } public VrAsset? ThumbAsset { get; set; } }
 file class VrDest2 { public string MainUrl { get; set; } = ""; public string ThumbUrl { get; set; } = ""; }
 
-// ── Value resolvers (like AutoMapper's IMemberValueResolver) ────────────
+// ── Value resolvers (IMemberValueResolver) ─────────────────────────────
 
 file class VrUrlResolver : IMemberValueResolver<object, object, VrAsset?, string>
 {
