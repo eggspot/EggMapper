@@ -8,6 +8,10 @@ name: Benchmarks
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - '.github/workflows/benchmarks.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,6 +23,8 @@ permissions:
 jobs:
   benchmark:
     runs-on: ubuntu-latest
+    # Path filter (src/**, scripts/**) is the primary guard against re-triggering
+    # on README-only benchmark update merges. Actor guard is secondary safety net.
     if: github.actor != 'github-actions[bot]'
     timeout-minutes: 50
 
