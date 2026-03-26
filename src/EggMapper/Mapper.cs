@@ -210,7 +210,9 @@ public sealed class Mapper : IMapper
             var ctx = GetContext(items);
             return (TDestination)openDel!(source, null, ctx);
         }
-        return Map<TSource, TDestination>(source);
+        // Fallback to MapInternal which handles base-type walk, interface walk,
+        // and collection auto-mapping — preserving the items dictionary.
+        return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null, items);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -249,7 +251,15 @@ public sealed class Mapper : IMapper
                 {
                     // Invoke via dynamic delegate — the patch func is Func<TBase,TDest,TDest>
                     // but source is a derived type, so it's assignable.
-                    return (TDestination)baseRaw.DynamicInvoke(source, destination)!;
+                    try
+                    {
+                        return (TDestination)baseRaw.DynamicInvoke(source, destination)!;
+                    }
+                    catch (System.Reflection.TargetInvocationException tie)
+                    {
+                        throw new MappingException(runtimeType, typeof(TDestination),
+                            tie.InnerException ?? tie);
+                    }
                 }
             }
         }
