@@ -77,11 +77,11 @@ jobs:
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts/
             benchmark-report.md
 
-      # ── Update README on push to main ──────────────────────────────────
+      # ── Update README on push to main or manual dispatch ───────────────
       # Creates a PR with updated benchmark tables (can't push to protected main).
       # Uses PAT_TOKEN because GITHUB_TOKEN can't create PRs in this org.
       - name: Update README with benchmark results
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
