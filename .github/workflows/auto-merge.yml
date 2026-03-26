@@ -12,7 +12,10 @@ jobs:
       contents: write
     steps:
       - name: Enable auto-merge (squash)
+        # Uses GITHUB_TOKEN so the merge actor is 'github-actions[bot]' —
+        # this ensures actor-based guards in benchmark/publish workflows
+        # correctly identify bot-authored merges.
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

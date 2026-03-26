@@ -24,6 +24,8 @@ name: Publish NuGet
 on:
   push:
     branches: [main]
+    paths:
+      - 'src/**'
   workflow_dispatch:
     inputs:
       force_bump:
@@ -45,6 +47,8 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Path filter (src/**) is the primary guard against README-only/docs pushes.
+    # Actor guard is a secondary safety net.
     if: github.actor != 'github-actions[bot]'
 
     steps:
