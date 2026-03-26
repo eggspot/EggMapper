@@ -23,9 +23,7 @@ name: Publish NuGet
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'src/**'
+    branches: [main]    
   workflow_dispatch:
     inputs:
       force_bump:
