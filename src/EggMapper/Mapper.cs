@@ -119,8 +119,8 @@ public sealed class Mapper : IMapper
         }
 
         throw new InvalidOperationException(
-            $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
-            $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
+            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
+            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -157,8 +157,8 @@ public sealed class Mapper : IMapper
             return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), destination);
 
         throw new InvalidOperationException(
-            $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
-            $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
+            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
+            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
     }
 
     public object Map(object source, Type sourceType, Type destinationType)
@@ -255,8 +255,8 @@ public sealed class Mapper : IMapper
         }
 
         throw new InvalidOperationException(
-            $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
-            $"Call CreateMap<{typeof(TSource).Name}, {typeof(TDestination).Name}>() in your mapper configuration.");
+            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
+            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
     }
 
     public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source)
@@ -338,7 +338,7 @@ public sealed class Mapper : IMapper
             else
             {
                 throw new InvalidOperationException(
-                    $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}.");
+                    $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}.");
             }
         }
         var ctx = GetContext();
@@ -458,12 +458,17 @@ public sealed class Mapper : IMapper
                     }
                     return resultList;
                 }
+
+                // Element mapping not found — give a clear error pointing to the element types
+                throw new InvalidOperationException(
+                    $"No mapping configured for collection {TypeNameHelper.Pair(sourceType, destinationType)}. " +
+                    $"Register the element mapping: CreateMap<{TypeNameHelper.Readable(srcElemType)}, {TypeNameHelper.Readable(destElemType)}>().");
             }
         }
 
         throw new InvalidOperationException(
-            $"No mapping configured for {sourceType.Name} -> {destinationType.Name}. " +
-            $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");
+            $"No mapping configured for {TypeNameHelper.Pair(sourceType, destinationType)}. " +
+            $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
     }
 
     /// <summary>

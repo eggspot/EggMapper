@@ -74,7 +74,7 @@ internal static class ReflectionHelper
                 return (args[0], args[1]);
             }
         }
-        throw new InvalidOperationException($"{type.Name} is not a dictionary type");
+        throw new InvalidOperationException($"{TypeNameHelper.Readable(type)} is not a dictionary type");
     }
 
     public static bool IsCollectionType(Type type) =>

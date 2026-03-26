@@ -355,14 +355,14 @@ public sealed class MapperConfiguration
                     var converter = Activator.CreateInstance(closedConverterType)!;
                     var method = closedConverterType.GetMethod("Convert")
                         ?? throw new InvalidOperationException(
-                            $"Type {closedConverterType.Name} does not have a Convert method.");
+                            $"Type {TypeNameHelper.Readable(closedConverterType)} does not have a Convert method.");
                     convertFunc = (src, dest, ctx) => method.Invoke(converter, new[] { src, dest, ctx })!;
                 }
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException(
-                        $"Failed to close generic converter {template.OpenGenericConverterType.Name} " +
-                        $"for {srcType.Name} -> {destType.Name}", ex);
+                        $"Failed to close generic converter {TypeNameHelper.Readable(template.OpenGenericConverterType)} " +
+                        $"for {TypeNameHelper.Pair(srcType, destType)}", ex);
                 }
             }
         }

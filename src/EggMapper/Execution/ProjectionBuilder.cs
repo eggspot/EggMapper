@@ -95,7 +95,7 @@ internal static class ProjectionBuilder
         // Parameterized ctor (records etc.) → NewExpression with member associations
         var best = FindBestCtor(destDetails, srcDetails)
             ?? throw new InvalidOperationException(
-                $"ProjectTo: no suitable constructor found for '{destType.Name}'.");
+                $"ProjectTo: no suitable constructor found for '{TypeNameHelper.Readable(destType)}'.");
 
         var ctorArgs = BuildCtorArgExpressions(best.Params, srcExpr, srcDetails);
 
