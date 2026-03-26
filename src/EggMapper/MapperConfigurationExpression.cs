@@ -137,7 +137,7 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         var destDetails = TypeDetails.Get(typeof(TDestination));
         var destProp = destDetails.WritableProperties.FirstOrDefault(p => p.Name == memberName)
             ?? throw new InvalidOperationException(
-                $"Property '{memberName}' not found or not writable on '{typeof(TDestination).Name}'");
+                $"Property '{memberName}' not found or not writable on '{TypeNameHelper.Readable(typeof(TDestination))}'");
         var propMap = GetOrCreatePropertyMap(destProp);
         var expr = new MemberConfigurationExpression<TSource, TDestination, TMember>(propMap);
         memberOptions(expr);
@@ -152,7 +152,7 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         var destDetails = TypeDetails.Get(typeof(TDestination));
         var destProp = destDetails.WritableProperties.FirstOrDefault(p => p.Name == memberName)
             ?? throw new InvalidOperationException(
-                $"Property '{memberName}' not found or not writable on '{typeof(TDestination).Name}'");
+                $"Property '{memberName}' not found or not writable on '{TypeNameHelper.Readable(typeof(TDestination))}'");
         var propMap = GetOrCreatePropertyMap(destProp);
         var expr = new PathConfigurationExpression<TSource, TDestination, TMember>(propMap);
         pathOptions(expr);
@@ -269,7 +269,7 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         {
             var converter = Activator.CreateInstance(converterType)!;
             var method = converterType.GetMethod("Convert")
-                ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+                ?? throw new InvalidOperationException($"Type {TypeNameHelper.Readable(converterType)} does not have a Convert method.");
             return method.Invoke(converter, new[] { src, dest, ctx })!;
         };
         return this;
@@ -481,7 +481,7 @@ internal sealed class NonGenericMappingExpression : IMappingExpression
             {
                 var converter = Activator.CreateInstance(converterType)!;
                 var method = converterType.GetMethod("Convert")
-                    ?? throw new InvalidOperationException($"Type {converterType.Name} does not have a Convert method.");
+                    ?? throw new InvalidOperationException($"Type {TypeNameHelper.Readable(converterType)} does not have a Convert method.");
                 return method.Invoke(converter, new[] { src, dest, ctx })!;
             };
         }

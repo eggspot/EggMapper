@@ -80,7 +80,7 @@ internal static class ExpressionBuilder
         }
 
         return _ => Activator.CreateInstance(destType)
-            ?? throw new MappingException($"Cannot create instance of {destType.Name}");
+            ?? throw new MappingException($"Cannot create instance of {TypeNameHelper.Readable(destType)}");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

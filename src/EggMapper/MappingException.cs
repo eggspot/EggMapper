@@ -1,3 +1,5 @@
+using EggMapper.Internal;
+
 namespace EggMapper;
 
 public sealed class MappingException : Exception
@@ -12,14 +14,14 @@ public sealed class MappingException : Exception
         : base(message, innerException) { }
 
     public MappingException(Type sourceType, Type destinationType, Exception innerException)
-        : base($"Error mapping {sourceType.Name} to {destinationType.Name}: {innerException.Message}", innerException)
+        : base($"Error mapping {TypeNameHelper.Pair(sourceType, destinationType)}: {innerException.Message}", innerException)
     {
         SourceType = sourceType;
         DestinationType = destinationType;
     }
 
     public MappingException(Type sourceType, Type destinationType, string memberName, Exception innerException)
-        : base($"Error mapping {sourceType.Name} to {destinationType.Name}, member '{memberName}': {innerException.Message}", innerException)
+        : base($"Error mapping {TypeNameHelper.Pair(sourceType, destinationType)}, member '{memberName}': {innerException.Message}", innerException)
     {
         SourceType = sourceType;
         DestinationType = destinationType;
@@ -27,7 +29,7 @@ public sealed class MappingException : Exception
     }
 
     public MappingException(Type sourceType, Type destinationType, string message)
-        : base($"Error mapping {sourceType.Name} to {destinationType.Name}: {message}")
+        : base($"Error mapping {TypeNameHelper.Pair(sourceType, destinationType)}: {message}")
     {
         SourceType = sourceType;
         DestinationType = destinationType;
