@@ -68,7 +68,7 @@ public class ArraysAndListsTests
     [Fact]
     public void Null_list_maps_to_empty()
     {
-        // Null source list maps to empty destination list (matches AutoMapper behavior)
+        // Null source list maps to empty destination list (default AllowNullCollections=false)
         var mapper = CreateMapper();
         var src = new CollectionSource { Items = null };
         var dest = mapper.Map<CollectionSource, CollectionDest>(src);
@@ -78,7 +78,7 @@ public class ArraysAndListsTests
     [Fact]
     public void Null_array_maps_to_empty()
     {
-        // Null source array maps to empty destination array (matches AutoMapper behavior)
+        // Null source array maps to empty destination array (default AllowNullCollections=false)
         var mapper = CreateMapper();
         var src = new CollectionSource { ItemArray = null };
         var dest = mapper.Map<CollectionSource, CollectionDest>(src);

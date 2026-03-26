@@ -5,7 +5,7 @@ using Xunit;
 namespace EggMapper.UnitTests;
 
 /// <summary>
-/// Tests for AutoMapper-compatible features added to maintain API parity:
+/// Tests for API features ensuring full compatibility:
 ///   1. ForMember(...).MapFrom(string) — source member by name on generic API
 ///   2. ConstructUsing(Func&lt;TSource, ResolutionContext, TDestination&gt;) — context-aware ctor
 ///   3. ForAllOtherMembers(...) — configure all not-yet-explicitly-mapped members

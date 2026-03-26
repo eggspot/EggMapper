@@ -2,7 +2,7 @@ namespace EggMapper;
 
 /// <summary>
 /// Runtime options passed to the call-site Map overload.
-/// Compatible with AutoMapper's IMappingOperationOptions&lt;TSource, TDestination&gt; pattern.
+/// Per-call mapping options with BeforeMap/AfterMap callbacks and Items bag.
 /// </summary>
 public interface IMappingOperationOptions<TSource, TDestination>
 {

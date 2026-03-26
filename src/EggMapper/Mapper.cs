@@ -101,10 +101,15 @@ public sealed class Mapper : IMapper
             }
 
             // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
-            // Delegate to MapInternal which does a base-type walk.
+            // Delegate to MapInternal which does a base-type walk + collection auto-mapping.
             var runtimeType = source!.GetType();
             if (runtimeType != typeof(TSource))
                 return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), null);
+
+            // Collection auto-mapping: Map<List<A>, List<B>>(list) uses registered element map A→B.
+            // No need for explicit CreateMap<List<A>, List<B>>().
+            if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
+                return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null);
         }
         catch (MappingException) { throw; }
         catch (MappingValidationException) { throw; }
@@ -146,6 +151,10 @@ public sealed class Mapper : IMapper
         var runtimeType = source!.GetType();
         if (runtimeType != typeof(TSource))
             return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), destination);
+
+        // Collection auto-mapping fallback: delegates to MapInternal which detects collection types.
+        if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
+            return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), destination);
 
         throw new InvalidOperationException(
             $"No mapping configured for {typeof(TSource).Name} -> {typeof(TDestination).Name}. " +
@@ -427,34 +436,15 @@ public sealed class Mapper : IMapper
         }
 
         // Collection auto-mapping: Map<IList<T>>(List<S>) → List<T> using registered element map S→T.
-        // Supports IList<T>, ICollection<T>, IEnumerable<T>, List<T> as destination types.
+        // CreateMap<A,B>() automatically enables Map<List<B>>(listOfA) — no explicit collection map needed.
+        // Supports List<>, IList<>, ICollection<>, IEnumerable<>, arrays as source/dest.
         if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
         {
             var destElemType = ReflectionHelper.GetCollectionElementType(destinationType);
             var srcElemType  = ReflectionHelper.GetCollectionElementType(sourceType);
             if (destElemType != null && srcElemType != null)
             {
-                var elemKey = new TypePair(srcElemType, destElemType);
-                if (!_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
-                {
-                    // Walk base types for collection element proxy/derived types
-                    for (var bt = srcElemType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
-                    {
-                        var bk = new TypePair(bt, destElemType);
-                        if (_config.FrozenMaps.TryGetValue(bk, out elemDel))
-                            break;
-                    }
-                    // Walk interfaces for collection element types
-                    if (elemDel == null)
-                    {
-                        foreach (var iface in srcElemType.GetInterfaces())
-                        {
-                            var ik = new TypePair(iface, destElemType);
-                            if (_config.FrozenMaps.TryGetValue(ik, out elemDel))
-                                break;
-                        }
-                    }
-                }
+                var elemDel = FindElementDelegate(srcElemType, destElemType);
                 if (elemDel != null)
                 {
                     var resultList = (IList)Activator.CreateInstance(
@@ -474,6 +464,46 @@ public sealed class Mapper : IMapper
         throw new InvalidOperationException(
             $"No mapping configured for {sourceType.Name} -> {destinationType.Name}. " +
             $"Call CreateMap<{sourceType.Name}, {destinationType.Name}>() in your mapper configuration.");
+    }
+
+    /// <summary>
+    /// Finds a boxed element mapping delegate for srcElemType→destElemType.
+    /// Checks FrozenMaps, then boxed wrappers of FrozenCtxFreeMaps, then open generics,
+    /// then base-type walk and interface walk (for EF Core proxies).
+    /// </summary>
+    private Func<object, object?, ResolutionContext, object>? FindElementDelegate(Type srcElemType, Type destElemType)
+    {
+        var elemKey = new TypePair(srcElemType, destElemType);
+
+        // 1. Direct lookup in FrozenMaps (covers both ctx-aware and boxed ctx-free delegates)
+        if (_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
+            return elemDel;
+
+        // 2. Open generic on-demand compilation (e.g., CreateMap(typeof(A<>), typeof(B<>)))
+        if (_config.TryGetOrCompileOpenGenericMap(elemKey, out var openDel, out _))
+            return openDel;
+
+        // 3. Base-type walk for EF Core proxy / derived element types
+        for (var bt = srcElemType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
+        {
+            var bk = new TypePair(bt, destElemType);
+            if (_config.FrozenMaps.TryGetValue(bk, out elemDel))
+                return elemDel;
+            if (_config.TryGetOrCompileOpenGenericMap(bk, out openDel, out _))
+                return openDel;
+        }
+
+        // 4. Interface walk for interface-based element mappings
+        foreach (var iface in srcElemType.GetInterfaces())
+        {
+            var ik = new TypePair(iface, destElemType);
+            if (_config.FrozenMaps.TryGetValue(ik, out elemDel))
+                return elemDel;
+            if (_config.TryGetOrCompileOpenGenericMap(ik, out openDel, out _))
+                return openDel;
+        }
+
+        return null;
     }
 
     // Generation is tied to MapperConfiguration, not Mapper instances.

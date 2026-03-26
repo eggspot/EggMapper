@@ -21,7 +21,7 @@ public interface IMapperConfigurationExpression
 
     /// <summary>
     /// Filter which properties should be mapped. Return false to skip a property.
-    /// Compatible with AutoMapper's ShouldMapProperty.
+    /// Filter predicate applied during configuration to skip unwanted properties.
     /// </summary>
     Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
 

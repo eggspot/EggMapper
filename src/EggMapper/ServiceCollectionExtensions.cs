@@ -11,7 +11,7 @@ public static class EggMapperServiceCollectionExtensions
         services.AddSingleton(config);
         // Transient: each injection gets a fresh Mapper with the caller's IServiceProvider.
         // This is critical for correct scoped service resolution in DI value resolvers
-        // (e.g., DbContext, IMediaAssetService) and matches AutoMapper's behavior.
+        // (e.g., DbContext, IMediaAssetService).
         // Mapper is lightweight (~32 bytes wrapping the singleton config) so per-injection
         // allocation cost is negligible.
         // Works correctly in all hosting models:

@@ -1625,7 +1625,7 @@ internal static class ExpressionBuilder
 
     /// <summary>
     /// Creates an empty collection matching the destination type. Used when source collection
-    /// is null — matches AutoMapper's default AllowNullCollections=false behavior.
+    /// is null — default AllowNullCollections=false behavior.
     /// </summary>
     private static object CreateEmptyCollection(Type destType)
     {

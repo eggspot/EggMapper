@@ -11,7 +11,7 @@ public interface IMapper
     /// <summary>
     /// Maps <paramref name="source"/> to <typeparamref name="TDestination"/> and then runs any
     /// AfterMap/BeforeMap callbacks registered in <paramref name="opts"/>.
-    /// Compatible with AutoMapper's single-type-arg call-site pattern:
+    /// Single-type-arg overload with per-call options:
     /// <c>mapper.Map&lt;TDest&gt;(src, opt =&gt; opt.AfterMap((s, d) =&gt; ...))</c>.
     /// The source parameter of the callback is typed as <c>object</c>; cast it if needed.
     /// </summary>
@@ -20,7 +20,7 @@ public interface IMapper
     /// <summary>
     /// Maps <paramref name="source"/> to <typeparamref name="TDestination"/> and then runs any
     /// AfterMap/BeforeMap callbacks registered in <paramref name="opts"/>.
-    /// Compatible with AutoMapper's two-type-arg call-site pattern:
+    /// Two-type-arg overload with per-call options:
     /// <c>mapper.Map&lt;TSource, TDest&gt;(src, opt =&gt; opt.AfterMap((s, d) =&gt; ...))</c>.
     /// </summary>
     TDestination Map<TSource, TDestination>(TSource source, Action<IMappingOperationOptions<TSource, TDestination>> opts);

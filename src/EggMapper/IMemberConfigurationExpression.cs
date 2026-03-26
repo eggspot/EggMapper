@@ -12,7 +12,7 @@ public interface IMemberConfigurationExpression<TSource, TDestination, TMember>
     void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, ResolutionContext, TSourceMember> mapFunction);
     /// <summary>
     /// Resolve the destination member from a source property by name.
-    /// Equivalent to AutoMapper's <c>MapFrom("SourcePropertyName")</c>.
+    /// String-based overload: <c>MapFrom("SourcePropertyName")</c>.
     /// </summary>
     void MapFrom(string sourceMemberName);
 
