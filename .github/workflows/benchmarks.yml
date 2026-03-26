@@ -83,7 +83,7 @@ jobs:
       - name: Update README with benchmark results
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || github.token }}
         run: |
           python3 scripts/update-readme-benchmarks.py \
             src/EggMapper.Benchmarks/BenchmarkDotNet.Artifacts \
@@ -111,15 +111,16 @@ jobs:
           git push origin "${BRANCH}"
 
           # Create PR and enable auto-merge
-          PR_URL=$(gh pr create \
+          if PR_URL=$(gh pr create \
             --title "chore: update benchmark results in README" \
             --body "Automated benchmark update from CI run #${{ github.run_number }}." \
             --head "${BRANCH}" \
-            --base main 2>&1) || echo "::warning::Failed to create PR — check PAT_TOKEN permissions."
-
-          if [ -n "$PR_URL" ]; then
+            --base main); then
             echo "Created PR: ${PR_URL}"
-            gh pr merge "${PR_URL}" --auto --squash --delete-branch || echo "::warning::Auto-merge not available — merge manually or enable auto-merge in repo settings."
+            gh pr merge "${PR_URL}" --auto --squash --delete-branch \
+              || echo "::warning::Auto-merge not available — merge manually."
+          else
+            echo "::warning::Failed to create PR — check token permissions."
           fi
 
       # ── Post detailed comment on PRs ───────────────────────────────────
