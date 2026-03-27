@@ -110,6 +110,19 @@ public sealed class Mapper : IMapper
             // No need for explicit CreateMap<List<A>, List<B>>().
             if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
                 return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null);
+
+            // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
+            if (_config.TryGetOrCompileSameTypeMap(key, out var sameBoxed, out var sameCtxFree))
+            {
+                if (sameCtxFree != null)
+                {
+                    var typed = (Func<TSource, TDestination, TDestination>)sameCtxFree;
+                    FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                    return typed(source, default!);
+                }
+                var ctx = GetContext();
+                return (TDestination)sameBoxed!(source!, null, ctx);
+            }
         }
         catch (MappingException) { throw; }
         catch (MappingValidationException) { throw; }
@@ -476,6 +489,14 @@ public sealed class Mapper : IMapper
             }
         }
 
+        // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
+        var sameKey = new TypePair(sourceType, destinationType);
+        if (_config.TryGetOrCompileSameTypeMap(sameKey, out var sameBoxed, out _))
+        {
+            var ctx = GetContext(items);
+            return sameBoxed!(source, destination, ctx);
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {TypeNameHelper.Pair(sourceType, destinationType)}. " +
             $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
@@ -517,6 +538,10 @@ public sealed class Mapper : IMapper
             if (_config.TryGetOrCompileOpenGenericMap(ik, out openDel, out _))
                 return openDel;
         }
+
+        // 5. Same-type auto-mapping for collection elements
+        if (_config.TryGetOrCompileSameTypeMap(elemKey, out var sameDel, out _))
+            return sameDel;
 
         return null;
     }

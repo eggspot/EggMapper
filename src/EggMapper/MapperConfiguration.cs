@@ -60,6 +60,10 @@ public sealed class MapperConfiguration
     private readonly ConcurrentDictionary<TypePair, Delegate> _runtimeListMaps  = new();
     private readonly ConcurrentDictionary<TypePair, Delegate> _runtimePatchMaps = new();
 
+    // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
+    // Compiled on first use and cached. Property-copy via expression tree.
+    private readonly ConcurrentDictionary<TypePair, OpenGenericEntry> _runtimeSameTypeMaps = new();
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         Generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
@@ -222,6 +226,59 @@ public sealed class MapperConfiguration
         var del = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap);
         if (del == null) return null;
         return _runtimePatchMaps.GetOrAdd(key, del);
+    }
+
+    /// <summary>
+    /// Auto-compiles a same-type mapping (T → T) on first use.
+    /// Creates a synthetic TypeMap and compiles it like any explicit CreateMap.
+    /// </summary>
+    internal bool TryGetOrCompileSameTypeMap(TypePair key,
+        out Func<object, object?, ResolutionContext, object>? boxedDel,
+        out Delegate? ctxFreeDel)
+    {
+        if (_runtimeSameTypeMaps.TryGetValue(key, out var cached))
+        {
+            boxedDel   = cached.Boxed;
+            ctxFreeDel = cached.CtxFree;
+            return true;
+        }
+
+        boxedDel   = null;
+        ctxFreeDel = null;
+
+        // Only auto-map when source == dest type, not a primitive/string/collection
+        var type = key.SourceType;
+        if (type != key.DestinationType) return false;
+        if (type.IsPrimitive || type == typeof(string) || type.IsEnum) return false;
+        if (type.IsValueType) return false;
+        if (Internal.ReflectionHelper.IsCollectionType(type)) return false;
+        if (Internal.ReflectionHelper.IsDictionaryType(type)) return false;
+
+        var entry = _runtimeSameTypeMaps.GetOrAdd(key, k =>
+        {
+            var syntheticMap = new TypeMap
+            {
+                SourceType = type,
+                DestinationType = type,
+                ShouldMapProperty = ShouldMapProperty
+            };
+
+            var ctxFree = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(
+                syntheticMap, _typeMaps, _globalConverters);
+            if (ctxFree != null)
+            {
+                var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(type, type, ctxFree);
+                return new OpenGenericEntry(boxed, ctxFree);
+            }
+
+            var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
+                syntheticMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
+            return new OpenGenericEntry(compiled, null);
+        });
+
+        boxedDel   = entry.Boxed;
+        ctxFreeDel = entry.CtxFree;
+        return true;
     }
 
     /// <summary>
