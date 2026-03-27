@@ -111,6 +111,17 @@ public sealed class Mapper : IMapper
             if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
                 return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null);
 
+            // Nullable<T> boxing fallback: .NET boxes Nullable<T> as T.
+            if (typeof(TSource).IsValueType && Nullable.GetUnderlyingType(typeof(TSource)) == null)
+            {
+                var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(typeof(TSource)), typeof(TDestination));
+                if (_config.FrozenMaps.TryGetValue(nullableKey, out var nullableDel))
+                {
+                    var ctx = GetContext();
+                    return (TDestination)nullableDel(source!, null, ctx);
+                }
+            }
+
             // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
             if (_config.TryGetOrCompileSameTypeMap(key, out var sameBoxed, out var sameCtxFree))
             {
@@ -428,6 +439,19 @@ public sealed class Mapper : IMapper
             return del(source, destination, ctx);
         }
 
+        // Nullable<T> boxing: .NET boxes Nullable<T> as T, stripping the wrapper.
+        // If CreateMap<T?, U>() was registered, the key uses Nullable<T> but source.GetType() returns T.
+        // Try Nullable<sourceType> as fallback.
+        if (sourceType.IsValueType && Nullable.GetUnderlyingType(sourceType) == null)
+        {
+            var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(sourceType), destinationType);
+            if (_config.FrozenMaps.TryGetValue(nullableKey, out del))
+            {
+                var ctx = GetContext(items);
+                return del(source, destination, ctx);
+            }
+        }
+
         // Open generic on-demand compilation
         if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
         {
@@ -539,7 +563,17 @@ public sealed class Mapper : IMapper
                 return openDel;
         }
 
-        // 5. Same-type auto-mapping for collection elements
+        // 5. Nullable<T> boxing fallback for collection elements
+        if (srcElemType.IsValueType && Nullable.GetUnderlyingType(srcElemType) == null)
+        {
+            var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(srcElemType), destElemType);
+            if (_config.FrozenMaps.TryGetValue(nullableKey, out elemDel))
+                return elemDel;
+            if (_config.TryGetOrCompileOpenGenericMap(nullableKey, out openDel, out _))
+                return openDel;
+        }
+
+        // 6. Same-type auto-mapping for collection elements
         if (_config.TryGetOrCompileSameTypeMap(elemKey, out var sameDel, out _))
             return sameDel;
 

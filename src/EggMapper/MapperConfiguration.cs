@@ -246,11 +246,13 @@ public sealed class MapperConfiguration
         boxedDel   = null;
         ctxFreeDel = null;
 
-        // Only auto-map when source == dest type, not a primitive/string/collection
+        // Only auto-map when source == dest type, concrete class with parameterless ctor
         var type = key.SourceType;
         if (type != key.DestinationType) return false;
         if (type.IsPrimitive || type == typeof(string) || type.IsEnum) return false;
         if (type.IsValueType) return false;
+        if (type.IsAbstract || type.IsInterface) return false;
+        if (type.GetConstructor(Type.EmptyTypes) == null) return false;
         if (Internal.ReflectionHelper.IsCollectionType(type)) return false;
         if (Internal.ReflectionHelper.IsDictionaryType(type)) return false;
 
