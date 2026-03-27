@@ -2137,7 +2137,7 @@ internal static class ExpressionBuilder
                     if (fullCondition != null && !fullCondition(src, dest)) return;
 
                     var srcVal = getter(src);
-                    if (hasNullSub && srcVal == null) { setter(dest, nullSub); return; }
+                    if (srcVal == null) { if (hasNullSub) setter(dest, nullSub); return; }
 
                     if (capturedMaps.TryGetValue(typePair, out var nestedDel))
                     {

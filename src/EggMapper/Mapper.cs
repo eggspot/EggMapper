@@ -84,7 +84,7 @@ public sealed class Mapper : IMapper
             if (_config.FrozenMaps.TryGetValue(key, out var del))
             {
                 var ctx = GetContext();
-                return (TDestination)del(source, null, ctx);
+                return (TDestination)del(source!, null, ctx);
             }
 
             // Open generic on-demand compilation
@@ -97,7 +97,7 @@ public sealed class Mapper : IMapper
                     return typed(source, default!);
                 }
                 var ctx = GetContext();
-                return (TDestination)openBoxed!(source, null, ctx);
+                return (TDestination)openBoxed!(source!, null, ctx);
             }
 
             // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
