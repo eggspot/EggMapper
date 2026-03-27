@@ -8,7 +8,7 @@ namespace EggMapper.UnitTests;
 public class ThreadSafetyTests
 {
     [Fact]
-    public void ConcurrentMapping_SameMapper_ProducesCorrectResults()
+    public async Task ConcurrentMapping_SameMapper_ProducesCorrectResults()
     {
         var config = new MapperConfiguration(cfg =>
         {
@@ -49,12 +49,12 @@ public class ThreadSafetyTests
             });
         }
 
-        Task.WaitAll(tasks);
+        await Task.WhenAll(tasks);
         errors.Should().BeEmpty();
     }
 
     [Fact]
-    public void ConcurrentMapping_NestedObjects_ProducesCorrectResults()
+    public async Task ConcurrentMapping_NestedObjects_ProducesCorrectResults()
     {
         var config = new MapperConfiguration(cfg =>
         {
@@ -97,12 +97,12 @@ public class ThreadSafetyTests
             });
         }
 
-        Task.WaitAll(tasks);
+        await Task.WhenAll(tasks);
         errors.Should().BeEmpty();
     }
 
     [Fact]
-    public void ConcurrentMapList_ProducesCorrectResults()
+    public async Task ConcurrentMapList_ProducesCorrectResults()
     {
         var config = new MapperConfiguration(cfg => cfg.CreateMap<FlatSource, FlatDest>());
         var mapper = config.CreateMapper();
@@ -138,7 +138,7 @@ public class ThreadSafetyTests
             });
         }
 
-        Task.WaitAll(tasks);
+        await Task.WhenAll(tasks);
         errors.Should().BeEmpty();
     }
 }

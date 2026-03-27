@@ -67,8 +67,8 @@ public class OpenGenericMapTests
         var result = mapper.Map<ApiResponse<OgOrder>, ApiResponseDto<OgOrderDto>>(source);
         result.StatusCode.Should().Be(200);
         result.Message.Should().Be("OK");
-        result.Data.Id.Should().Be(7);
-        result.Data.Name.Should().Be("Eggs");
+        result.Data!.Id.Should().Be(7);
+        result.Data!.Name.Should().Be("Eggs");
     }
 
     [Fact]
@@ -88,8 +88,8 @@ public class OpenGenericMapTests
         // Second call — should hit FastCache
         var r2 = mapper.Map<ApiResponse<OgOrder>, ApiResponseDto<OgOrderDto>>(source);
 
-        r1.Data.Id.Should().Be(1);
-        r2.Data.Id.Should().Be(1);
+        r1.Data!.Id.Should().Be(1);
+        r2.Data!.Id.Should().Be(1);
     }
 
     [Fact]
@@ -127,8 +127,8 @@ public class OpenGenericMapTests
         var orderResult  = mapper.Map<Box<OgOrder>, BoxDto<OgOrderDto>>(orderBox);
         var sourceResult = mapper.Map<Box<OgSource>, BoxDto<OgDest>>(sourceBox);
 
-        orderResult.Value.Id.Should().Be(5);
-        sourceResult.Value.Name.Should().Be("Src");
+        orderResult.Value!.Id.Should().Be(5);
+        sourceResult.Value!.Name.Should().Be("Src");
     }
 
     [Fact]
@@ -149,8 +149,8 @@ public class OpenGenericMapTests
 
         var result = mapper.MapList<ApiResponse<OgOrder>, ApiResponseDto<OgOrderDto>>(list);
         result.Should().HaveCount(2);
-        result[0].Data.Id.Should().Be(1);
-        result[1].Data.Name.Should().Be("B");
+        result[0].Data!.Id.Should().Be(1);
+        result[1].Data!.Name.Should().Be("B");
     }
 
     [Fact]
