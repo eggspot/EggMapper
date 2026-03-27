@@ -428,6 +428,19 @@ public sealed class Mapper : IMapper
             return del(source, destination, ctx);
         }
 
+        // Nullable<T> boxing: .NET boxes Nullable<T> as T, stripping the wrapper.
+        // If CreateMap<T?, U>() was registered, the key uses Nullable<T> but source.GetType() returns T.
+        // Try Nullable<sourceType> as fallback.
+        if (sourceType.IsValueType)
+        {
+            var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(sourceType), destinationType);
+            if (_config.FrozenMaps.TryGetValue(nullableKey, out del))
+            {
+                var ctx = GetContext(items);
+                return del(source, destination, ctx);
+            }
+        }
+
         // Open generic on-demand compilation
         if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
         {
