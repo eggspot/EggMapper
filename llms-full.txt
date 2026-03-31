@@ -146,10 +146,26 @@ CreateMap<Product, ProductDto>()
 ### IQueryable Projection (EF Core)
 
 ```csharp
-// In a repository or service
+// In a repository or service — expression tree passed to EF Core, translated to SQL
 var dtos = await dbContext.Products
-    .ProjectTo<ProductDto>(mapperConfig)
+    .Where(p => p.IsActive)
+    .ProjectTo<Product, ProductDto>(mapperConfig)
     .ToListAsync();
+
+// Equivalent to: .Select(p => new ProductDto { Name = p.Name, ... })
+// No in-memory mapping — all done in SQL
+```
+
+### Same-Type Auto-Mapping (T → T)
+
+```csharp
+// No CreateMap<T, T>() needed — works automatically for cloning/copying
+var copy = mapper.Map<Customer, Customer>(customer);
+copy.Id == customer.Id     // true — all properties copied
+copy != customer           // true — new instance
+
+// Also works through collections
+var copies = mapper.Map<List<Order>>(orders);
 ```
 
 ### ConvertUsing (Custom Type Converter)
@@ -200,6 +216,35 @@ var result = mapper.Map<List<ProductDto>>(products, opt =>
 });
 ```
 
+### Collection Auto-Mapping
+
+```csharp
+// No CreateMap<List<A>, List<B>>() needed — just register the element map
+cfg.CreateMap<Order, OrderDto>();
+
+// All these work automatically:
+mapper.Map<List<OrderDto>>(orders);                    // Map<TDest>(object)
+mapper.Map<List<Order>, List<OrderDto>>(orders);       // Map<TSrc, TDest>
+mapper.Map<IEnumerable<OrderDto>>(orders);             // interface dest
+mapper.Map<IList<OrderDto>>(orders);                   // IList dest
+```
+
+## Migration Cheat Sheet (AutoMapper → EggMapper)
+
+| AutoMapper | EggMapper | Notes |
+|-----------|-----------|-------|
+| `using AutoMapper;` | `using EggMapper;` | |
+| `services.AddAutoMapper(asm)` | `services.AddEggMapper(asm)` | |
+| `mapper.Map<Dest>(src)` | `mapper.Map<Dest>(src)` | Same API |
+| `mapper.Map<S, D>(src)` | `mapper.Map<S, D>(src)` | Same API |
+| `mapper.Map(src, dest)` | `mapper.Map(src, dest)` | Same API |
+| `.ProjectTo<Dest>(config)` | `.ProjectTo<Src, Dest>(config)` | Two type args |
+| `mapper.Map<List<D>>(list)` | `mapper.Map<List<D>>(list)` | Auto-maps elements |
+| `mapper.Map<T, T>(obj)` | `mapper.Map<T, T>(obj)` | No CreateMap needed |
+| `ForMember(...)` | `ForMember(...)` | Same API |
+| `ReverseMap()` | `ReverseMap()` | Same API |
+| `Profile` | `Profile` | Same base class |
+
 ## Key Differences from AutoMapper
 
 | Feature | AutoMapper | EggMapper |
@@ -211,4 +256,7 @@ var result = mapper.Map<List<ProductDto>>(products, opt =>
 | API compatibility | Original | Same API, drop-in replacement |
 | DI registration | AddAutoMapper() | AddEggMapper() |
 | EF Core proxies | Handled | Handled (base-type + interface walk) |
+| ProjectTo | `ProjectTo<Dest>(cfg)` | `ProjectTo<Src, Dest>(cfg)` |
+| Same-type T→T | Needs CreateMap | Auto-compiles on first use |
+| Null collections | Empty by default | Empty by default |
 | Source generator | No | No (runtime, but near source-gen speed) |
