@@ -6,7 +6,7 @@ nav_order: 1
 description: "EggMapper.Generator — compile-time extension methods with [MapTo] attribute."
 ---
 
-# Getting Started: Tier 2 — Compile-Time Extension Methods (`[MapTo]`)
+# Attribute Mapper (`[MapTo]`)
 
 `EggMapper.Generator` generates **zero-reflection, zero-allocation extension methods** at build time from a single `[MapTo]` attribute.  No `MapperConfiguration`, no runtime delegates — the mapping code is emitted directly into your binary.
 
@@ -130,11 +130,11 @@ The generated `ToOrderDto()` calls `AfterMap(source, dest)` after building the o
 
 ---
 
-## When to Use Tier 2 vs Runtime EggMapper
+## When to Use Attribute Mapper vs Runtime EggMapper
 
 | Scenario | Recommendation |
 |----------|---------------|
-| Simple 1:1 property copying, no custom logic | **Tier 2** — zero overhead, compile-time safety |
+| Simple 1:1 property copying, no custom logic | **Attribute Mapper** — zero overhead, compile-time safety |
 | Complex conditional mapping, `BeforeMap`/`AfterMap` hooks | **Runtime EggMapper** |
 | Need `ForMember`, `ConvertUsing`, `MaxDepth` | **Runtime EggMapper** |
-| Want type errors at build time, not runtime | **Tier 2** |
+| Want type errors at build time, not runtime | **Attribute Mapper** |

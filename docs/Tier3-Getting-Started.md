@@ -6,7 +6,7 @@ nav_order: 2
 description: "EggMapper.ClassMapper — partial class mapper generation with [EggMapper] attribute."
 ---
 
-# Getting Started: Tier 3 — Mapper Class Generation (`[EggMapper]`)
+# Class Mapper (`[EggMapper]`)
 
 `EggMapper.ClassMapper` generates implementations for **partial mapping methods** you declare in a class.  You get full IDE auto-complete, type-checked mapping, and the ability to add custom logic alongside the generated code — all at zero runtime cost.
 
@@ -159,9 +159,9 @@ public partial class StatusMapper
 
 ---
 
-## When to Use Tier 3 vs Tier 2
+## When to Use Class Mapper vs Attribute Mapper
 
-| Feature | Tier 2 `[MapTo]` | Tier 3 `[EggMapper]` |
+| Feature | Attribute Mapper `[MapTo]` | Class Mapper `[EggMapper]` |
 |---------|-----------------|---------------------|
 | Simple property copy | ✅ | ✅ |
 | Reverse mapping | ❌ | ✅ |
