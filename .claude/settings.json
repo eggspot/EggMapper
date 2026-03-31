@@ -1,1 +1,7 @@
-{}
+{
+  "permissions": {
+    "additionalDirectories": [
+      "d:\\Work\\eg\\product\\src\\EggMapper\\.claude"
+    ]
+  }
+}
