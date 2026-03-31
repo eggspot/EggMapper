@@ -1,4 +1,10 @@
-# Migration Guide: Runtime → Compile-Time Mapping
+---
+layout: default
+title: Migration Guide
+nav_order: 8
+---
+
+# Migration Guide: Runtime to Compile-Time Mapping
 
 EggMapper supports **three tiers** of mapping.  This guide walks through migrating from the runtime API (Tier 1 style) to the compile-time generators (Tier 2 and Tier 3).
 

@@ -1,21 +1,31 @@
 ---
 layout: default
-title: EggMapper
+title: Home
+nav_order: 1
+description: "EggMapper — fastest .NET object mapper. Free AutoMapper alternative, 2-5x faster, MIT licensed."
+permalink: /
 ---
 
 # EggMapper
+{: .fs-9 }
 
-**Fastest .NET runtime object-to-object mapper.** Drop-in replacement for AutoMapper — same API, 2-5x faster, MIT licensed.
+Fastest .NET runtime object-to-object mapper. Drop-in AutoMapper replacement — same API, 2-5x faster, MIT licensed.
+{: .fs-6 .fw-300 }
+
+[Get Started](quick-start){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[View on GitHub](https://github.com/eggspot/EggMapper){: .btn .fs-5 .mb-4 .mb-md-0 }
+
+---
 
 ## Why EggMapper?
 
-| | AutoMapper | EggMapper |
+| | AutoMapper | **EggMapper** |
 |---|-----------|-----------|
-| **License** | Commercial (v13+) | MIT (free forever) |
-| **Performance** | Baseline | 2-5x faster |
-| **Allocations** | Extra per-map | Zero extra |
-| **Runtime reflection** | Yes | No (compiled expressions) |
-| **API** | Original | Same API, drop-in |
+| License | Commercial (v13+) | **MIT (free forever)** |
+| Performance | Baseline | **2-5x faster** |
+| Allocations | Extra per-map | **Zero extra** |
+| Runtime reflection | Yes | **No** (compiled expressions) |
+| API | Original | **Same API, drop-in** |
 
 ## Install
 
@@ -44,22 +54,12 @@ var dto = mapper.Map<CustomerDto>(customer);
 - **Zero runtime reflection** — all delegates compiled as expression trees
 - **Zero extra allocations** — matches hand-written mapping code
 - **Collection auto-mapping** — `Map<List<B>>(listOfA)` works with just `CreateMap<A,B>()`
-- **Same-type auto-mapping** — `Map<T,T>(obj)` creates a copy without any configuration
+- **Same-type auto-mapping** — `Map<T,T>(obj)` creates a copy without configuration
 - **EF Core ProjectTo** — `query.ProjectTo<Src, Dest>(config)` translates to SQL
 - **DI integration** — `services.AddEggMapper(assembly)` with scoped IServiceProvider
 - **EF Core proxy support** — base-type + interface walk for lazy-loading proxies
-
-## Documentation
-
-- [Quick Start](quick-start) — Install, DI, Profiles, Collections
-- [Getting Started](Getting-Started) — Detailed walkthrough
-- [Configuration](Configuration) — MapperConfiguration, Profiles, Validation
-- [API Reference](API-Reference) — All Map overloads, ForMember options
-- [Advanced Features](Advanced-Features) — ProjectTo, Open Generics, Inheritance, Hooks
-- [Dependency Injection](Dependency-Injection) — ASP.NET, Blazor, gRPC, Windows Service
-- [Profiles](Profiles) — Organizing mappings into profile classes
-- [Migration Guide](Migration-Guide) — Runtime to Compile-Time tiers
-- [Performance](Performance) — Benchmark results vs all competitors
+- **Patch mapping** — partial updates with `Patch<S,D>(source, dest)`
+- **Open generics** — `CreateMap(typeof(Result<>), typeof(ResultDto<>))`
 
 ## Links
 

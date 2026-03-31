@@ -1,3 +1,9 @@
+---
+layout: default
+title: Advanced Features
+nav_order: 5
+---
+
 # Advanced Features
 
 ## `ForMember` — Custom Member Mapping

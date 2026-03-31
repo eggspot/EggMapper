@@ -1,3 +1,9 @@
+---
+layout: default
+title: Dependency Injection
+nav_order: 7
+---
+
 # Dependency Injection
 
 DI support is built into the main `EggMapper` package — no separate package needed.
