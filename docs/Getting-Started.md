@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Getting Started
-nav_exclude: true
+nav_order: 11
 description: "Getting started with EggMapper — install, define types, configure, map."
 ---
 

@@ -1,8 +1,7 @@
 ---
 layout: default
 title: Configuration
-parent: Guide
-nav_order: 1
+nav_order: 9
 description: "EggMapper configuration — MapperConfiguration, CreateMap, validation, thread safety."
 ---
 

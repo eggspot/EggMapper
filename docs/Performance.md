@@ -1,8 +1,7 @@
 ---
 layout: default
 title: Performance
-parent: Guide
-nav_order: 5
+nav_order: 6
 description: "EggMapper performance — benchmarks, allocation analysis, optimization techniques, and tuning tips."
 ---
 

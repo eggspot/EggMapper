@@ -1,8 +1,7 @@
 ---
 layout: default
 title: Advanced Features
-parent: Guide
-nav_order: 4
+nav_order: 5
 description: "Advanced EggMapper features — ForMember, conditions, hooks, ProjectTo, patch mapping, validation, open generics."
 ---
 
