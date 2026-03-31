@@ -32,6 +32,8 @@ dotnet add package EggMapper
 ### Minimal API
 
 ```csharp
+using EggMapper;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Register EggMapper — scans for all Profile subclasses
@@ -85,6 +87,8 @@ app.Run();
 
 ```csharp
 // Program.cs
+using EggMapper;
+
 builder.Services.AddControllers();
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
 
@@ -132,6 +136,8 @@ public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 
 ```csharp
 // Program.cs
+using EggMapper;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
@@ -172,6 +178,8 @@ builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);
 
 ```csharp
 // Program.cs (client-side)
+using EggMapper;
+
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 
@@ -207,6 +215,8 @@ public class ProductService(HttpClient http, IMapper mapper)
 
 ```csharp
 // Program.cs
+using EggMapper;
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddGrpc();
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
@@ -256,6 +266,8 @@ public class OrderGrpcService(IMapper mapper, AppDbContext db)
 
 ```csharp
 // Program.cs
+using EggMapper;
+
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>();
@@ -316,6 +328,8 @@ builder.Services.AddEggMapper(
 ### Inline configuration (no profiles needed)
 
 ```csharp
+using EggMapper;
+
 builder.Services.AddEggMapper(cfg =>
 {
     cfg.CreateMap<Order, OrderDto>();

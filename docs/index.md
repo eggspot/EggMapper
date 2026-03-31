@@ -9,11 +9,15 @@ permalink: /
 # EggMapper
 {: .fs-9 }
 
-Fastest .NET runtime object-to-object mapper. Drop-in AutoMapper replacement — same API, 2-5x faster, MIT licensed.
+The fastest .NET runtime object mapper. Drop-in AutoMapper replacement — same API, 2-5x faster, zero allocations, MIT licensed.
 {: .fs-6 .fw-300 }
 
-[Get Started](quick-start){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+AutoMapper went commercial. You need a free, faster alternative. EggMapper is that alternative — swap the NuGet package, change one `using`, and your app gets 2-5x faster mapping with zero code changes.
+{: .fs-5 .fw-300 }
+
+[Get Started in 30 Seconds](quick-start){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub](https://github.com/eggspot/EggMapper){: .btn .fs-5 .mb-4 .mb-md-0 }
+[Migration from AutoMapper](vs-automapper){: .btn .btn-outline .fs-5 .mb-4 .mb-md-0 }
 
 ---
 
@@ -21,11 +25,11 @@ Fastest .NET runtime object-to-object mapper. Drop-in AutoMapper replacement —
 
 | | AutoMapper | **EggMapper** |
 |---|-----------|-----------|
-| License | Commercial (v13+) | **MIT (free forever)** |
-| Performance | Baseline | **2-5x faster** |
-| Allocations | Extra per-map | **Zero extra** |
-| Runtime reflection | Yes | **No** (compiled expressions) |
-| API | Original | **Same API, drop-in** |
+| **License** | Commercial RPL (v13+) | **MIT (free forever)** |
+| **Performance** | Baseline | **2-5x faster** |
+| **Allocations** | Extra per-map | **Zero extra** |
+| **Runtime reflection** | Yes | **No** (compiled expressions) |
+| **API** | Original | **Same API, drop-in** |
 
 ## Install
 
@@ -53,35 +57,9 @@ var dto = mapper.Map<CustomerDto>(customer);
 ## Real-World Example: EF Core Entity to API Response
 
 ```csharp
-// Entities
-public class Order
-{
-    public int Id { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public decimal Total { get; set; }
-    public Customer Customer { get; set; } = null!;
-    public List<OrderLine> Lines { get; set; } = [];
-}
+using EggMapper;
 
-public class OrderLine
-{
-    public int ProductId { get; set; }
-    public string ProductName { get; set; } = "";
-    public int Quantity { get; set; }
-    public decimal UnitPrice { get; set; }
-}
-
-// DTOs
-public record OrderResponse(
-    int Id,
-    DateTime CreatedAt,
-    decimal Total,
-    string CustomerName,
-    List<OrderLineResponse> Lines);
-
-public record OrderLineResponse(int ProductId, string ProductName, int Quantity, decimal UnitPrice);
-
-// Profile
+// Profile — group related maps
 public class OrderProfile : Profile
 {
     public OrderProfile()
@@ -93,7 +71,7 @@ public class OrderProfile : Profile
     }
 }
 
-// Usage in a minimal API endpoint
+// Minimal API endpoint
 app.MapGet("/orders/{id}", async (int id, AppDbContext db, IMapper mapper) =>
 {
     var order = await db.Orders
@@ -109,19 +87,17 @@ app.MapGet("/orders/{id}", async (int id, AppDbContext db, IMapper mapper) =>
 
 ## Key Features
 
-- **Same API as AutoMapper** — CreateMap, ForMember, Profile, IMapper
-- **Zero runtime reflection** — all delegates compiled as expression trees
-- **Zero extra allocations** — matches hand-written mapping code
-- **Collection auto-mapping** — `Map<List<B>>(listOfA)` works with just `CreateMap<A,B>()`
-- **Batch collection mapping** — `MapList<A,B>(list)` uses a fully inlined compiled loop
-- **Same-type auto-mapping** — `Map<T,T>(obj)` creates a deep copy without configuration
-- **EF Core ProjectTo** — `query.ProjectTo<Src, Dest>(config)` translates to SQL
-- **Patch mapping** — partial updates with `Patch<S,D>(source, dest)`
-- **DI integration** — `services.AddEggMapper(assembly)` one-line setup
-- **EF Core proxy support** — base-type + interface walk for lazy-loading proxies
-- **Open generics** — `CreateMap(typeof(Result<>), typeof(ResultDto<>))`
-- **Inline validation** — `.Validate(d => d.Email, e => e.Contains("@"), "Invalid")`
-- **Constructor & record mapping** — auto-selects best-matching constructor
+| Category | Feature |
+|----------|---------|
+| **API** | Same as AutoMapper — `CreateMap`, `ForMember`, `Profile`, `IMapper` |
+| **Performance** | Zero runtime reflection, zero extra allocations, compiled expression trees |
+| **Collections** | Auto-mapping `Map<List<B>>(listOfA)` + batch `MapList<A,B>()` with inlined loop |
+| **EF Core** | `ProjectTo<S,D>(config)` translates to SQL; proxy support for lazy-loading |
+| **Cloning** | `Map<T,T>(obj)` creates a deep copy without configuration |
+| **Patch** | `Patch<S,D>(source, dest)` for partial updates |
+| **DI** | One-line setup: `services.AddEggMapper(assembly)` |
+| **Advanced** | Open generics, inline validation, constructor and record mapping |
+| **Code Gen** | Optional source generators (`[MapTo]`, `[EggMapper]`) for compile-time mapping |
 
 ## Links
 

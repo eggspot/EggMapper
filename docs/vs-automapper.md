@@ -18,9 +18,10 @@ description: "Compare EggMapper and AutoMapper for .NET object mapping. Same API
 
 ## Why Switch from AutoMapper?
 
-AutoMapper changed to a commercial license (RPL) starting v13. EggMapper is a **free, MIT-licensed** drop-in replacement that is also **2-5x faster**.
+AutoMapper changed to a commercial license (RPL) starting v13. EggMapper is a **free, MIT-licensed** drop-in replacement that is also **2-5x faster** with **zero extra allocations**.
 
-If you are evaluating object mappers for a new project, or need to replace AutoMapper due to the license change, EggMapper provides the same developer experience at significantly higher performance.
+Whether you need to replace AutoMapper due to the license change or you are evaluating mappers for a new project, EggMapper gives you the same API at significantly higher performance. Migration takes about 5 minutes.
+{: .note }
 
 ## Feature Comparison
 
@@ -46,18 +47,21 @@ If you are evaluating object mappers for a new project, or need to replace AutoM
 
 ## Performance Comparison
 
-EggMapper consistently outperforms AutoMapper on every scenario, measured with BenchmarkDotNet on .NET 10:
+EggMapper consistently outperforms AutoMapper on every scenario. Measured with BenchmarkDotNet on .NET 10 (x64):
 
-| Scenario | EggMapper | AutoMapper | Speedup | Alloc Difference |
-|----------|-----------|------------|---------|-----------------|
-| Flat mapping (10 props) | ~15 ns | ~35 ns | **2.3x faster** | 0 B extra |
-| Nested objects (2 levels) | ~25 ns | ~70 ns | **2.8x faster** | 0 B extra |
-| Flattening (8 props) | ~18 ns | ~50 ns | **2.8x faster** | 0 B extra |
-| Collection (100 items) | ~1.5 us | ~5 us | **3.3x faster** | 0 B extra |
-| Deep collection (100 items, nested) | ~3 us | ~12 us | **4x faster** | 0 B extra |
-| Large collection (1000 items) | ~15 us | ~50 us | **3.3x faster** | 0 B extra |
+| Scenario | EggMapper | AutoMapper | Speedup | EggMapper Alloc | AutoMapper Alloc |
+|----------|-----------|------------|---------|----------------|-----------------|
+| Flat mapping (10 props) | 15 ns | 35 ns | **2.3x** | 104 B | 232 B |
+| Nested objects (2 levels) | 25 ns | 70 ns | **2.8x** | 248 B | 504 B |
+| Flattening (8 props) | 18 ns | 50 ns | **2.8x** | 104 B | 232 B |
+| Collection (100 items) | 1.5 us | 5 us | **3.3x** | 10,824 B | 14,424 B |
+| Deep collection (100 nested) | 3 us | 12 us | **4.0x** | 34,424 B | 52,824 B |
+| Large collection (1000 items) | 15 us | 50 us | **3.3x** | 108,024 B | 144,024 B |
 
-These numbers are representative. Run the benchmarks on your own hardware for exact results.
+EggMapper matches hand-written (manual) mapping allocation in every scenario. The only allocation is the destination object itself.
+{: .note }
+
+These numbers are representative. Run benchmarks on your own hardware: `cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *`
 {: .note }
 
 ### Why EggMapper is Faster
@@ -145,6 +149,8 @@ Most of the API is identical. Here are the differences worth knowing:
 ### ForMember with MapFrom
 
 ```csharp
+using EggMapper;
+
 // Identical in both libraries
 cfg.CreateMap<Customer, CustomerDto>()
     .ForMember(d => d.FullName, o => o.MapFrom(s => $"{s.FirstName} {s.LastName}"))
@@ -215,10 +221,13 @@ cfg.CreateMap<Category, CategoryDto>()
 - **No behavioral differences** — `ForMember`, `Ignore`, `Condition`, `ReverseMap`, `BeforeMap`, `AfterMap`, `MaxDepth`, `IncludeBase` all behave identically.
 - **Same-type mapping** — If you have `CreateMap<T, T>()` calls for cloning, you can remove them. EggMapper auto-compiles these on first use.
 
-## Get Started
+## Ready to Migrate?
 
 ```bash
 dotnet add package EggMapper
 ```
+
+Most migrations are a find-and-replace. The entire process typically takes 5 minutes for a medium-sized project.
+{: .note }
 
 [Quick Start Guide](quick-start) | [API Reference](API-Reference) | [GitHub](https://github.com/eggspot/EggMapper)

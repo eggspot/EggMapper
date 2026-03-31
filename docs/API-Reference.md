@@ -39,6 +39,8 @@ Compiles all registered type maps into cached delegates during construction. Thi
 **Example:**
 
 ```csharp
+using EggMapper;
+
 var config = new MapperConfiguration(cfg =>
 {
     cfg.CreateMap<Order, OrderDto>()
@@ -184,6 +186,8 @@ Fluent interface passed to the `MapperConfiguration` constructor callback.
 **`CreateMap<TSrc, TDst>()` example:**
 
 ```csharp
+using EggMapper;
+
 var config = new MapperConfiguration(cfg =>
 {
     cfg.CreateMap<Customer, CustomerDto>();
@@ -194,6 +198,8 @@ var config = new MapperConfiguration(cfg =>
 **`CreateMap(Type, Type)` — open generics:**
 
 ```csharp
+using EggMapper;
+
 var config = new MapperConfiguration(cfg =>
 {
     // Maps Result<T> to ResultDto<T> for any T
@@ -351,6 +357,8 @@ Call `CreateMap<TSrc, TDst>()` inside your constructor to register maps. The API
 **Example — real-world profile:**
 
 ```csharp
+using EggMapper;
+
 public class ECommerceProfile : Profile
 {
     public ECommerceProfile()
@@ -495,12 +503,16 @@ var page = await dbContext.Orders
 **Assembly scanning:**
 
 ```csharp
+using EggMapper;
+
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
 ```
 
 **Inline configuration:**
 
 ```csharp
+using EggMapper;
+
 builder.Services.AddEggMapper(cfg =>
 {
     cfg.CreateMap<Order, OrderDto>();

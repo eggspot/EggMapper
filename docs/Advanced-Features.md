@@ -22,6 +22,8 @@ description: "Advanced EggMapper features — ForMember, conditions, hooks, Proj
 Override the default convention for any destination property:
 
 ```csharp
+using EggMapper;
+
 cfg.CreateMap<Customer, CustomerDto>()
     .ForMember(d => d.FullName,
                opt => opt.MapFrom(s => $"{s.FirstName} {s.LastName}"))
