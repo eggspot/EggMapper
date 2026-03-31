@@ -47,12 +47,12 @@ var dto = mapper.Map<ProductDto>(product);
 The `MapperConfiguration` constructor compiles all registered type maps into cached delegates. Create it once and keep it as a singleton.
 {: .note }
 
-## Dependency Injection
-
-### ASP.NET Core Web API
+## Dependency Injection (ASP.NET Core)
 
 ```csharp
 // Program.cs
+using EggMapper;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
@@ -70,135 +70,19 @@ app.MapGet("/products/{id}", async (int id, AppDbContext db, IMapper mapper) =>
 app.Run();
 ```
 
-### ASP.NET Core MVC Controller
+Both `MapperConfiguration` and `IMapper` are registered as **singletons**. The compiled delegate cache is built once and shared across all threads.
+{: .note }
 
-```csharp
-public class ProductsController(IMapper mapper, AppDbContext db) : ControllerBase
-{
-    [HttpGet("{id}")]
-    public async Task<IActionResult> Get(int id)
-    {
-        var product = await db.Products
-            .Include(p => p.Category)
-            .FirstOrDefaultAsync(p => p.Id == id);
-
-        if (product is null) return NotFound();
-
-        return Ok(mapper.Map<Product, ProductDto>(product));
-    }
-
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
-    {
-        var products = await db.Products.ToListAsync();
-        return Ok(mapper.MapList<Product, ProductDto>(products));
-    }
-
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, UpdateProductRequest request)
-    {
-        var product = await db.Products.FindAsync(id);
-        if (product is null) return NotFound();
-
-        mapper.Patch(request, product);  // Only non-null fields overwrite
-        await db.SaveChangesAsync();
-        return NoContent();
-    }
-}
-```
-
-### Blazor Server / Blazor InteractiveServer
-
-```csharp
-// Program.cs
-builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);
-
-// Component
-@inject IMapper Mapper
-
-@code {
-    private List<ProductViewModel> _products = [];
-
-    protected override async Task OnInitializedAsync()
-    {
-        var entities = await DbContext.Products.ToListAsync();
-        _products = Mapper.MapList<Product, ProductViewModel>(entities);
-    }
-}
-```
-
-### Blazor WebAssembly
-
-```csharp
-// Program.cs (client-side)
-builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);
-
-// In a service
-public class ProductService(HttpClient http, IMapper mapper)
-{
-    public async Task<List<ProductViewModel>> GetProductsAsync()
-    {
-        var apiModels = await http.GetFromJsonAsync<List<ProductApiModel>>("api/products")
-            ?? [];
-        return mapper.MapList<ProductApiModel, ProductViewModel>(apiModels);
-    }
-}
-```
-
-### gRPC Service
-
-```csharp
-// Program.cs
-builder.Services.AddGrpc();
-builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
-
-// gRPC service implementation
-public class OrderGrpcService(IMapper mapper, OrderRepository repo)
-    : OrderService.OrderServiceBase
-{
-    public override async Task<OrderReply> GetOrder(
-        OrderRequest request, ServerCallContext context)
-    {
-        var order = await repo.GetByIdAsync(request.Id);
-        return mapper.Map<Order, OrderReply>(order);
-    }
-}
-```
-
-### Worker Service / Background Service
-
-```csharp
-// Program.cs
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddEggMapper(typeof(SyncProfile).Assembly);
-builder.Services.AddHostedService<DataSyncWorker>();
-
-// Worker
-public class DataSyncWorker(IMapper mapper, ILogger<DataSyncWorker> logger) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            var externalRecords = await FetchFromExternalApi();
-            var entities = mapper.MapList<ExternalRecord, LocalEntity>(externalRecords);
-            await SaveToDatabase(entities);
-
-            logger.LogInformation("Synced {Count} records", entities.Count);
-            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
-        }
-    }
-}
-```
-
-`IMapper` is **Singleton** (backed by the compiled delegate cache). `MapperConfiguration` is also **Singleton**.
+For Blazor, gRPC, Worker Service, and other DI scenarios, see [Dependency Injection](Dependency-Injection).
 {: .note }
 
 ## Profiles
 
-Group related maps into profile classes for organisation:
+Group related maps into profile classes for organization:
 
 ```csharp
+using EggMapper;
+
 public class OrderProfile : Profile
 {
     public OrderProfile()
@@ -245,6 +129,8 @@ No `CreateMap<List<Product>, List<ProductDto>>()` needed. Register the element m
 ## EF Core ProjectTo
 
 ```csharp
+using EggMapper;
+
 // Translates to SQL — no in-memory mapping, no entity materialization
 var dtos = await dbContext.Products
     .Where(p => p.IsActive)

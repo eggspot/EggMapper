@@ -190,6 +190,9 @@ Never construct `MapperConfiguration` per-request. The constructor compiles expr
 
 ### Prefer Generic `Map<TSrc, TDst>()` Over `Map<TDst>(object)`
 
+Always use the two-type-parameter overload in hot paths. It eliminates dictionary lookups entirely.
+{: .warning }
+
 ```csharp
 // Fast: uses static generic cache (zero dict lookup)
 var dto = mapper.Map<Order, OrderDto>(order);
@@ -214,7 +217,12 @@ var dtos = orders.Select(o => mapper.Map<Order, OrderDto>(o)).ToList();
 
 ### Use `ProjectTo` for Read-Only Queries
 
+`ProjectTo` pushes the mapping into the SQL query. Only the columns needed for the DTO are selected, with no entity tracking overhead. Always prefer it for read-only data.
+{: .note }
+
 ```csharp
+using EggMapper;
+
 // Best: SQL does the projection, no entity materialization
 var dtos = await db.Orders
     .ProjectTo<Order, OrderDto>(config)

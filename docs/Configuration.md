@@ -31,7 +31,7 @@ var config = new MapperConfiguration(cfg =>
 });
 ```
 
-`MapperConfiguration` is **not** thread-safe to modify after construction, but it is safe to read (`CreateMapper`, `Map`, `BuildProjection`) concurrently from any number of threads.
+`MapperConfiguration` is immutable after construction. It is safe to call `CreateMapper()`, `Map()`, and `BuildProjection()` concurrently from any number of threads.
 {: .warning }
 
 ---
