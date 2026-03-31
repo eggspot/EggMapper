@@ -86,22 +86,44 @@ public class MyProfile : Profile
 - CreateMap<S,D>() with ForMember, MapFrom, Ignore, ReverseMap
 - Profile-based configuration with assembly scanning
 - Nested object mapping (inlined expression trees)
-- Collection mapping (List, Array, HashSet, Dictionary)
-- Flattening (src.Address.Street -> dest.AddressStreet)
+- Collection auto-mapping: CreateMap<A,B>() enables Map<List<B>>(listOfA) automatically
+- Same-type auto-mapping: Map<T,T>(obj) works without CreateMap — auto-compiles property copy
+- Flattening (src.Address.Street -> dest.AddressStreet), multi-level supported
 - Constructor mapping (records, immutable types)
-- Before/After map hooks
+- Before/After map hooks (with ResolutionContext for DI access)
 - Conditional mapping
 - Null substitution
+- Null collections → empty by default (matches common convention)
 - MaxDepth for self-referencing types
 - Inheritance mapping (IncludeAllDerived)
 - Enum mapping (int <-> enum, string <-> enum)
 - ForPath for nested destination properties
 - Patch/partial mapping
-- IQueryable projection (ProjectTo for EF Core)
+- IQueryable projection: `source.ProjectTo<TSrc, TDest>(config)` for EF Core
 - Open generic mapping
 - Global type converters
 - Configuration validation
-- EF Core proxy/derived type resolution
+- EF Core proxy/derived type resolution (base-type + interface walk)
+
+## ProjectTo (EF Core IQueryable Projection)
+
+```csharp
+// Translates to SQL — no in-memory mapping
+var dtos = await dbContext.Products
+    .Where(p => p.IsActive)
+    .ProjectTo<Product, ProductDto>(mapperConfig)
+    .ToListAsync();
+```
+
+Note: EggMapper requires both type args: `ProjectTo<TSrc, TDest>(config)`
+
+## Migrating from AutoMapper
+
+1. Replace NuGet: `AutoMapper` → `EggMapper`
+2. Replace using: `using AutoMapper;` → `using EggMapper;`
+3. Replace DI: `AddAutoMapper(...)` → `AddEggMapper(...)`
+4. Replace ProjectTo: `.ProjectTo<Dest>(cfg)` → `.ProjectTo<Src, Dest>(cfg)`
+5. All CreateMap, ForMember, Profile, IMapper code works unchanged
 
 ## Performance
 
