@@ -1,8 +1,37 @@
 title: EggMapper
-description: Fastest .NET runtime object-to-object mapper. Drop-in replacement for AutoMapper — same API, 2-5x faster.
-remote_theme: pages-themes/minimal@v0.2.0
+description: >-
+  Free AutoMapper alternative for .NET — fastest runtime object-to-object mapper.
+  Same API (CreateMap, ForMember, Profile, IMapper), 2-5x faster, MIT licensed.
+remote_theme: just-the-docs/just-the-docs@v0.10.1
 plugins:
   - jekyll-remote-theme
+  - jekyll-seo-tag
+
+color_scheme: dark
 
 url: https://eggspot.github.io
 baseurl: /EggMapper
+
+# SEO
+author: Eggspot
+
+# Navigation
+aux_links:
+  GitHub: https://github.com/eggspot/EggMapper
+  NuGet: https://www.nuget.org/packages/EggMapper
+
+aux_links_new_tab: true
+
+# Footer
+footer_content: >-
+  EggMapper is MIT licensed. &copy; Eggspot.
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+
+# Back to top link
+back_to_top: true
+back_to_top_text: "Back to top"

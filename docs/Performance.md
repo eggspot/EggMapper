@@ -1,3 +1,9 @@
+---
+layout: default
+title: Performance
+nav_order: 6
+---
+
 # Performance
 
 ## How EggMapper Achieves High Performance
