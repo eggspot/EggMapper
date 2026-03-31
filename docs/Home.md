@@ -1,4 +1,11 @@
-# 🥚 EggMapper — Wiki Home
+---
+layout: default
+title: Wiki Home
+nav_order: 99
+nav_exclude: true
+---
+
+# EggMapper — Wiki Home
 
 Welcome to the **EggMapper** documentation wiki.
 
@@ -6,7 +13,7 @@ EggMapper is a **high-performance .NET object-to-object mapping library** built 
 
 ---
 
-## 📚 Table of Contents
+## Table of Contents
 
 | Page | What you'll learn |
 |------|-------------------|
@@ -20,7 +27,7 @@ EggMapper is a **high-performance .NET object-to-object mapping library** built 
 
 ---
 
-## ⚡ 30-Second Quickstart
+## 30-Second Quickstart
 
 ```bash
 dotnet add package EggMapper
@@ -39,7 +46,7 @@ OrderDto dto = mapper.Map<Order, OrderDto>(order);
 
 ---
 
-## 🏗️ Design Principles
+## Design Principles
 
 1. **Zero runtime reflection** — all delegates compiled once at `MapperConfiguration` construction time and cached in a `ConcurrentDictionary`.
 2. **Familiar API** — drop-in mental model for anyone who has used AutoMapper.

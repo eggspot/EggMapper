@@ -1,3 +1,11 @@
+---
+layout: default
+title: Class Mapper ([EggMapper])
+parent: Code Generation
+nav_order: 2
+description: "EggMapper.ClassMapper — partial class mapper generation with [EggMapper] attribute."
+---
+
 # Getting Started: Tier 3 — Mapper Class Generation (`[EggMapper]`)
 
 `EggMapper.ClassMapper` generates implementations for **partial mapping methods** you declare in a class.  You get full IDE auto-complete, type-checked mapping, and the ability to add custom logic alongside the generated code — all at zero runtime cost.
