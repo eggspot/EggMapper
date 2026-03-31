@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Dependency Injection
-nav_order: 7
+parent: Guide
+nav_order: 3
 description: "EggMapper DI integration — ASP.NET Core, Blazor, gRPC, Worker Service, minimal API setup."
 ---
 

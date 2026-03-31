@@ -5,6 +5,7 @@ description: >-
 remote_theme: just-the-docs/just-the-docs@v0.10.1
 plugins:
   - jekyll-remote-theme
+  - jekyll-sitemap
   - jekyll-seo-tag
 
 color_scheme: dark
@@ -12,19 +13,22 @@ color_scheme: dark
 url: https://eggspot.github.io
 baseurl: /EggMapper
 
+logo: "/assets/images/logo.png"
+favicon_ico: "/favicon.ico"
+
 # SEO
 author: Eggspot
 
-# Navigation
+# Top-right links
 aux_links:
   GitHub: https://github.com/eggspot/EggMapper
   NuGet: https://www.nuget.org/packages/EggMapper
-
 aux_links_new_tab: true
 
 # Footer
 footer_content: >-
-  EggMapper is MIT licensed. &copy; Eggspot.
+  EggMapper &mdash; MIT licensed &copy; Eggspot.
+  Fastest .NET runtime object mapper.
 
 # Search
 search_enabled: true
@@ -32,6 +36,14 @@ search:
   heading_level: 2
   previews: 3
 
-# Back to top link
 back_to_top: true
 back_to_top_text: "Back to top"
+
+# Heading anchor links
+heading_anchors: true
+
+# External navigation links
+nav_external_links:
+  - title: NuGet Package
+    url: https://www.nuget.org/packages/EggMapper
+    hide_icon: false

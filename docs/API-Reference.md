@@ -1,7 +1,7 @@
 ---
 layout: default
 title: API Reference
-nav_order: 4
+nav_order: 5
 description: "Complete API reference for EggMapper — MapperConfiguration, IMapper, profiles, fluent builders."
 ---
 
