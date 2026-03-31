@@ -1,7 +1,8 @@
 ---
 layout: default
-title: "Tier 3: Mapper Class [EggMapper]"
-nav_order: 13
+title: Class Mapper ([EggMapper])
+parent: Code Generation
+nav_order: 2
 description: "EggMapper.ClassMapper — partial class mapper generation with [EggMapper] attribute."
 ---
 

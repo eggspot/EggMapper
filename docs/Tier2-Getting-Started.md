@@ -1,7 +1,8 @@
 ---
 layout: default
-title: "Tier 2: Compile-Time [MapTo]"
-nav_order: 12
+title: Attribute Mapper ([MapTo])
+parent: Code Generation
+nav_order: 1
 description: "EggMapper.Generator — compile-time extension methods with [MapTo] attribute."
 ---
 

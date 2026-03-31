@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Migration Guide
-nav_order: 8
+parent: Code Generation
+nav_order: 3
 description: "Migrate from AutoMapper to EggMapper, or from runtime to compile-time mapping tiers."
 ---
 

@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Profiles
-nav_order: 10
+parent: Guide
+nav_order: 2
 description: "EggMapper profiles — group related mappings into reusable Profile classes."
 ---
 
