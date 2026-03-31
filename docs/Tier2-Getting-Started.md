@@ -1,3 +1,10 @@
+---
+layout: default
+title: "Tier 2: Compile-Time [MapTo]"
+nav_order: 12
+description: "EggMapper.Generator — compile-time extension methods with [MapTo] attribute."
+---
+
 # Getting Started: Tier 2 — Compile-Time Extension Methods (`[MapTo]`)
 
 `EggMapper.Generator` generates **zero-reflection, zero-allocation extension methods** at build time from a single `[MapTo]` attribute.  No `MapperConfiguration`, no runtime delegates — the mapping code is emitted directly into your binary.

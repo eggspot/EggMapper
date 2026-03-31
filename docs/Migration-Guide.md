@@ -2,15 +2,157 @@
 layout: default
 title: Migration Guide
 nav_order: 8
+description: "Migrate from AutoMapper to EggMapper, or from runtime to compile-time mapping tiers."
 ---
 
-# Migration Guide: Runtime to Compile-Time Mapping
+# Migration Guide
+{: .no_toc }
 
-EggMapper supports **three tiers** of mapping.  This guide walks through migrating from the runtime API (Tier 1 style) to the compile-time generators (Tier 2 and Tier 3).
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
 
 ---
 
-## Tier overview
+## Migrating from AutoMapper to EggMapper
+
+This is the most common migration path. EggMapper is a drop-in replacement for AutoMapper with the same API.
+
+### Step-by-step
+
+**1. Swap NuGet packages:**
+
+```bash
+dotnet remove package AutoMapper
+dotnet remove package AutoMapper.Extensions.Microsoft.DependencyInjection
+dotnet add package EggMapper
+```
+
+**2. Find and replace the namespace:**
+
+```diff
+- using AutoMapper;
++ using EggMapper;
+```
+
+**3. Update DI registration:**
+
+```diff
+- services.AddAutoMapper(typeof(MyProfile).Assembly);
++ services.AddEggMapper(typeof(MyProfile).Assembly);
+```
+
+**4. Update ProjectTo calls (if any):**
+
+```diff
+- query.ProjectTo<ProductDto>(config);
++ query.ProjectTo<Product, ProductDto>(config);
+```
+
+**5. Run tests.** All your existing `CreateMap`, `ForMember`, `Profile`, and `IMapper` code works unchanged.
+
+### What stays the same
+
+These APIs are identical between AutoMapper and EggMapper:
+
+- `CreateMap<TSrc, TDst>()`
+- `ForMember(d => d.Prop, o => o.MapFrom(...))`
+- `ForMember(d => d.Prop, o => o.Ignore())`
+- `ForMember(d => d.Prop, o => o.Condition(...))`
+- `ForPath(d => d.A.B.Prop, o => o.MapFrom(...))`
+- `ReverseMap()`
+- `BeforeMap()` / `AfterMap()`
+- `MaxDepth()`
+- `IncludeBase<TBaseSrc, TBaseDst>()`
+- `Profile` base class
+- `IMapper` interface
+- `mapper.Map<TSrc, TDst>(source)`
+- `mapper.Map<TDst>(objectSource)`
+- `config.AssertConfigurationIsValid()`
+
+### What is different
+
+| AutoMapper | EggMapper | Notes |
+|------------|-----------|-------|
+| `ProjectTo<TDest>(config)` | `ProjectTo<TSrc, TDest>(config)` | Explicit source type parameter |
+| `AddAutoMapper(assemblies)` | `AddEggMapper(assemblies)` | Same behavior, different name |
+| `IMapper` registered as scoped | `IMapper` registered as singleton | Safe because config is immutable |
+| `CreateMap<T,T>()` required for clone | Auto-compiles on first use | Just call `Map<T,T>(obj)` |
+| No built-in Patch | `mapper.Patch(src, dst)` | New feature |
+| No built-in MapList | `mapper.MapList<S,D>(list)` | New feature |
+| No inline validation | `.Validate(d => d.Prop, pred, msg)` | New feature |
+
+### Migration example: full controller
+
+**Before (AutoMapper):**
+
+```csharp
+using AutoMapper;
+
+public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(int id)
+    {
+        var order = await db.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o => o.Id == id);
+        return order is null ? NotFound() : Ok(mapper.Map<OrderDto>(order));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var orders = await db.Orders.ToListAsync();
+        return Ok(mapper.Map<List<OrderSummaryDto>>(orders));
+    }
+}
+```
+
+**After (EggMapper):**
+
+```csharp
+using EggMapper;
+
+public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public async Task<IActionResult> Get(int id)
+    {
+        var order = await db.Orders.Include(o => o.Customer).FirstOrDefaultAsync(o => o.Id == id);
+        return order is null ? NotFound() : Ok(mapper.Map<Order, OrderDto>(order));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var orders = await db.Orders.ToListAsync();
+        return Ok(mapper.MapList<Order, OrderSummaryDto>(orders));  // faster batch mapping
+    }
+}
+```
+
+The only changes are the `using` directive and optionally switching to the generic `Map<TSrc, TDst>()` and `MapList<>()` for better performance.
+{: .note }
+
+### You can also remove unnecessary `CreateMap<T, T>()` calls
+
+If you had self-referencing maps for cloning, EggMapper handles these automatically:
+
+```diff
+  // Before
+  cfg.CreateMap<Product, Product>();
+
+  // After — remove the line, it auto-compiles
+```
+
+---
+
+## Runtime to Compile-Time Mapping
+
+EggMapper supports **three tiers** of mapping. This guide walks through migrating from the runtime API (Tier 1 style) to the compile-time generators (Tier 2 and Tier 3).
+
+### Tier overview
 
 | Tier | Package | API | When to use |
 |------|---------|-----|-------------|
@@ -22,9 +164,9 @@ You can mix all three tiers in the same project — there is no requirement to m
 
 ---
 
-## Migrating a simple `CreateMap` to `[MapTo]`
+### Migrating a simple `CreateMap` to `[MapTo]`
 
-### Before (runtime)
+#### Before (runtime)
 
 ```csharp
 var config = new MapperConfiguration(cfg =>
@@ -37,7 +179,7 @@ var mapper = config.CreateMapper();
 var dto = mapper.Map<OrderDto>(order);
 ```
 
-### After (Tier 2 — compile-time extension method)
+#### After (Tier 2 -- compile-time extension method)
 
 ```csharp
 // 1. Add [MapTo] to the source class
@@ -59,9 +201,9 @@ var dto = order.ToOrderDto();
 
 ---
 
-## Migrating a `CreateMap` with `ForMember` to `[EggMapper]`
+### Migrating a `CreateMap` with `ForMember` to `[EggMapper]`
 
-### Before (runtime with customization)
+#### Before (runtime with customization)
 
 ```csharp
 cfg.CreateMap<Customer, CustomerDto>()
@@ -69,7 +211,7 @@ cfg.CreateMap<Customer, CustomerDto>()
               o => o.MapFrom(s => $"{s.FirstName} {s.LastName}"));
 ```
 
-### After (Tier 3 — partial class mapper)
+#### After (Tier 3 -- partial class mapper)
 
 ```csharp
 [EggMapper]
@@ -87,15 +229,15 @@ The generator maps all matching properties automatically and uses `BuildDisplayL
 
 ---
 
-## Migrating `ReverseMap`
+### Migrating `ReverseMap`
 
-### Before (runtime)
+#### Before (runtime)
 
 ```csharp
 cfg.CreateMap<Order, OrderDto>().ReverseMap();
 ```
 
-### After (Tier 3)
+#### After (Tier 3)
 
 ```csharp
 [EggMapper]
@@ -108,9 +250,9 @@ public partial class OrderMapper
 
 ---
 
-## Migrating `Profile` classes
+### Migrating `Profile` classes
 
-If you have a large `Profile` subclass, the Analyzer EGG1003 will flag each bare `CreateMap<S,D>()` call that has no customizations and suggest replacing it with `[MapTo]`.  Use the IDE quick-fix to apply the suggestion automatically.
+If you have a large `Profile` subclass, the Analyzer EGG1003 will flag each bare `CreateMap<S,D>()` call that has no customizations and suggest replacing it with `[MapTo]`. Use the IDE quick-fix to apply the suggestion automatically.
 
 ```
 // EGG1003 (Info): CreateMap<Order, OrderDto>() has no customizations.
@@ -120,14 +262,16 @@ If you have a large `Profile` subclass, the Analyzer EGG1003 will flag each bare
 
 ---
 
-## Keeping the runtime API
+## Keeping the Runtime API
 
-Not everything needs to migrate.  Keep `CreateMap` + `ForMember` for:
+Not everything needs to migrate. Keep `CreateMap` + `ForMember` for:
 
 - Maps with `Condition`, `PreCondition`, `AfterMap` hooks
-- `ConstructUsing` / `ConvertUsing`
 - `MaxDepth` / `IncludeBase` / polymorphic inheritance
 - Dynamic map selection at runtime
+- Patch mapping
+- Inline validation
+- Open generic maps
 
 The runtime API is fully retained and will not be removed.
 
@@ -141,7 +285,7 @@ The runtime API is fully retained and will not be removed.
 | `ForMember` rename | `[MapProperty("Name")]` on source property | Custom converter method |
 | `Ignore()` | `[MapIgnore]` on source property | Omit from destination |
 | `ReverseMap()` | Add `[MapTo(typeof(S))]` on D | Add reverse partial method |
-| `AfterMap(…)` hook | `static partial void AfterMap(S,D)` | Custom method in mapper class |
+| `AfterMap(...)` hook | `static partial void AfterMap(S,D)` | Custom method in mapper class |
 | Collection mapping | `ToOrderDtoList()` | Automatic via `List<TDst>` detection |
 | Nested type mapping | Declare `[MapTo]` on nested type too | Declare additional partial method |
 | DI singleton | N/A (static extension) | `MyMapper.Instance` + constructor injection |

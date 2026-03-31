@@ -1,4 +1,20 @@
+---
+layout: default
+title: Configuration
+nav_order: 9
+description: "EggMapper configuration — MapperConfiguration, CreateMap, validation, thread safety."
+---
+
 # Configuration
+{: .no_toc }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
 
 ## `MapperConfiguration`
 
@@ -14,7 +30,8 @@ var config = new MapperConfiguration(cfg =>
 });
 ```
 
-> ⚠️ `MapperConfiguration` is **not** thread-safe to modify after construction, but it is safe to read (call `CreateMapper`) concurrently.
+`MapperConfiguration` is **not** thread-safe to modify after construction, but it is safe to read (`CreateMapper`, `Map`, `BuildProjection`) concurrently from any number of threads.
+{: .warning }
 
 ---
 
@@ -26,21 +43,39 @@ var config = new MapperConfiguration(cfg =>
 cfg.CreateMap<Source, Destination>();
 ```
 
-By convention, properties with identical names (case-insensitive) are mapped automatically.
+By convention, properties with identical names (case-insensitive) are mapped automatically. No configuration needed for matching property names.
+
+### With custom member mapping
+
+```csharp
+cfg.CreateMap<Order, OrderDto>()
+    .ForMember(d => d.CustomerName, o => o.MapFrom(s => s.Customer.FullName))
+    .ForMember(d => d.TotalWithTax, o => o.MapFrom(s => s.Total * 1.1m))
+    .ForMember(d => d.InternalNotes, o => o.Ignore());
+```
 
 ### Reverse map
 
 ```csharp
 cfg.CreateMap<Source, Destination>().ReverseMap();
-// Registers both Source→Destination and Destination→Source
+// Registers both Source -> Destination and Destination -> Source
 ```
 
 ### Multiple maps
 
 ```csharp
 cfg.CreateMap<Customer, CustomerDto>();
+cfg.CreateMap<Customer, CustomerSummaryDto>();
 cfg.CreateMap<Address,  AddressDto>();
 cfg.CreateMap<Order,    OrderDto>();
+cfg.CreateMap<Order,    OrderSummaryDto>();
+```
+
+### Open generic maps
+
+```csharp
+cfg.CreateMap(typeof(Result<>), typeof(ResultDto<>));
+cfg.CreateMap(typeof(PagedList<>), typeof(PagedListDto<>));
 ```
 
 ---
@@ -59,6 +94,9 @@ Or scan an assembly for all profiles:
 ```csharp
 cfg.AddProfiles(typeof(OrderProfile).Assembly);
 ```
+
+Assembly scanning is recommended for large projects. It automatically discovers and registers all `Profile` subclasses.
+{: .note }
 
 ---
 
@@ -87,6 +125,29 @@ Call this in unit tests or at application startup to surface misconfiguration im
 config.AssertConfigurationIsValid();
 ```
 
+### What validation checks
+
+- Every destination property must have either:
+  - A matching source property (by name, case-insensitive)
+  - A custom `MapFrom` expression
+  - A flattening match (e.g., `AddressCity` matches `Address.City`)
+  - An explicit `Ignore()` call
+- Nested type maps must be registered
+- Constructor parameters must match source properties
+
+### Recommended: validate in a unit test
+
+```csharp
+[Fact]
+public void AllMappings_ShouldBeValid()
+{
+    var config = new MapperConfiguration(cfg =>
+        cfg.AddProfiles(typeof(OrderProfile).Assembly));
+
+    config.AssertConfigurationIsValid();
+}
+```
+
 ---
 
 ## `IMapperConfigurationExpression` Options
@@ -94,9 +155,55 @@ config.AssertConfigurationIsValid();
 | Method | Description |
 |--------|-------------|
 | `CreateMap<TSrc, TDst>()` | Register a new type map and return the fluent builder |
+| `CreateMap(Type src, Type dst)` | Register an open-generic type map |
 | `AddProfile<TProfile>()` | Register all maps declared in a `Profile` subclass |
 | `AddProfile(profile)` | Register a pre-constructed `Profile` instance |
 | `AddProfiles(assemblies)` | Scan assemblies and register all `Profile` subclasses |
+
+---
+
+## Configuration Patterns
+
+### Small application — inline configuration
+
+```csharp
+var config = new MapperConfiguration(cfg =>
+{
+    cfg.CreateMap<Product, ProductDto>();
+    cfg.CreateMap<Order, OrderDto>()
+        .ForMember(d => d.CustomerName, o => o.MapFrom(s => s.Customer.FullName));
+});
+```
+
+### Medium application — profiles
+
+```csharp
+var config = new MapperConfiguration(cfg =>
+{
+    cfg.AddProfile<OrderProfile>();
+    cfg.AddProfile<CustomerProfile>();
+    cfg.AddProfile<ProductProfile>();
+});
+```
+
+### Large application — assembly scanning
+
+```csharp
+var config = new MapperConfiguration(cfg =>
+    cfg.AddProfiles(
+        typeof(OrderProfile).Assembly,        // Core domain
+        typeof(ReportProfile).Assembly));     // Reporting module
+```
+
+### Multi-module application
+
+```csharp
+// Each module defines its own profiles
+builder.Services.AddEggMapper(
+    typeof(OrderModule.OrderProfile).Assembly,
+    typeof(InventoryModule.ProductProfile).Assembly,
+    typeof(ReportingModule.ReportProfile).Assembly);
+```
 
 ---
 
@@ -104,7 +211,21 @@ config.AssertConfigurationIsValid();
 
 | Scenario | Safe? |
 |----------|-------|
-| Construct `MapperConfiguration` on one thread | ✅ |
-| Call `CreateMapper()` concurrently | ✅ |
-| Call `IMapper.Map()` concurrently | ✅ |
-| Add maps after construction | ❌ Not supported |
+| Construct `MapperConfiguration` on one thread | Yes |
+| Call `CreateMapper()` concurrently | Yes |
+| Call `IMapper.Map()` concurrently | Yes |
+| Call `IMapper.MapList()` concurrently | Yes |
+| Call `IMapper.Patch()` concurrently | Yes |
+| Use `ProjectTo()` concurrently | Yes |
+| Add maps after construction | Not supported |
+
+All mapping operations are thread-safe after construction. The compiled delegate cache is immutable and shared across all mapper instances.
+
+---
+
+## Common Pitfalls
+
+- **Constructing `MapperConfiguration` per request** — This recompiles all expression trees every time. Always keep it as a singleton.
+- **Adding maps after construction** — Not supported. All maps must be registered in the constructor callback or in profiles.
+- **Not calling `AssertConfigurationIsValid()`** — Missing maps or typos in property names silently leave destination properties at their default values. Always validate in tests.
+- **Registering the same type pair twice** — The second `CreateMap<S,D>()` overwrites the first. This is usually a mistake. Keep each type pair in a single profile.
