@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EGG3003 — EggMapper Diagnostics</title>
+  <meta name="description" content="EGG3003: Enum underlying type mismatch (ClassMapper) — EggMapper.ClassMapper info.">
+  <link rel="icon" href="../favicon.ico">
+  <link rel="stylesheet" href="../assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="../index.html">
+    <img src="../assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="../index.html">Home</a>
+    <a class="nav-link" href="../quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="../Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="../Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="../Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="../Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="../Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="../Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="../API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="../vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="../Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="../Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="../Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>EGG3003 — Enum underlying type mismatch (ClassMapper)</h1>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Property</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Severity</strong></td><td>Info</td></tr>
+          <tr><td><strong>Package</strong></td><td><code>EggMapper.ClassMapper</code></td></tr>
+          <tr><td><strong>Category</strong></td><td>EggMapper</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Description</h2>
+
+      <p>Two enum types are being mapped and their underlying types differ (e.g., <code>byte</code> vs <code>int</code>). An explicit cast is still generated, but numerical values may not correspond between the two enums — e.g., <code>StatusKind.Active = 0</code> might become <code>StatusDtoKind.Inactive = 0</code>.</p>
+
+      <h2>Example (triggers info)</h2>
+
+      <pre><code>public enum SourceStatus : byte  { Active = 1, Inactive = 2 }
+public enum DestStatus   : int   { Inactive = 0, Active = 1 }   // different ordinals!</code></pre>
+
+      <p>When <code>SourceStatus.Active</code> (= <code>1</code>) is cast to <code>DestStatus</code>, you get <code>DestStatus.Active</code> (= <code>1</code>). This might be correct, but EGG3003 flags it so you can verify intentionality.</p>
+
+      <h2>How to fix</h2>
+
+      <p>If the mapping is correct, suppress the diagnostic. If not, add a custom converter method:</p>
+
+      <pre><code>[EggMapper]
+public partial class StatusMapper
+{
+    public partial StatusDto Map(Status source);
+
+    private DestStatus ConvertStatus(SourceStatus s) =&gt; s switch
+    {
+        SourceStatus.Active   =&gt; DestStatus.Active,
+        SourceStatus.Inactive =&gt; DestStatus.Inactive,
+        _                     =&gt; throw new ArgumentOutOfRangeException(nameof(s))
+    };
+}</code></pre>
+
+      <h2>How to suppress</h2>
+
+      <pre><code># .editorconfig
+dotnet_diagnostic.EGG3003.severity = none</code></pre>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </div>
+</footer>
+<script src="../assets/js/nav.js"></script>
+</body>
+</html>

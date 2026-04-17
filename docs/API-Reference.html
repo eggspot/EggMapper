@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference — EggMapper</title>
+  <meta name="description" content="Complete API reference for EggMapper — MapperConfiguration, IMapper, profiles, fluent builders.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link nav-link-active" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>API Reference</h1>
+
+      <hr>
+
+      <h2>Namespace <code>EggMapper</code></h2>
+
+      <hr>
+
+      <h3><code>MapperConfiguration</code></h3>
+
+      <p>The root configuration object. Construct once at startup; keep as a singleton.</p>
+
+<pre><code>public sealed class MapperConfiguration</code></pre>
+
+      <h4>Constructor</h4>
+
+<pre><code>public MapperConfiguration(Action&lt;IMapperConfigurationExpression&gt; configure)</code></pre>
+
+      <p>Compiles all registered type maps into cached delegates during construction. This is the only expensive call — all subsequent mapping is near-zero overhead.</p>
+
+      <p><strong>Example:</strong></p>
+
+<pre><code>using EggMapper;
+
+var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.CreateMap&lt;Order, OrderDto&gt;()
+        .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName));
+
+    cfg.CreateMap&lt;OrderLine, OrderLineDto&gt;();
+    cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+    cfg.CreateMap&lt;Address, AddressDto&gt;();
+
+    cfg.AddProfile&lt;ProductProfile&gt;();
+});</code></pre>
+
+      <h4>Methods</h4>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>CreateMapper()</code></td><td><code>IMapper</code></td><td>Returns a mapper backed by the compiled cache</td></tr>
+          <tr><td><code>AssertConfigurationIsValid()</code></td><td><code>void</code></td><td>Throws if any destination property is unmapped</td></tr>
+          <tr><td><code>BuildProjection&lt;TSrc, TDst&gt;()</code></td><td><code>Expression&lt;Func&lt;TSrc, TDst&gt;&gt;</code></td><td>Returns the raw projection expression for EF Core / LINQ</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong><code>CreateMapper()</code> example:</strong></p>
+
+<pre><code>IMapper mapper = config.CreateMapper();
+
+// mapper is lightweight — backed by the shared compiled cache
+// Safe to call multiple times; each returns a new wrapper around the same cache</code></pre>
+
+      <p><strong><code>AssertConfigurationIsValid()</code> example:</strong></p>
+
+<pre><code>// In a unit test — catch missing maps before production
+[Fact]
+public void MappingConfiguration_ShouldBeValid()
+{
+    var config = new MapperConfiguration(cfg =&gt;
+        cfg.AddProfiles(typeof(OrderProfile).Assembly));
+
+    config.AssertConfigurationIsValid(); // Throws on unmapped properties
+}</code></pre>
+
+      <p><strong><code>BuildProjection&lt;TSrc, TDst&gt;()</code> example:</strong></p>
+
+<pre><code>// Get the raw expression for inspection or composition
+Expression&lt;Func&lt;Order, OrderDto&gt;&gt; expr = config.BuildProjection&lt;Order, OrderDto&gt;();
+
+// Use in custom LINQ queries
+var results = dbContext.Orders
+    .Where(o =&gt; o.IsActive)
+    .Select(expr)
+    .ToListAsync();</code></pre>
+
+      <hr>
+
+      <h3><code>IMapper</code></h3>
+
+      <p>The runtime mapping interface. Resolve from DI or call <code>config.CreateMapper()</code>.</p>
+
+<pre><code>public interface IMapper</code></pre>
+
+      <h4>Methods</h4>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Signature</th><th>Returns</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Map&lt;TSrc, TDst&gt;(TSrc source)</code></td><td><code>TDst</code></td><td>Map source to a new destination instance</td></tr>
+          <tr><td><code>Map&lt;TSrc, TDst&gt;(TSrc source, TDst destination)</code></td><td><code>TDst</code></td><td>Map source into an existing destination instance</td></tr>
+          <tr><td><code>Map&lt;TDst&gt;(object source)</code></td><td><code>TDst</code></td><td>Map source (type inferred at runtime) to <code>TDst</code></td></tr>
+          <tr><td><code>MapList&lt;TSrc, TDst&gt;(IEnumerable&lt;TSrc&gt; source)</code></td><td><code>List&lt;TDst&gt;</code></td><td>Batch map a collection using an inlined compiled loop</td></tr>
+          <tr><td><code>Patch&lt;TSrc, TDst&gt;(TSrc source, TDst destination)</code></td><td><code>TDst</code></td><td>Partial update — only non-null properties are copied</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong><code>Map&lt;TSrc, TDst&gt;(source)</code> — fastest path (static generic cache):</strong></p>
+
+<pre><code>var dto = mapper.Map&lt;Order, OrderDto&gt;(order);
+// Uses FastCache&lt;Order, OrderDto&gt; — zero dictionary lookup after first call</code></pre>
+
+      <p><strong><code>Map&lt;TSrc, TDst&gt;(source, destination)</code> — map into existing object:</strong></p>
+
+<pre><code>var existing = await db.Orders.FindAsync(id);
+mapper.Map(updateRequest, existing);
+// existing is populated in-place, no new allocation
+await db.SaveChangesAsync();</code></pre>
+
+      <p><strong><code>Map&lt;TDst&gt;(object)</code> — runtime type resolution:</strong></p>
+
+<pre><code>// Useful when source type is not known at compile time
+object entity = GetEntityFromSomewhere();
+var dto = mapper.Map&lt;OrderDto&gt;(entity);
+// Source type resolved via GetType() — falls back to base-type + interface walk</code></pre>
+
+      <div class="note"><p>The generic <code>Map&lt;TSrc, TDst&gt;()</code> overload is faster than <code>Map&lt;TDst&gt;(object)</code> because it uses the static generic cache. Prefer the generic version in hot paths.</p></div>
+
+      <p><strong><code>MapList&lt;TSrc, TDst&gt;(source)</code> — batch collection mapping:</strong></p>
+
+<pre><code>var orders = await db.Orders.ToListAsync();
+List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);
+// Entire loop compiled as a single expression tree — near-manual speed</code></pre>
+
+      <p><strong><code>Patch&lt;TSrc, TDst&gt;(source, destination)</code> — partial update:</strong></p>
+
+<pre><code>// API endpoint for PATCH /products/{id}
+app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbContext db, IMapper mapper) =&gt;
+{
+    var product = await db.Products.FindAsync(id);
+    if (product is null) return Results.NotFound();
+
+    mapper.Patch(req, product); // Only non-null fields are written
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});</code></pre>
+
+      <hr>
+
+      <h3><code>IMapperConfigurationExpression</code></h3>
+
+      <p>Fluent interface passed to the <code>MapperConfiguration</code> constructor callback.</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Method</th><th>Returns</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>CreateMap&lt;TSrc, TDst&gt;()</code></td><td><code>IMappingExpression&lt;TSrc, TDst&gt;</code></td><td>Register a type map</td></tr>
+          <tr><td><code>CreateMap(Type src, Type dst)</code></td><td><code>IMappingExpression</code></td><td>Register an open-generic type map</td></tr>
+          <tr><td><code>AddProfile&lt;TProfile&gt;()</code></td><td><code>void</code></td><td>Register all maps in a <code>Profile</code> subclass</td></tr>
+          <tr><td><code>AddProfile(Profile profile)</code></td><td><code>void</code></td><td>Register a pre-constructed <code>Profile</code> instance</td></tr>
+          <tr><td><code>AddProfiles(params Assembly[] assemblies)</code></td><td><code>void</code></td><td>Scan assemblies and register all <code>Profile</code> subclasses</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong><code>CreateMap&lt;TSrc, TDst&gt;()</code> example:</strong></p>
+
+<pre><code>using EggMapper;
+
+var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+    cfg.CreateMap&lt;Address, AddressDto&gt;();
+});</code></pre>
+
+      <p><strong><code>CreateMap(Type, Type)</code> — open generics:</strong></p>
+
+<pre><code>using EggMapper;
+
+var config = new MapperConfiguration(cfg =&gt;
+{
+    // Maps Result&lt;T&gt; to ResultDto&lt;T&gt; for any T
+    cfg.CreateMap(typeof(Result&lt;&gt;), typeof(ResultDto&lt;&gt;));
+});
+
+// Usage
+var result = new Result&lt;Order&gt; { Data = order, Success = true };
+var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;Order&gt;&gt;(result);</code></pre>
+
+      <p><strong><code>AddProfiles(assemblies)</code> example:</strong></p>
+
+<pre><code>var config = new MapperConfiguration(cfg =&gt;
+    cfg.AddProfiles(
+        typeof(OrderProfile).Assembly,
+        typeof(ReportProfile).Assembly));</code></pre>
+
+      <hr>
+
+      <h3><code>IMappingExpression&lt;TSrc, TDst&gt;</code></h3>
+
+      <p>Fluent builder returned by <code>CreateMap&lt;TSrc, TDst&gt;()</code>.</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Method</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ForMember(dst =&gt; dst.Prop, opt =&gt; opt.MapFrom(...))</code></td><td>Custom source expression</td></tr>
+          <tr><td><code>ForMember(dst =&gt; dst.Prop, opt =&gt; opt.Ignore())</code></td><td>Skip destination property</td></tr>
+          <tr><td><code>ForMember(dst =&gt; dst.Prop, opt =&gt; opt.Condition(s =&gt; ...))</code></td><td>Map only when predicate is true</td></tr>
+          <tr><td><code>ForMember(dst =&gt; dst.Prop, opt =&gt; opt.PreCondition(s =&gt; ...))</code></td><td>Skip source read when predicate is false</td></tr>
+          <tr><td><code>ForMember(dst =&gt; dst.Prop, opt =&gt; opt.NullSubstitute(value))</code></td><td>Use fallback when source is null</td></tr>
+          <tr><td><code>ForPath(dst =&gt; dst.A.B.Prop, opt =&gt; opt.MapFrom(...))</code></td><td>Map to a deeply nested destination path</td></tr>
+          <tr><td><code>ReverseMap()</code></td><td>Also register the inverse mapping</td></tr>
+          <tr><td><code>BeforeMap(Action&lt;TSrc, TDst&gt;)</code></td><td>Hook called before any property is mapped</td></tr>
+          <tr><td><code>AfterMap(Action&lt;TSrc, TDst&gt;)</code></td><td>Hook called after all properties are mapped</td></tr>
+          <tr><td><code>MaxDepth(int depth)</code></td><td>Limit recursion depth for self-referencing types</td></tr>
+          <tr><td><code>IncludeBase&lt;TBaseSrc, TBaseDst&gt;()</code></td><td>Inherit the base type's mapping rules</td></tr>
+          <tr><td><code>Validate(dst =&gt; dst.Prop, predicate, message)</code></td><td>Post-mapping validation rule</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong><code>ForMember</code> with <code>MapFrom</code> — custom mapping expression:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
+    .ForMember(d =&gt; d.TotalWithTax, o =&gt; o.MapFrom(s =&gt; s.Total * 1.1m))
+    .ForMember(d =&gt; d.Status, o =&gt; o.MapFrom(s =&gt; s.Status.ToString()));</code></pre>
+
+      <p><strong><code>ForMember</code> with <code>Ignore</code> — exclude sensitive data:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;User, UserDto&gt;()
+    .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore())
+    .ForMember(d =&gt; d.SecurityStamp, o =&gt; o.Ignore())
+    .ForMember(d =&gt; d.TwoFactorSecret, o =&gt; o.Ignore());</code></pre>
+
+      <p><strong><code>ForMember</code> with <code>Condition</code> — conditional mapping:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.DiscountPrice,
+               o =&gt; o.Condition(s =&gt; s.Discount &gt; 0))
+    .ForMember(d =&gt; d.WarehouseLocation,
+               o =&gt; o.Condition((src, dst) =&gt; src.Stock &gt; 0));</code></pre>
+
+      <p><strong><code>ForMember</code> with <code>NullSubstitute</code> — fallback values:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.Description, o =&gt; o.NullSubstitute("No description available"))
+    .ForMember(d =&gt; d.ImageUrl, o =&gt; o.NullSubstitute("/images/placeholder.png"));</code></pre>
+
+      <p><strong><code>ForPath</code> — nested destination paths:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;OrderFlatDto, Order&gt;()
+    .ForPath(d =&gt; d.Customer.Name, o =&gt; o.MapFrom(s =&gt; s.CustomerName))
+    .ForPath(d =&gt; d.Customer.Address.City, o =&gt; o.MapFrom(s =&gt; s.ShippingCity))
+    .ForPath(d =&gt; d.Customer.Address.PostalCode, o =&gt; o.MapFrom(s =&gt; s.ShippingZip));</code></pre>
+
+      <p><strong><code>ReverseMap</code> — bidirectional mapping:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;().ReverseMap();
+// Equivalent to:
+// cfg.CreateMap&lt;Product, ProductDto&gt;();
+// cfg.CreateMap&lt;ProductDto, Product&gt;();</code></pre>
+
+      <p><strong><code>BeforeMap</code> / <code>AfterMap</code> — lifecycle hooks:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .BeforeMap((src, dst) =&gt;
+    {
+        // Normalize data before mapping
+        src.CustomerName = src.CustomerName?.Trim();
+    })
+    .AfterMap((src, dst) =&gt;
+    {
+        dst.MappedAt = DateTime.UtcNow;
+        dst.DisplayId = $"ORD-{dst.Id:D6}";
+    });</code></pre>
+
+      <p><strong><code>MaxDepth</code> — self-referencing types:</strong></p>
+
+<pre><code>// Category has Children: List&lt;Category&gt; (tree structure)
+cfg.CreateMap&lt;Category, CategoryDto&gt;()
+    .MaxDepth(3);
+// Maps 3 levels deep, then stops (children beyond depth 3 are null)</code></pre>
+
+      <p><strong><code>IncludeBase</code> — polymorphic inheritance:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;Vehicle, VehicleDto&gt;();
+cfg.CreateMap&lt;Car, CarDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();
+cfg.CreateMap&lt;Truck, TruckDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();
+
+// When mapping a Car, base Vehicle properties are mapped via the base map
+var car = new Car { Make = "Toyota", Doors = 4 };
+var dto = mapper.Map&lt;Car, CarDto&gt;(car);
+// dto.Make == "Toyota" (from Vehicle map), dto.Doors == 4 (from Car map)</code></pre>
+
+      <p><strong><code>Validate</code> — post-mapping validation:</strong></p>
+
+<pre><code>cfg.CreateMap&lt;CreateOrderRequest, Order&gt;()
+    .Validate(d =&gt; d.CustomerName, n =&gt; !string.IsNullOrWhiteSpace(n), "Customer name is required")
+    .Validate(d =&gt; d.Total, t =&gt; t &gt; 0, "Order total must be positive")
+    .Validate(d =&gt; d.Lines, l =&gt; l.Count &gt; 0, "Order must have at least one line");</code></pre>
+
+      <hr>
+
+      <h3><code>Profile</code></h3>
+
+      <p>Base class for grouping related maps.</p>
+
+<pre><code>public abstract class Profile</code></pre>
+
+      <p>Call <code>CreateMap&lt;TSrc, TDst&gt;()</code> inside your constructor to register maps. The API is identical to <code>IMapperConfigurationExpression</code>.</p>
+
+      <p><strong>Example — real-world profile:</strong></p>
+
+<pre><code>using EggMapper;
+
+public class ECommerceProfile : Profile
+{
+    public ECommerceProfile()
+    {
+        // Order aggregate
+        CreateMap&lt;Order, OrderDto&gt;()
+            .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
+            .ForMember(d =&gt; d.ShippingCity, o =&gt; o.MapFrom(s =&gt; s.ShippingAddress.City));
+
+        CreateMap&lt;Order, OrderSummaryDto&gt;()
+            .ForMember(d =&gt; d.LineCount, o =&gt; o.MapFrom(s =&gt; s.Lines.Count));
+
+        CreateMap&lt;OrderLine, OrderLineDto&gt;();
+
+        // Customer aggregate
+        CreateMap&lt;Customer, CustomerDto&gt;()
+            .ForMember(d =&gt; d.FullName, o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+            .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore());
+
+        CreateMap&lt;Address, AddressDto&gt;();
+
+        // Reverse maps for write operations
+        CreateMap&lt;CreateOrderRequest, Order&gt;()
+            .ForMember(d =&gt; d.Id, o =&gt; o.Ignore())
+            .ForMember(d =&gt; d.CreatedAt, o =&gt; o.Ignore());
+    }
+}</code></pre>
+
+      <hr>
+
+      <h3><code>MappingException</code></h3>
+
+      <p>Thrown when a mapping fails at runtime (e.g. unsupported type conversion, null reference in a non-nullable path).</p>
+
+<pre><code>public sealed class MappingException : Exception</code></pre>
+
+      <h4>Properties</h4>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>SourceType</code></td><td><code>Type</code></td><td>The source type being mapped</td></tr>
+          <tr><td><code>DestinationType</code></td><td><code>Type</code></td><td>The destination type</td></tr>
+          <tr><td><code>InnerException</code></td><td><code>Exception?</code></td><td>The underlying exception</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong>Handling example:</strong></p>
+
+<pre><code>try
+{
+    var dto = mapper.Map&lt;Order, OrderDto&gt;(order);
+}
+catch (MappingException ex)
+{
+    logger.LogError(ex,
+        "Mapping failed: {Source} -&gt; {Dest}",
+        ex.SourceType.Name,
+        ex.DestinationType.Name);
+}</code></pre>
+
+      <hr>
+
+      <h3><code>MappingValidationException</code></h3>
+
+      <p>Thrown when post-mapping validation rules fail.</p>
+
+<pre><code>public sealed class MappingValidationException : Exception</code></pre>
+
+      <h4>Properties</h4>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Errors</code></td><td><code>IReadOnlyList&lt;string&gt;</code></td><td>All validation messages that failed</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong>Handling example:</strong></p>
+
+<pre><code>try
+{
+    var order = mapper.Map&lt;CreateOrderRequest, Order&gt;(request);
+}
+catch (MappingValidationException ex)
+{
+    // Return all errors to the client
+    return Results.ValidationProblem(
+        ex.Errors.ToDictionary(
+            e =&gt; "mapping",
+            e =&gt; new[] { e }));
+}</code></pre>
+
+      <hr>
+
+      <h2>Extension Methods</h2>
+
+      <h3><code>QueryableExtensions.ProjectTo&lt;TSrc, TDst&gt;()</code></h3>
+
+<pre><code>public static IQueryable&lt;TDst&gt; ProjectTo&lt;TSrc, TDst&gt;(
+    this IQueryable&lt;TSrc&gt; source,
+    MapperConfiguration config)</code></pre>
+
+      <p>Builds a pure expression tree from the registered type map and passes it to <code>IQueryable.Select()</code>. The expression is never compiled by EggMapper — the LINQ provider translates it.</p>
+
+      <p><strong>Example:</strong></p>
+
+<pre><code>// All of these work with ProjectTo
+var activeProducts = await dbContext.Products
+    .Where(p =&gt; p.IsActive)
+    .ProjectTo&lt;Product, ProductDto&gt;(config)
+    .OrderBy(d =&gt; d.Name)
+    .ToListAsync();
+
+// With pagination
+var page = await dbContext.Orders
+    .Where(o =&gt; o.CustomerId == customerId)
+    .OrderByDescending(o =&gt; o.CreatedAt)
+    .ProjectTo&lt;Order, OrderSummaryDto&gt;(config)
+    .Skip(pageSize * pageIndex)
+    .Take(pageSize)
+    .ToListAsync();</code></pre>
+
+      <hr>
+
+      <h2>Namespace <code>Microsoft.Extensions.DependencyInjection</code></h2>
+
+      <h3><code>EggMapperServiceCollectionExtensions</code></h3>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Extension method</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>AddEggMapper(params Assembly[])</code></td><td>Scan assemblies for <code>Profile</code> subclasses and register <code>IMapper</code> as singleton</td></tr>
+          <tr><td><code>AddEggMapper(Action&lt;IMapperConfigurationExpression&gt;)</code></td><td>Inline configuration without profiles</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong>Assembly scanning:</strong></p>
+
+<pre><code>using EggMapper;
+
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
+
+      <p><strong>Inline configuration:</strong></p>
+
+<pre><code>using EggMapper;
+
+builder.Services.AddEggMapper(cfg =&gt;
+{
+    cfg.CreateMap&lt;Order, OrderDto&gt;();
+    cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+});</code></pre>
+
+      <p><strong>Multiple assemblies:</strong></p>
+
+<pre><code>builder.Services.AddEggMapper(
+    typeof(OrderProfile).Assembly,       // Web API layer
+    typeof(ReportProfile).Assembly);     // Reporting layer</code></pre>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

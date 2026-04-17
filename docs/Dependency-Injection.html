@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dependency Injection — EggMapper</title>
+  <meta name="description" content="EggMapper DI integration — ASP.NET Core, Blazor, gRPC, Worker Service, minimal API setup.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Dependency Injection</h1>
+
+      <p>DI support is built into the main <code>EggMapper</code> package — no separate package needed.</p>
+
+      <h2>Installation</h2>
+
+      <pre><code>dotnet add package EggMapper</code></pre>
+
+      <hr>
+
+      <h2>ASP.NET Core Web API</h2>
+
+      <h3>Minimal API</h3>
+
+      <pre><code>using EggMapper;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Register EggMapper — scans for all Profile subclasses
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
+
+var app = builder.Build();
+
+// IMapper is injected directly into endpoint handlers
+app.MapGet("/orders/{id}", async (int id, AppDbContext db, IMapper mapper) =&gt;
+{
+    var order = await db.Orders
+        .Include(o =&gt; o.Customer)
+        .Include(o =&gt; o.Lines)
+        .FirstOrDefaultAsync(o =&gt; o.Id == id);
+
+    return order is null
+        ? Results.NotFound()
+        : Results.Ok(mapper.Map&lt;Order, OrderDto&gt;(order));
+});
+
+app.MapGet("/orders", async (AppDbContext db, IMapper mapper) =&gt;
+{
+    var orders = await db.Orders.ToListAsync();
+    return Results.Ok(mapper.MapList&lt;Order, OrderSummaryDto&gt;(orders));
+});
+
+// ProjectTo for read-only queries (translated to SQL)
+app.MapGet("/products", async (AppDbContext db, MapperConfiguration config) =&gt;
+{
+    var products = await db.Products
+        .Where(p =&gt; p.IsActive)
+        .ProjectTo&lt;Product, ProductDto&gt;(config)
+        .ToListAsync();
+    return Results.Ok(products);
+});
+
+app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbContext db, IMapper mapper) =&gt;
+{
+    var product = await db.Products.FindAsync(id);
+    if (product is null) return Results.NotFound();
+
+    mapper.Patch(req, product);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});
+
+app.Run();</code></pre>
+
+      <h3>MVC Controller</h3>
+
+      <pre><code>// Program.cs
+using EggMapper;
+
+builder.Services.AddControllers();
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
+
+// Controller — inject IMapper via primary constructor
+public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public async Task&lt;IActionResult&gt; Get(int id)
+    {
+        var order = await db.Orders
+            .Include(o =&gt; o.Customer)
+            .FirstOrDefaultAsync(o =&gt; o.Id == id);
+
+        if (order is null) return NotFound();
+        return Ok(mapper.Map&lt;Order, OrderDto&gt;(order));
+    }
+
+    [HttpGet]
+    public async Task&lt;IActionResult&gt; GetAll([FromQuery] int page = 0, [FromQuery] int size = 20)
+    {
+        var orders = await db.Orders
+            .OrderByDescending(o =&gt; o.CreatedAt)
+            .Skip(page * size)
+            .Take(size)
+            .ToListAsync();
+
+        return Ok(mapper.MapList&lt;Order, OrderSummaryDto&gt;(orders));
+    }
+
+    [HttpPost]
+    public async Task&lt;IActionResult&gt; Create(CreateOrderRequest request)
+    {
+        var order = mapper.Map&lt;CreateOrderRequest, Order&gt;(request);
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+        return CreatedAtAction(nameof(Get), new { id = order.Id },
+            mapper.Map&lt;Order, OrderDto&gt;(order));
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Blazor Server / InteractiveServer</h2>
+
+      <pre><code>// Program.cs
+using EggMapper;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);</code></pre>
+
+      <pre><code>@* Components/Pages/Products.razor *@
+@page "/products"
+@inject IMapper Mapper
+@inject AppDbContext DbContext
+
+&lt;h3&gt;Products&lt;/h3&gt;
+
+@foreach (var product in _products)
+{
+    &lt;div&gt;@product.Name — @product.Price.ToString("C")&lt;/div&gt;
+}
+
+@code {
+    private List&lt;ProductViewModel&gt; _products = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var entities = await DbContext.Products
+            .Where(p =&gt; p.IsActive)
+            .ToListAsync();
+
+        _products = Mapper.MapList&lt;Product, ProductViewModel&gt;(entities);
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Blazor WebAssembly (WASM)</h2>
+
+      <pre><code>// Program.cs (client-side)
+using EggMapper;
+
+var builder = WebAssemblyHostBuilder.CreateDefault(args);
+builder.RootComponents.Add&lt;App&gt;("#app");
+
+builder.Services.AddScoped(sp =&gt;
+    new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
+builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);
+
+await builder.Build().RunAsync();</code></pre>
+
+      <pre><code>// Services/ProductService.cs
+public class ProductService(HttpClient http, IMapper mapper)
+{
+    public async Task&lt;List&lt;ProductViewModel&gt;&gt; GetProductsAsync()
+    {
+        var apiModels = await http.GetFromJsonAsync&lt;List&lt;ProductApiResponse&gt;&gt;("api/products")
+            ?? [];
+        return mapper.MapList&lt;ProductApiResponse, ProductViewModel&gt;(apiModels);
+    }
+
+    public async Task&lt;ProductDetailViewModel?&gt; GetProductAsync(int id)
+    {
+        var apiModel = await http.GetFromJsonAsync&lt;ProductDetailApiResponse&gt;($"api/products/{id}");
+        return apiModel is null ? null : mapper.Map&lt;ProductDetailApiResponse, ProductDetailViewModel&gt;(apiModel);
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>gRPC Service</h2>
+
+      <pre><code>// Program.cs
+using EggMapper;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddGrpc();
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
+
+var app = builder.Build();
+app.MapGrpcService&lt;OrderGrpcService&gt;();
+app.Run();</code></pre>
+
+      <pre><code>// Services/OrderGrpcService.cs
+public class OrderGrpcService(IMapper mapper, AppDbContext db)
+    : OrderService.OrderServiceBase
+{
+    public override async Task&lt;GetOrderReply&gt; GetOrder(
+        GetOrderRequest request, ServerCallContext context)
+    {
+        var order = await db.Orders
+            .Include(o =&gt; o.Lines)
+            .FirstOrDefaultAsync(o =&gt; o.Id == request.Id);
+
+        if (order is null)
+            throw new RpcException(new Status(StatusCode.NotFound, "Order not found"));
+
+        return mapper.Map&lt;Order, GetOrderReply&gt;(order);
+    }
+
+    public override async Task&lt;ListOrdersReply&gt; ListOrders(
+        ListOrdersRequest request, ServerCallContext context)
+    {
+        var orders = await db.Orders
+            .OrderByDescending(o =&gt; o.CreatedAt)
+            .Skip(request.PageIndex * request.PageSize)
+            .Take(request.PageSize)
+            .ToListAsync();
+
+        var reply = new ListOrdersReply();
+        reply.Orders.AddRange(mapper.MapList&lt;Order, OrderBrief&gt;(orders));
+        return reply;
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Worker Service / Background Service</h2>
+
+      <pre><code>// Program.cs
+using EggMapper;
+
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.Services.AddDbContext&lt;AppDbContext&gt;();
+builder.Services.AddEggMapper(typeof(SyncProfile).Assembly);
+builder.Services.AddHostedService&lt;DataSyncWorker&gt;();
+
+var host = builder.Build();
+host.Run();</code></pre>
+
+      <pre><code>// Workers/DataSyncWorker.cs
+public class DataSyncWorker(
+    IMapper mapper,
+    IServiceScopeFactory scopeFactory,
+    ILogger&lt;DataSyncWorker&gt; logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService&lt;AppDbContext&gt;();
+
+            var externalOrders = await FetchFromExternalApiAsync(stoppingToken);
+            var entities = mapper.MapList&lt;ExternalOrder, Order&gt;(externalOrders);
+
+            db.Orders.AddRange(entities);
+            await db.SaveChangesAsync(stoppingToken);
+
+            logger.LogInformation("Synced {Count} orders", entities.Count);
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+        }
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Setup Options</h2>
+
+      <h3>Scan an assembly for Profiles (recommended)</h3>
+
+      <pre><code>builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
+
+      <p>Pass one or more assemblies and every <code>Profile</code> subclass found will be registered automatically.</p>
+
+      <h3>Scan multiple assemblies</h3>
+
+      <pre><code>builder.Services.AddEggMapper(
+    typeof(OrderProfile).Assembly,    // Web layer profiles
+    typeof(ReportProfile).Assembly);  // Reporting layer profiles</code></pre>
+
+      <h3>Inline configuration (no profiles needed)</h3>
+
+      <pre><code>using EggMapper;
+
+builder.Services.AddEggMapper(cfg =&gt;
+{
+    cfg.CreateMap&lt;Order, OrderDto&gt;();
+    cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+    cfg.CreateMap&lt;Address, AddressDto&gt;();
+});</code></pre>
+
+      <div class="note"><p>For small projects with just a few maps, inline configuration is simpler. For larger projects, profiles keep things organized.</p></div>
+
+      <hr>
+
+      <h2>What Gets Registered</h2>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Service</th><th>Lifetime</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>MapperConfiguration</code></td><td>Singleton</td><td>The compiled configuration (keeps the delegate cache)</td></tr>
+          <tr><td><code>IMapper</code></td><td>Singleton</td><td>Resolved from <code>MapperConfiguration.CreateMapper()</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <p>Both services are safe to inject anywhere. <code>MapperConfiguration</code> is immutable after construction, and <code>IMapper</code> is backed by the same immutable compiled cache.</p>
+
+      <hr>
+
+      <h2>Injecting <code>IMapper</code></h2>
+
+      <h3>With primary constructors (C# 12)</h3>
+
+      <pre><code>public class OrderService(IMapper mapper, AppDbContext db)
+{
+    public OrderDto GetOrder(int id)
+    {
+        var order = db.Orders.Find(id);
+        return mapper.Map&lt;Order, OrderDto&gt;(order!);
+    }
+}</code></pre>
+
+      <h3>Traditional constructor injection</h3>
+
+      <pre><code>public class OrderService
+{
+    private readonly IMapper _mapper;
+    private readonly AppDbContext _db;
+
+    public OrderService(IMapper mapper, AppDbContext db)
+    {
+        _mapper = mapper;
+        _db = db;
+    }
+
+    public OrderDto GetOrder(int id)
+    {
+        var order = _db.Orders.Find(id);
+        return _mapper.Map&lt;Order, OrderDto&gt;(order!);
+    }
+}</code></pre>
+
+      <h3>Injecting <code>MapperConfiguration</code> directly</h3>
+
+      <p>You can also inject <code>MapperConfiguration</code> for <code>ProjectTo</code> or <code>BuildProjection</code>:</p>
+
+      <pre><code>public class ProductQueryService(MapperConfiguration config, AppDbContext db)
+{
+    public async Task&lt;List&lt;ProductDto&gt;&gt; GetActiveProductsAsync()
+    {
+        return await db.Products
+            .Where(p =&gt; p.IsActive)
+            .ProjectTo&lt;Product, ProductDto&gt;(config)
+            .ToListAsync();
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Testing with DI</h2>
+
+      <p>Use <code>ServiceCollection</code> directly in unit tests without a full host:</p>
+
+      <pre><code>[Fact]
+public void Should_MapOrderToDto()
+{
+    var services = new ServiceCollection();
+    services.AddEggMapper(cfg =&gt;
+    {
+        cfg.CreateMap&lt;Order, OrderDto&gt;();
+        cfg.CreateMap&lt;OrderLine, OrderLineDto&gt;();
+    });
+
+    var provider = services.BuildServiceProvider();
+    var mapper = provider.GetRequiredService&lt;IMapper&gt;();
+
+    var order = new Order
+    {
+        Id = 1,
+        CustomerName = "Alice",
+        Total = 99.99m,
+        Lines = [new OrderLine { ProductName = "Widget", Quantity = 2 }]
+    };
+
+    var dto = mapper.Map&lt;Order, OrderDto&gt;(order);
+
+    dto.Id.Should().Be(1);
+    dto.CustomerName.Should().Be("Alice");
+    dto.Lines.Should().HaveCount(1);
+}</code></pre>
+
+      <h3>Validate all mappings in a single test</h3>
+
+      <pre><code>[Fact]
+public void AllMappings_ShouldBeValid()
+{
+    var services = new ServiceCollection();
+    services.AddEggMapper(typeof(OrderProfile).Assembly);
+
+    var provider = services.BuildServiceProvider();
+    var config = provider.GetRequiredService&lt;MapperConfiguration&gt;();
+
+    config.AssertConfigurationIsValid();
+}</code></pre>
+
+      <hr>
+
+      <h2>Common Pitfalls</h2>
+
+      <div class="warning"><p>Do not register <code>MapperConfiguration</code> as scoped or transient. It compiles expression trees in its constructor. <code>AddEggMapper()</code> handles this correctly (singleton), but be aware if you register manually.</p></div>
+
+      <ul>
+        <li><strong>Manually registering as transient</strong> — If you bypass <code>AddEggMapper()</code> and register <code>MapperConfiguration</code> as transient, you will recompile all maps on every request. Always use singleton.</li>
+        <li><strong>Forgetting to scan the right assembly</strong> — If your profiles are in a separate class library, pass that assembly: <code>AddEggMapper(typeof(SomeProfile).Assembly)</code>.</li>
+        <li><strong>Using <code>IMapper</code> in a static context</strong> — <code>IMapper</code> is designed for DI. In static helpers or extension methods, inject <code>MapperConfiguration</code> and call <code>CreateMapper()</code>.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

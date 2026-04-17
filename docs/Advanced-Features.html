@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced Features — EggMapper</title>
+  <meta name="description" content="Advanced EggMapper features — ForMember, conditions, hooks, ProjectTo, patch mapping, validation, open generics.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Advanced Features</h1>
+
+      <h2><code>ForMember</code> — Custom Member Mapping</h2>
+
+      <p>Override the default convention for any destination property:</p>
+
+      <pre><code>using EggMapper;
+
+cfg.CreateMap&lt;Customer, CustomerDto&gt;()
+    .ForMember(d =&gt; d.FullName,
+               opt =&gt; opt.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+    .ForMember(d =&gt; d.City,
+               opt =&gt; opt.MapFrom(s =&gt; s.Address.City));</code></pre>
+
+      <h3>Map from a computed expression</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .ForMember(d =&gt; d.DisplayPrice,
+               opt =&gt; opt.MapFrom(s =&gt; $"{s.Currency} {s.Price:F2}"))
+    .ForMember(d =&gt; d.TotalWithTax,
+               opt =&gt; opt.MapFrom(s =&gt; s.Total * (1 + s.TaxRate)))
+    .ForMember(d =&gt; d.LineCount,
+               opt =&gt; opt.MapFrom(s =&gt; s.Lines.Count));</code></pre>
+
+      <h3>Map from a deeply nested source</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderFlatDto&gt;()
+    .ForMember(d =&gt; d.CustomerName,
+               opt =&gt; opt.MapFrom(s =&gt; s.Customer.FullName))
+    .ForMember(d =&gt; d.CustomerEmail,
+               opt =&gt; opt.MapFrom(s =&gt; s.Customer.Email))
+    .ForMember(d =&gt; d.ShippingCity,
+               opt =&gt; opt.MapFrom(s =&gt; s.ShippingAddress.City))
+    .ForMember(d =&gt; d.ShippingCountry,
+               opt =&gt; opt.MapFrom(s =&gt; s.ShippingAddress.Country));</code></pre>
+
+      <hr>
+
+      <h2><code>Ignore()</code> — Skip a Property</h2>
+
+      <p>Tell EggMapper to leave a destination property at its default value:</p>
+
+      <pre><code>cfg.CreateMap&lt;User, UserDto&gt;()
+    .ForMember(d =&gt; d.PasswordHash, opt =&gt; opt.Ignore())
+    .ForMember(d =&gt; d.InternalId,   opt =&gt; opt.Ignore())
+    .ForMember(d =&gt; d.SecurityStamp, opt =&gt; opt.Ignore());</code></pre>
+
+      <div class="note"><p>Use <code>Ignore()</code> for sensitive data (passwords, tokens, internal IDs) or computed-only properties that should not come from the source.</p></div>
+
+      <hr>
+
+      <h2><code>ReverseMap()</code> — Bidirectional Mapping</h2>
+
+      <p>Register the inverse mapping in one call:</p>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();
+// Registers: Order -&gt; OrderDto  AND  OrderDto -&gt; Order</code></pre>
+
+      <h3>Real-world use: API request/response symmetry</h3>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;().ReverseMap();
+
+// Read: Entity -&gt; DTO
+var dto = mapper.Map&lt;Product, ProductDto&gt;(product);
+
+// Write: DTO -&gt; Entity (for create/update endpoints)
+var entity = mapper.Map&lt;ProductDto, Product&gt;(dto);</code></pre>
+
+      <hr>
+
+      <h2><code>ForPath</code> — Map to a Nested Destination Property</h2>
+
+      <p>Write to a property deep in the destination object graph:</p>
+
+      <pre><code>cfg.CreateMap&lt;OrderFlatDto, Order&gt;()
+    .ForPath(d =&gt; d.Customer.Name,
+             opt =&gt; opt.MapFrom(s =&gt; s.CustomerName))
+    .ForPath(d =&gt; d.Customer.Address.City,
+             opt =&gt; opt.MapFrom(s =&gt; s.ShippingCity))
+    .ForPath(d =&gt; d.Customer.Address.PostalCode,
+             opt =&gt; opt.MapFrom(s =&gt; s.ShippingZip));</code></pre>
+
+      <div class="note"><p>EggMapper creates intermediate objects (<code>Customer</code>, <code>Address</code>) automatically when using <code>ForPath</code>.</p></div>
+
+      <hr>
+
+      <h2>Nested Object Mapping</h2>
+
+      <p>Declare maps for nested types and EggMapper uses them automatically:</p>
+
+      <pre><code>cfg.CreateMap&lt;Address,  AddressDto&gt;();
+cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+// CustomerDto.Address is mapped via the Address -&gt; AddressDto map</code></pre>
+
+      <h3>Real-world example: Order with nested Customer and Address</h3>
+
+      <pre><code>// Entities
+public class Order
+{
+    public int Id { get; set; }
+    public Customer Customer { get; set; } = null!;
+    public Address ShippingAddress { get; set; } = null!;
+    public List&lt;OrderLine&gt; Lines { get; set; } = [];
+}
+
+// DTOs
+public class OrderDto
+{
+    public int Id { get; set; }
+    public CustomerDto Customer { get; set; } = null!;
+    public AddressDto ShippingAddress { get; set; } = null!;
+    public List&lt;OrderLineDto&gt; Lines { get; set; } = [];
+}
+
+// Configuration — register maps for each level
+cfg.CreateMap&lt;Order, OrderDto&gt;();
+cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+cfg.CreateMap&lt;Address, AddressDto&gt;();
+cfg.CreateMap&lt;OrderLine, OrderLineDto&gt;();
+
+// Map — nested objects and collections handled automatically
+var dto = mapper.Map&lt;Order, OrderDto&gt;(order);
+// dto.Customer.Name, dto.ShippingAddress.City, dto.Lines[0].ProductName all populated</code></pre>
+
+      <div class="warning"><p>If you forget to register a nested type map, <code>AssertConfigurationIsValid()</code> will catch it. Always call it in your test suite.</p></div>
+
+      <hr>
+
+      <h2>Collection Mapping</h2>
+
+      <p>Supported collection types out of the box:</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Source</th><th>Destination</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>T[]</code></td><td><code>T[]</code>, <code>List&lt;T&gt;</code>, <code>IList&lt;T&gt;</code>, <code>ICollection&lt;T&gt;</code>, <code>IEnumerable&lt;T&gt;</code>, <code>HashSet&lt;T&gt;</code></td></tr>
+          <tr><td><code>List&lt;T&gt;</code></td><td>All of the above</td></tr>
+          <tr><td><code>IEnumerable&lt;T&gt;</code></td><td>All of the above</td></tr>
+        </tbody>
+      </table></div>
+
+      <pre><code>cfg.CreateMap&lt;Order,    OrderDto&gt;();
+cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+
+// CustomerDto.Orders (List&lt;OrderDto&gt;) mapped automatically from Customer.Orders (List&lt;Order&gt;)</code></pre>
+
+      <h3>Batch mapping with <code>MapList</code></h3>
+
+      <pre><code>var orders = await db.Orders.ToListAsync();
+
+// Fully inlined compiled loop — near-manual speed
+List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);</code></pre>
+
+      <h3>Array mapping</h3>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;();
+
+Product[] products = GetProducts();
+var dtos = mapper.Map&lt;List&lt;ProductDto&gt;&gt;(products);
+// Also: mapper.Map&lt;ProductDto[]&gt;(products)</code></pre>
+
+      <hr>
+
+      <h2>Conditional Mapping</h2>
+
+      <h3><code>Condition</code> — skip if a value-level predicate fails</h3>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.DiscountPrice,
+               opt =&gt; opt.Condition(s =&gt; s.Discount &gt; 0));
+// DiscountPrice only set when there is actually a discount</code></pre>
+
+      <h3><code>PreCondition</code> — skip the source read entirely</h3>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.WarehouseCode,
+               opt =&gt; opt.PreCondition(s =&gt; s.IsPhysical));
+// WarehouseCode not even read from source for digital products</code></pre>
+
+      <h3>Full condition (source + destination)</h3>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.Price,
+               opt =&gt; opt.Condition((src, dst) =&gt; src.Price != dst.Price));
+// Only update price if it actually changed — useful with Map(src, existingDst)</code></pre>
+
+      <h3>Real-world example: conditional mapping for API responses</h3>
+
+      <pre><code>cfg.CreateMap&lt;User, UserProfileDto&gt;()
+    .ForMember(d =&gt; d.Email,
+               opt =&gt; opt.Condition(s =&gt; s.EmailVerified))
+    .ForMember(d =&gt; d.PhoneNumber,
+               opt =&gt; opt.Condition(s =&gt; s.PhoneVerified))
+    .ForMember(d =&gt; d.AdminNotes,
+               opt =&gt; opt.PreCondition(s =&gt; s.Role == UserRole.Admin));</code></pre>
+
+      <hr>
+
+      <h2>Null Substitution</h2>
+
+      <p>Provide a fallback value when the source property is <code>null</code>:</p>
+
+      <pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.Description,
+               opt =&gt; opt.NullSubstitute("No description available"))
+    .ForMember(d =&gt; d.ImageUrl,
+               opt =&gt; opt.NullSubstitute("/images/placeholder.png"))
+    .ForMember(d =&gt; d.Category,
+               opt =&gt; opt.NullSubstitute("Uncategorized"));</code></pre>
+
+      <hr>
+
+      <h2>Before / After Map Hooks</h2>
+
+      <p>Run custom logic immediately before or after the mapping:</p>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .BeforeMap((src, dst) =&gt;
+    {
+        // Normalize or validate source data
+        src.CustomerName = src.CustomerName?.Trim() ?? "";
+    })
+    .AfterMap((src, dst) =&gt;
+    {
+        // Compute derived fields after mapping
+        dst.MappedAt = DateTime.UtcNow;
+        dst.DisplayId = $"ORD-{dst.Id:D6}";
+    });</code></pre>
+
+      <h3>Use case: auditing mapped objects</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderAuditDto&gt;()
+    .AfterMap((src, dst) =&gt;
+    {
+        dst.AuditTimestamp = DateTimeOffset.UtcNow;
+        dst.AuditSource = "OrderService";
+        dst.ChangeHash = ComputeHash(dst);
+    });</code></pre>
+
+      <div class="note"><p>Maps that use <code>BeforeMap</code> / <code>AfterMap</code> take the flexible delegate path, which is slightly slower than the context-free path used by simple maps. Only use hooks when you need them.</p></div>
+
+      <hr>
+
+      <h2>MaxDepth — Self-Referencing / Circular Types</h2>
+
+      <p>Prevent infinite recursion on types that reference themselves:</p>
+
+      <pre><code>cfg.CreateMap&lt;Category, CategoryDto&gt;()
+    .MaxDepth(3);
+// Category.Children -&gt; CategoryDto.Children mapped up to depth 3
+// Beyond depth 3, Children is null</code></pre>
+
+      <h3>Real-world example: organizational hierarchy</h3>
+
+      <pre><code>public class Department
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public Department? Parent { get; set; }
+    public List&lt;Department&gt; SubDepartments { get; set; } = [];
+}
+
+cfg.CreateMap&lt;Department, DepartmentDto&gt;()
+    .MaxDepth(5); // Org chart depth limit</code></pre>
+
+      <h3>Real-world example: threaded comments</h3>
+
+      <pre><code>public class Comment
+{
+    public int Id { get; set; }
+    public string Body { get; set; } = "";
+    public List&lt;Comment&gt; Replies { get; set; } = [];
+}
+
+cfg.CreateMap&lt;Comment, CommentDto&gt;()
+    .MaxDepth(10); // Limit nesting depth for threaded discussions</code></pre>
+
+      <hr>
+
+      <h2>Inheritance / Include</h2>
+
+      <p>Map a derived type through the base type map:</p>
+
+      <pre><code>cfg.CreateMap&lt;Vehicle, VehicleDto&gt;();
+cfg.CreateMap&lt;Car, CarDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();
+cfg.CreateMap&lt;Truck, TruckDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();</code></pre>
+
+      <h3>Real-world example: EF Core TPH (Table Per Hierarchy)</h3>
+
+      <pre><code>// EF Core entities using TPH inheritance
+public abstract class Payment
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public DateTime ProcessedAt { get; set; }
+}
+
+public class CreditCardPayment : Payment
+{
+    public string Last4Digits { get; set; } = "";
+    public string CardBrand { get; set; } = "";
+}
+
+public class BankTransferPayment : Payment
+{
+    public string BankName { get; set; } = "";
+    public string ReferenceNumber { get; set; } = "";
+}
+
+// DTOs
+public class PaymentDto
+{
+    public int Id { get; set; }
+    public decimal Amount { get; set; }
+    public string Type { get; set; } = "";
+}
+
+public class CreditCardPaymentDto : PaymentDto
+{
+    public string Last4Digits { get; set; } = "";
+    public string CardBrand { get; set; } = "";
+}
+
+public class BankTransferPaymentDto : PaymentDto
+{
+    public string BankName { get; set; } = "";
+}
+
+// Configuration
+cfg.CreateMap&lt;Payment, PaymentDto&gt;()
+    .ForMember(d =&gt; d.Type, o =&gt; o.MapFrom(s =&gt; s.GetType().Name));
+
+cfg.CreateMap&lt;CreditCardPayment, CreditCardPaymentDto&gt;()
+    .IncludeBase&lt;Payment, PaymentDto&gt;();
+
+cfg.CreateMap&lt;BankTransferPayment, BankTransferPaymentDto&gt;()
+    .IncludeBase&lt;Payment, PaymentDto&gt;();</code></pre>
+
+      <hr>
+
+      <h2>Enum Mapping</h2>
+
+      <p>Enums are mapped by value (numeric) by default. Properties with identical enum types are copied directly.</p>
+
+      <pre><code>public enum OrderStatus { Pending, Processing, Shipped, Delivered }
+public enum OrderStatusDto { Pending, Processing, Shipped, Delivered }
+
+cfg.CreateMap&lt;Order, OrderDto&gt;();
+// Order.Status (OrderStatus) -&gt; OrderDto.Status (OrderStatusDto) by numeric value</code></pre>
+
+      <h3>Enum to string</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .ForMember(d =&gt; d.StatusText, o =&gt; o.MapFrom(s =&gt; s.Status.ToString()));</code></pre>
+
+      <hr>
+
+      <h2>Constructor Mapping</h2>
+
+      <p>If the destination has a constructor whose parameter names match source property names, EggMapper uses it automatically:</p>
+
+      <pre><code>public record OrderDto(int Id, string CustomerName, decimal Total);
+
+cfg.CreateMap&lt;Order, OrderDto&gt;();
+// Uses the positional constructor: new OrderDto(src.Id, src.CustomerName, src.Total)</code></pre>
+
+      <h3>Record types with additional properties</h3>
+
+      <pre><code>public record ProductDto(int Id, string Name)
+{
+    public decimal Price { get; init; }
+    public string Category { get; init; } = "";
+}
+
+cfg.CreateMap&lt;Product, ProductDto&gt;();
+// Constructor: new ProductDto(src.Id, src.Name) { Price = src.Price, Category = src.Category }</code></pre>
+
+      <h3>Immutable value objects</h3>
+
+      <pre><code>public class Money
+{
+    public Money(decimal amount, string currency)
+    {
+        Amount = amount;
+        Currency = currency;
+    }
+
+    public decimal Amount { get; }
+    public string Currency { get; }
+}
+
+cfg.CreateMap&lt;PriceEntity, Money&gt;();
+// Calls: new Money(src.Amount, src.Currency)</code></pre>
+
+      <div class="note"><p>EggMapper scores constructors by how many parameter names match source property names (case-insensitive) and picks the highest-scoring one.</p></div>
+
+      <hr>
+
+      <h2>Patch / Partial Mapping</h2>
+
+      <p><code>mapper.Patch&lt;TSource, TDestination&gt;(source, destination)</code> copies only the <em>set</em> properties from <code>source</code> onto an existing <code>destination</code> object:</p>
+
+      <ul>
+        <li><strong>Reference types</strong> (<code>string</code>, classes) — copied only when the source value is non-null</li>
+        <li><strong><code>Nullable&lt;T&gt;</code></strong> — copied only when <code>.HasValue</code> is true</li>
+        <li><strong>Non-nullable value types</strong> (<code>int</code>, <code>bool</code>, etc.) — always copied (no sentinel for "not set")</li>
+      </ul>
+
+      <pre><code>cfg.CreateMap&lt;UpdateOrderRequest, Order&gt;();
+
+var existing = db.Orders.Find(id)!;
+mapper.Patch(request, existing);   // only non-null fields overwrite existing
+db.SaveChanges();</code></pre>
+
+      <p>No extra configuration needed — every type map automatically gets a patch delegate compiled at startup.</p>
+
+      <h3>Real-world example: PATCH endpoint</h3>
+
+      <pre><code>public class UpdateProductRequest
+{
+    public string? Name { get; set; }
+    public decimal? Price { get; set; }
+    public string? Description { get; set; }
+    public int? CategoryId { get; set; }
+}
+
+// Only the fields the client sends are non-null
+// PATCH /products/42  { "name": "New Name", "price": 29.99 }
+
+app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbContext db, IMapper mapper) =&gt;
+{
+    var product = await db.Products.FindAsync(id);
+    if (product is null) return Results.NotFound();
+
+    mapper.Patch(req, product);
+    // product.Name = "New Name", product.Price = 29.99
+    // product.Description and product.CategoryId unchanged
+
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+});</code></pre>
+
+      <hr>
+
+      <h2>Inline Validation</h2>
+
+      <p>Add post-mapping validation rules directly to a type map with <code>.Validate()</code>. All rules run after mapping completes; a <code>MappingValidationException</code> is thrown that contains <strong>every</strong> violation (not just the first):</p>
+
+      <pre><code>cfg.CreateMap&lt;CreateOrderRequest, Order&gt;()
+    .Validate(d =&gt; d.CustomerName, n =&gt; !string.IsNullOrWhiteSpace(n), "Customer name is required")
+    .Validate(d =&gt; d.Total, t =&gt; t &gt; 0, "Order total must be positive")
+    .Validate(d =&gt; d.Lines, l =&gt; l.Count &gt; 0, "Order must have at least one line");</code></pre>
+
+      <pre><code>try
+{
+    var order = mapper.Map&lt;CreateOrderRequest, Order&gt;(request);
+}
+catch (MappingValidationException ex)
+{
+    // ex.Errors — IReadOnlyList&lt;string&gt; with all violations
+    foreach (var err in ex.Errors)
+        Console.WriteLine(err);
+}</code></pre>
+
+      <h3>Use in a minimal API endpoint</h3>
+
+      <pre><code>app.MapPost("/orders", (CreateOrderRequest req, IMapper mapper, AppDbContext db) =&gt;
+{
+    try
+    {
+        var order = mapper.Map&lt;CreateOrderRequest, Order&gt;(req);
+        db.Orders.Add(order);
+        db.SaveChanges();
+        return Results.Created($"/orders/{order.Id}", order);
+    }
+    catch (MappingValidationException ex)
+    {
+        return Results.ValidationProblem(
+            new Dictionary&lt;string, string[]&gt;
+            {
+                ["mapping"] = [.. ex.Errors]
+            });
+    }
+});</code></pre>
+
+      <div class="note"><p>Maps without <code>.Validate()</code> calls use the zero-overhead context-free path. There is no performance penalty for the common case.</p></div>
+
+      <hr>
+
+      <h2>IQueryable Projection (ProjectTo)</h2>
+
+      <p><code>ProjectTo&lt;TSource, TDest&gt;(config)</code> builds a pure <code>Expression&lt;Func&lt;TSource, TDest&gt;&gt;</code> from the registered type map and passes it directly to <code>IQueryable.Select()</code>. The expression is <strong>never compiled</strong> by EggMapper, so LINQ providers (EF Core, etc.) can translate it to SQL.</p>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;();
+
+// EF Core — translated to SQL SELECT
+var dtos = await dbContext.Orders
+    .Where(o =&gt; o.IsActive)
+    .ProjectTo&lt;Order, OrderDto&gt;(config)
+    .ToListAsync();</code></pre>
+
+      <p>Supports:</p>
+      <ul>
+        <li>Flat DTOs (<code>MemberInitExpression</code>)</li>
+        <li>Records and parameterized constructors (<code>NewExpression</code> with member associations)</li>
+        <li>Nested registered maps (recursive projection)</li>
+        <li>Flattened properties (<code>AddressStreet</code> -&gt; <code>src.Address.Street</code>)</li>
+        <li>Custom <code>MapFrom</code> expressions inlined into the projection tree</li>
+      </ul>
+
+      <h3>Complex query with ProjectTo</h3>
+
+      <pre><code>// Paginated order list with filtering
+var page = await dbContext.Orders
+    .Where(o =&gt; o.CustomerId == customerId)
+    .Where(o =&gt; o.Status != OrderStatus.Cancelled)
+    .OrderByDescending(o =&gt; o.CreatedAt)
+    .ProjectTo&lt;Order, OrderSummaryDto&gt;(config)
+    .Skip(pageSize * pageIndex)
+    .Take(pageSize)
+    .ToListAsync();</code></pre>
+
+      <h3>ProjectTo with nested maps</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDetailDto&gt;();
+cfg.CreateMap&lt;Customer, CustomerBriefDto&gt;();
+cfg.CreateMap&lt;Address, AddressBriefDto&gt;();
+
+// EF Core generates a single SQL query with JOINs
+var detail = await dbContext.Orders
+    .Where(o =&gt; o.Id == orderId)
+    .ProjectTo&lt;Order, OrderDetailDto&gt;(config)
+    .FirstOrDefaultAsync();
+// detail.Customer and detail.ShippingAddress are populated from SQL, not in memory</code></pre>
+
+      <h3>Get the raw expression</h3>
+
+      <pre><code>Expression&lt;Func&lt;Order, OrderDto&gt;&gt; expr = config.BuildProjection&lt;Order, OrderDto&gt;();
+
+// Compose with other expressions
+var combined = dbContext.Orders
+    .Where(o =&gt; o.IsActive)
+    .Select(expr);</code></pre>
+
+      <div class="note"><p><code>ProjectTo</code> eliminates N+1 queries. Instead of loading entities and mapping in memory, the entire projection becomes a single SQL query. Always prefer <code>ProjectTo</code> when reading data you do not need to modify.</p></div>
+
+      <hr>
+
+      <h2>Open Generic Mapping</h2>
+
+      <p>Map generic wrapper types without registering every closed variant:</p>
+
+      <pre><code>// Generic wrapper types
+public class Result&lt;T&gt;
+{
+    public bool Success { get; set; }
+    public T? Data { get; set; }
+    public string? Error { get; set; }
+}
+
+public class ResultDto&lt;T&gt;
+{
+    public bool Success { get; set; }
+    public T? Data { get; set; }
+    public string? Error { get; set; }
+}
+
+// Register the open generic map once
+cfg.CreateMap(typeof(Result&lt;&gt;), typeof(ResultDto&lt;&gt;));
+
+// Works for any T
+var orderResult = new Result&lt;Order&gt; { Success = true, Data = order };
+var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;OrderDto&gt;&gt;(orderResult);
+// dto.Success == true, dto.Data is mapped via Order -&gt; OrderDto</code></pre>
+
+      <h3>Real-world example: paginated API responses</h3>
+
+      <pre><code>public class PagedResult&lt;T&gt;
+{
+    public List&lt;T&gt; Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int PageIndex { get; set; }
+    public int PageSize { get; set; }
+}
+
+public class PagedResultDto&lt;T&gt;
+{
+    public List&lt;T&gt; Items { get; set; } = [];
+    public int TotalCount { get; set; }
+    public int PageIndex { get; set; }
+    public int PageSize { get; set; }
+}
+
+cfg.CreateMap(typeof(PagedResult&lt;&gt;), typeof(PagedResultDto&lt;&gt;));
+cfg.CreateMap&lt;Product, ProductDto&gt;();
+
+var pagedProducts = new PagedResult&lt;Product&gt; { Items = products, TotalCount = 150 };
+var dto = mapper.Map&lt;PagedResult&lt;Product&gt;, PagedResultDto&lt;ProductDto&gt;&gt;(pagedProducts);</code></pre>
+
+      <hr>
+
+      <h2>Same-Type Mapping (Cloning)</h2>
+
+      <p>Map an object to the same type without any configuration:</p>
+
+      <pre><code>// No CreateMap&lt;Customer, Customer&gt;() needed
+var copy = mapper.Map&lt;Customer, Customer&gt;(customer);</code></pre>
+
+      <p>This is useful for creating snapshots before mutation, or for detaching EF Core tracked entities.</p>
+
+      <pre><code>// Create a detached copy for comparison
+var before = mapper.Map&lt;Order, Order&gt;(order);
+
+// Mutate the tracked entity
+order.Status = OrderStatus.Shipped;
+order.ShippedAt = DateTime.UtcNow;
+
+// Compare
+if (before.Status != order.Status)
+    await PublishOrderStatusChanged(order);</code></pre>
+
+      <hr>
+
+      <h2>Configuration Validation</h2>
+
+      <p>Validate at startup (or in tests) that every destination property is covered:</p>
+
+      <pre><code>config.AssertConfigurationIsValid();
+// Throws if any destination property is unmapped and not ignored</code></pre>
+
+      <h3>Recommended: validate in a unit test</h3>
+
+      <pre><code>[Fact]
+public void AllMappings_ShouldBeValid()
+{
+    var config = new MapperConfiguration(cfg =&gt;
+        cfg.AddProfiles(typeof(OrderProfile).Assembly));
+
+    config.AssertConfigurationIsValid();
+}</code></pre>
+
+      <hr>
+
+      <h2>Common Pitfalls</h2>
+
+      <div class="warning"><p>Missing nested type maps are the most common source of bugs. If <code>OrderDto.Customer</code> is a <code>CustomerDto</code>, you need <code>CreateMap&lt;Customer, CustomerDto&gt;()</code> in addition to <code>CreateMap&lt;Order, OrderDto&gt;()</code>.</p></div>
+
+      <ul>
+        <li><strong>Missing nested type maps</strong> — Register maps for every nested type in your object graph. Use <code>AssertConfigurationIsValid()</code> to catch these.</li>
+        <li><strong>Circular references without <code>MaxDepth</code></strong> — Self-referencing types (trees, graphs) will cause a stack overflow without <code>MaxDepth()</code>.</li>
+        <li><strong>Using <code>BeforeMap</code>/<code>AfterMap</code> unnecessarily</strong> — These hooks force the flexible delegate path. For simple computed properties, use <code>MapFrom</code> instead.</li>
+        <li><strong>Forgetting to register <code>Ignore()</code> for validation</strong> — <code>AssertConfigurationIsValid()</code> will fail on unmapped destination properties. Use <code>Ignore()</code> for properties you intentionally leave unmapped.</li>
+        <li><strong>Registering maps after construction</strong> — <code>MapperConfiguration</code> is immutable after construction. All maps must be registered in the constructor callback.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

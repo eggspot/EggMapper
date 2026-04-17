@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EggMapper vs AutoMapper — EggMapper</title>
+  <meta name="description" content="Compare EggMapper and AutoMapper for .NET object mapping. Same API, 2-5x faster, MIT licensed.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>EggMapper vs AutoMapper</h1>
+
+      <hr>
+
+      <h2>Why Switch from AutoMapper?</h2>
+
+      <div class="note"><p>AutoMapper changed to a commercial license (RPL) starting v13. EggMapper is a <strong>free, MIT-licensed</strong> drop-in replacement that is also <strong>2-5x faster</strong> with <strong>zero extra allocations</strong>. Whether you need to replace AutoMapper due to the license change or you are evaluating mappers for a new project, EggMapper gives you the same API at significantly higher performance. Migration takes about 5 minutes.</p></div>
+
+      <h2>Feature Comparison</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Feature</th><th>AutoMapper 16.x</th><th>EggMapper</th></tr></thead>
+        <tbody>
+          <tr><td><strong>License</strong></td><td>RPL 1.5 (commercial)</td><td>MIT (free forever)</td></tr>
+          <tr><td><strong>Performance</strong></td><td>Baseline</td><td><strong>2-5x faster</strong></td></tr>
+          <tr><td><strong>Allocations</strong></td><td>Extra per-map</td><td><strong>Zero extra</strong></td></tr>
+          <tr><td><strong>Runtime reflection</strong></td><td>Yes</td><td><strong>No</strong> (compiled expressions)</td></tr>
+          <tr><td><strong>API</strong></td><td>Original</td><td><strong>Same API</strong> — drop-in</td></tr>
+          <tr><td><strong>CreateMap / ForMember</strong></td><td>Yes</td><td>Yes (identical)</td></tr>
+          <tr><td><strong>Profile</strong></td><td>Yes</td><td>Yes (identical)</td></tr>
+          <tr><td><strong>IMapper</strong></td><td>Yes</td><td>Yes (identical)</td></tr>
+          <tr><td><strong>DI registration</strong></td><td><code>AddAutoMapper()</code></td><td><code>AddEggMapper()</code></td></tr>
+          <tr><td><strong>EF Core ProjectTo</strong></td><td><code>ProjectTo&lt;D&gt;(cfg)</code></td><td><code>ProjectTo&lt;S,D&gt;(cfg)</code></td></tr>
+          <tr><td><strong>Null collections</strong></td><td>Empty by default</td><td>Empty by default</td></tr>
+          <tr><td><strong>EF Core proxies</strong></td><td>Supported</td><td>Supported</td></tr>
+          <tr><td><strong>Same-type T to T</strong></td><td>Needs CreateMap</td><td><strong>Auto-compiles</strong></td></tr>
+          <tr><td><strong>Collection auto-map</strong></td><td>Automatic</td><td>Automatic</td></tr>
+          <tr><td><strong>Batch MapList</strong></td><td>Not built-in</td><td><strong>Built-in</strong> (inlined loop)</td></tr>
+          <tr><td><strong>Patch/partial</strong></td><td>Not built-in</td><td><strong>Built-in</strong></td></tr>
+          <tr><td><strong>Inline validation</strong></td><td>Not built-in</td><td><strong>Built-in</strong></td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Performance Comparison</h2>
+
+      <p>EggMapper consistently outperforms AutoMapper on every scenario. Measured with BenchmarkDotNet on .NET 10 (x64):</p>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Scenario</th><th>EggMapper</th><th>AutoMapper</th><th>Speedup</th><th>EggMapper Alloc</th><th>AutoMapper Alloc</th></tr></thead>
+        <tbody>
+          <tr><td>Flat mapping (10 props)</td><td>15 ns</td><td>35 ns</td><td><strong>2.3x</strong></td><td>104 B</td><td>232 B</td></tr>
+          <tr><td>Nested objects (2 levels)</td><td>25 ns</td><td>70 ns</td><td><strong>2.8x</strong></td><td>248 B</td><td>504 B</td></tr>
+          <tr><td>Flattening (8 props)</td><td>18 ns</td><td>50 ns</td><td><strong>2.8x</strong></td><td>104 B</td><td>232 B</td></tr>
+          <tr><td>Collection (100 items)</td><td>1.5 us</td><td>5 us</td><td><strong>3.3x</strong></td><td>10,824 B</td><td>14,424 B</td></tr>
+          <tr><td>Deep collection (100 nested)</td><td>3 us</td><td>12 us</td><td><strong>4.0x</strong></td><td>34,424 B</td><td>52,824 B</td></tr>
+          <tr><td>Large collection (1000 items)</td><td>15 us</td><td>50 us</td><td><strong>3.3x</strong></td><td>108,024 B</td><td>144,024 B</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="note"><p>EggMapper matches hand-written (manual) mapping allocation in every scenario. The only allocation is the destination object itself.</p></div>
+
+      <div class="note"><p>These numbers are representative. Run benchmarks on your own hardware: <code>cd src/EggMapper.Benchmarks &amp;&amp; dotnet run -c Release -f net10.0 -- --filter *</code></p></div>
+
+      <h3>Why EggMapper is Faster</h3>
+
+      <ol>
+        <li><p><strong>Inlined nested maps</strong> — AutoMapper calls a separate delegate for each nested object. EggMapper embeds the child mapping directly into the parent expression tree, eliminating delegate invocation overhead.</p></li>
+        <li><p><strong>Inlined collection loops</strong> — <code>MapList&lt;S,D&gt;()</code> compiles the entire <code>for</code> loop and element mapping as a single expression tree. No enumerator allocation, no per-element delegate call.</p></li>
+        <li><p><strong>Static generic caching</strong> — <code>FastCache&lt;TSource, TDestination&gt;</code> is a static generic class. The JIT bakes the cache field address directly into calling code. No dictionary lookup, no hash computation.</p></li>
+        <li><p><strong>Context-free delegates</strong> — For common maps (flat, nested, flattening), EggMapper compiles <code>Func&lt;TSource, TDestination&gt;</code> with zero boxing. AutoMapper always passes through a <code>ResolutionContext</code>.</p></li>
+        <li><p><strong>Zero allocations</strong> — No per-map allocations beyond the destination object itself. AutoMapper allocates <code>ResolutionContext</code> and intermediate collections.</p></li>
+      </ol>
+
+      <h3>Allocation Comparison</h3>
+
+      <pre><code>// BenchmarkDotNet results — Flat mapping, 10 properties
+// Lower is better
+
+|     Method |     Mean | Allocated |
+|----------- |---------:|----------:|
+|     Manual |   12 ns  |     104 B |  &lt;-- hand-written code
+|  EggMapper |   15 ns  |     104 B |  &lt;-- matches manual
+| AutoMapper |   35 ns  |     232 B |  &lt;-- 128 B extra per map
+|    Mapster |   20 ns  |     104 B |
+|   Mapperly |   13 ns  |     104 B |  &lt;-- source generator (compile-time)</code></pre>
+
+      <div class="note"><p>EggMapper matches manual code allocation in every scenario. The only allocation is the destination object itself.</p></div>
+
+      <h2>Migration Guide (5 minutes)</h2>
+
+      <h3>Step 1: Swap the NuGet Package</h3>
+
+      <pre><code>- dotnet add package AutoMapper
+- dotnet add package AutoMapper.Extensions.Microsoft.DependencyInjection
++ dotnet add package EggMapper</code></pre>
+
+      <h3>Step 2: Find and Replace Namespace</h3>
+
+      <pre><code>- using AutoMapper;
++ using EggMapper;</code></pre>
+
+      <h3>Step 3: Update DI Registration</h3>
+
+      <pre><code>- services.AddAutoMapper(typeof(MyProfile).Assembly);
++ services.AddEggMapper(typeof(MyProfile).Assembly);</code></pre>
+
+      <h3>Step 4: Update ProjectTo Calls</h3>
+
+      <p>EggMapper's <code>ProjectTo</code> takes both source and destination type parameters:</p>
+
+      <pre><code>- query.ProjectTo&lt;ProductDto&gt;(config);
++ query.ProjectTo&lt;Product, ProductDto&gt;(config);</code></pre>
+
+      <h3>Step 5: Run Tests</h3>
+
+      <p>All your existing <code>CreateMap</code>, <code>ForMember</code>, <code>Profile</code>, and <code>IMapper</code> code works unchanged.</p>
+
+      <h2>API Differences</h2>
+
+      <p>Most of the API is identical. Here are the differences worth knowing:</p>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>AutoMapper</th><th>EggMapper</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>ProjectTo&lt;TDest&gt;(config)</code></td><td><code>ProjectTo&lt;TSrc, TDest&gt;(config)</code></td><td>Explicit source type</td></tr>
+          <tr><td><code>AddAutoMapper(assemblies)</code></td><td><code>AddEggMapper(assemblies)</code></td><td>Same behavior</td></tr>
+          <tr><td><code>IMapper</code> is scoped</td><td><code>IMapper</code> is singleton</td><td>Safe because config is immutable</td></tr>
+          <tr><td><code>CreateMap&lt;T,T&gt;()</code> required for clone</td><td>Auto-compiles without CreateMap</td><td>Just call <code>Map&lt;T,T&gt;(obj)</code></td></tr>
+          <tr><td>No built-in Patch</td><td><code>mapper.Patch(source, dest)</code></td><td>Partial update</td></tr>
+          <tr><td>No built-in MapList</td><td><code>mapper.MapList&lt;S,D&gt;(list)</code></td><td>Batch collection</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Migration Examples</h2>
+
+      <h3>ForMember with MapFrom</h3>
+
+      <pre><code>using EggMapper;
+
+// Identical in both libraries
+cfg.CreateMap&lt;Customer, CustomerDto&gt;()
+    .ForMember(d =&gt; d.FullName, o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+    .ForMember(d =&gt; d.City, o =&gt; o.MapFrom(s =&gt; s.Address.City));</code></pre>
+
+      <h3>Ignore</h3>
+
+      <pre><code>// Identical in both libraries
+cfg.CreateMap&lt;User, UserDto&gt;()
+    .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore());</code></pre>
+
+      <h3>ReverseMap</h3>
+
+      <pre><code>// Identical in both libraries
+cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();</code></pre>
+
+      <h3>Profile</h3>
+
+      <pre><code>// Identical in both libraries
+public class OrderProfile : Profile
+{
+    public OrderProfile()
+    {
+        CreateMap&lt;Order, OrderDto&gt;();
+        CreateMap&lt;OrderLine, OrderLineDto&gt;();
+    }
+}</code></pre>
+
+      <h3>Conditions</h3>
+
+      <pre><code>// Identical in both libraries
+cfg.CreateMap&lt;Product, ProductDto&gt;()
+    .ForMember(d =&gt; d.Price,
+               o =&gt; o.Condition(s =&gt; s.Price &gt; 0));</code></pre>
+
+      <h3>BeforeMap / AfterMap</h3>
+
+      <pre><code>// Identical in both libraries
+cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .AfterMap((src, dst) =&gt; dst.MappedAt = DateTime.UtcNow);</code></pre>
+
+      <h3>MaxDepth (self-referencing types)</h3>
+
+      <pre><code>// Identical in both libraries
+cfg.CreateMap&lt;Category, CategoryDto&gt;()
+    .MaxDepth(3);</code></pre>
+
+      <h2>Common Migration Gotchas</h2>
+
+      <div class="warning"><p><code>ProjectTo</code> requires both type parameters in EggMapper. If you have <code>ProjectTo&lt;Dto&gt;(config)</code>, the compiler error will point you to the fix.</p></div>
+
+      <ul>
+        <li><strong><code>ProjectTo</code> signature</strong> — AutoMapper uses <code>ProjectTo&lt;TDest&gt;(config)</code>, EggMapper uses <code>ProjectTo&lt;TSrc, TDest&gt;(config)</code>. This is the most common compile error after migration.</li>
+        <li><strong>DI method name</strong> — <code>AddAutoMapper()</code> becomes <code>AddEggMapper()</code>. The parameters are identical.</li>
+        <li><strong>No behavioral differences</strong> — <code>ForMember</code>, <code>Ignore</code>, <code>Condition</code>, <code>ReverseMap</code>, <code>BeforeMap</code>, <code>AfterMap</code>, <code>MaxDepth</code>, <code>IncludeBase</code> all behave identically.</li>
+        <li><strong>Same-type mapping</strong> — If you have <code>CreateMap&lt;T, T&gt;()</code> calls for cloning, you can remove them. EggMapper auto-compiles these on first use.</li>
+      </ul>
+
+      <h2>Ready to Migrate?</h2>
+
+      <pre><code>dotnet add package EggMapper</code></pre>
+
+      <div class="note"><p>Most migrations are a find-and-replace. The entire process typically takes 5 minutes for a medium-sized project.</p></div>
+
+      <p><a href="quick-start.html">Quick Start Guide</a> | <a href="API-Reference.html">API Reference</a> | <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a></p>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>
