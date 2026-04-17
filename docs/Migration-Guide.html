@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migration Guide — EggMapper</title>
+  <meta name="description" content="Migrate from AutoMapper to EggMapper, or from runtime to compile-time mapping tiers.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Migration Guide</h1>
+
+      <hr>
+
+      <h2>Migrating from AutoMapper to EggMapper</h2>
+
+      <p>This is the most common migration path. EggMapper is a drop-in replacement for AutoMapper with the same API.</p>
+
+      <h3>Step-by-step</h3>
+
+      <p><strong>1. Swap NuGet packages:</strong></p>
+
+      <pre><code>dotnet remove package AutoMapper
+dotnet remove package AutoMapper.Extensions.Microsoft.DependencyInjection
+dotnet add package EggMapper</code></pre>
+
+      <p><strong>2. Find and replace the namespace:</strong></p>
+
+      <pre><code>- using AutoMapper;
++ using EggMapper;</code></pre>
+
+      <p><strong>3. Update DI registration:</strong></p>
+
+      <pre><code>- services.AddAutoMapper(typeof(MyProfile).Assembly);
++ services.AddEggMapper(typeof(MyProfile).Assembly);</code></pre>
+
+      <p><strong>4. Update ProjectTo calls (if any):</strong></p>
+
+      <pre><code>- query.ProjectTo&lt;ProductDto&gt;(config);
++ query.ProjectTo&lt;Product, ProductDto&gt;(config);</code></pre>
+
+      <p><strong>5. Run tests.</strong> All your existing <code>CreateMap</code>, <code>ForMember</code>, <code>Profile</code>, and <code>IMapper</code> code works unchanged.</p>
+
+      <h3>What stays the same</h3>
+
+      <p>These APIs are identical between AutoMapper and EggMapper:</p>
+
+      <ul>
+        <li><code>CreateMap&lt;TSrc, TDst&gt;()</code></li>
+        <li><code>ForMember(d =&gt; d.Prop, o =&gt; o.MapFrom(...))</code></li>
+        <li><code>ForMember(d =&gt; d.Prop, o =&gt; o.Ignore())</code></li>
+        <li><code>ForMember(d =&gt; d.Prop, o =&gt; o.Condition(...))</code></li>
+        <li><code>ForPath(d =&gt; d.A.B.Prop, o =&gt; o.MapFrom(...))</code></li>
+        <li><code>ReverseMap()</code></li>
+        <li><code>BeforeMap()</code> / <code>AfterMap()</code></li>
+        <li><code>MaxDepth()</code></li>
+        <li><code>IncludeBase&lt;TBaseSrc, TBaseDst&gt;()</code></li>
+        <li><code>Profile</code> base class</li>
+        <li><code>IMapper</code> interface</li>
+        <li><code>mapper.Map&lt;TSrc, TDst&gt;(source)</code></li>
+        <li><code>mapper.Map&lt;TDst&gt;(objectSource)</code></li>
+        <li><code>config.AssertConfigurationIsValid()</code></li>
+      </ul>
+
+      <h3>What is different</h3>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>AutoMapper</th><th>EggMapper</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td><code>ProjectTo&lt;TDest&gt;(config)</code></td><td><code>ProjectTo&lt;TSrc, TDest&gt;(config)</code></td><td>Explicit source type parameter</td></tr>
+          <tr><td><code>AddAutoMapper(assemblies)</code></td><td><code>AddEggMapper(assemblies)</code></td><td>Same behavior, different name</td></tr>
+          <tr><td><code>IMapper</code> registered as scoped</td><td><code>IMapper</code> registered as singleton</td><td>Safe because config is immutable</td></tr>
+          <tr><td><code>CreateMap&lt;T,T&gt;()</code> required for clone</td><td>Auto-compiles on first use</td><td>Just call <code>Map&lt;T,T&gt;(obj)</code></td></tr>
+          <tr><td>No built-in Patch</td><td><code>mapper.Patch(src, dst)</code></td><td>New feature</td></tr>
+          <tr><td>No built-in MapList</td><td><code>mapper.MapList&lt;S,D&gt;(list)</code></td><td>New feature</td></tr>
+          <tr><td>No inline validation</td><td><code>.Validate(d =&gt; d.Prop, pred, msg)</code></td><td>New feature</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Migration example: full controller</h3>
+
+      <p><strong>Before (AutoMapper):</strong></p>
+
+      <pre><code>using AutoMapper;
+
+public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public async Task&lt;IActionResult&gt; Get(int id)
+    {
+        var order = await db.Orders.Include(o =&gt; o.Customer).FirstOrDefaultAsync(o =&gt; o.Id == id);
+        return order is null ? NotFound() : Ok(mapper.Map&lt;OrderDto&gt;(order));
+    }
+
+    [HttpGet]
+    public async Task&lt;IActionResult&gt; GetAll()
+    {
+        var orders = await db.Orders.ToListAsync();
+        return Ok(mapper.Map&lt;List&lt;OrderSummaryDto&gt;&gt;(orders));
+    }
+}</code></pre>
+
+      <p><strong>After (EggMapper):</strong></p>
+
+      <pre><code>using EggMapper;
+
+public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public async Task&lt;IActionResult&gt; Get(int id)
+    {
+        var order = await db.Orders.Include(o =&gt; o.Customer).FirstOrDefaultAsync(o =&gt; o.Id == id);
+        return order is null ? NotFound() : Ok(mapper.Map&lt;Order, OrderDto&gt;(order));
+    }
+
+    [HttpGet]
+    public async Task&lt;IActionResult&gt; GetAll()
+    {
+        var orders = await db.Orders.ToListAsync();
+        return Ok(mapper.MapList&lt;Order, OrderSummaryDto&gt;(orders));  // faster batch mapping
+    }
+}</code></pre>
+
+      <div class="note"><p>The only changes are the <code>using</code> directive and optionally switching to the generic <code>Map&lt;TSrc, TDst&gt;()</code> and <code>MapList&lt;&gt;()</code> for better performance.</p></div>
+
+      <h3>You can also remove unnecessary <code>CreateMap&lt;T, T&gt;()</code> calls</h3>
+
+      <p>If you had self-referencing maps for cloning, EggMapper handles these automatically:</p>
+
+      <pre><code>  // Before
+  cfg.CreateMap&lt;Product, Product&gt;();
+
+  // After — remove the line, it auto-compiles</code></pre>
+
+      <hr>
+
+      <h2>Runtime to Compile-Time Mapping</h2>
+
+      <p>EggMapper supports <strong>three tiers</strong> of mapping. This guide walks through migrating from the runtime API (Tier 1 style) to the compile-time generators (Tier 2 and Tier 3).</p>
+
+      <h3>Tier overview</h3>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tier</th><th>Package</th><th>API</th><th>When to use</th></tr></thead>
+        <tbody>
+          <tr><td>Runtime</td><td><code>EggMapper</code></td><td><code>MapperConfiguration</code> + <code>CreateMap</code></td><td>Complex/conditional mapping, existing AutoMapper code</td></tr>
+          <tr><td>Tier 2</td><td><code>EggMapper.Generator</code></td><td><code>[MapTo]</code> attribute</td><td>Simple 1:1 copies, want compile-time safety</td></tr>
+          <tr><td>Tier 3</td><td><code>EggMapper.ClassMapper</code></td><td><code>[EggMapper]</code> partial class</td><td>Custom logic alongside generated code, DI, reverse mapping</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>You can mix all three tiers in the same project — there is no requirement to migrate everything at once.</p>
+
+      <hr>
+
+      <h3>Migrating a simple <code>CreateMap</code> to <code>[MapTo]</code></h3>
+
+      <h4>Before (runtime)</h4>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.CreateMap&lt;Order, OrderDto&gt;();
+});
+var mapper = config.CreateMapper();
+
+// Usage
+var dto = mapper.Map&lt;OrderDto&gt;(order);</code></pre>
+
+      <h4>After (Tier 2 -- compile-time extension method)</h4>
+
+      <pre><code>// 1. Add [MapTo] to the source class
+[MapTo(typeof(OrderDto))]
+public class Order
+{
+    public int    Id    { get; set; }
+    public string Name  { get; set; } = "";
+}
+
+// 2. Use the generated extension
+var dto = order.ToOrderDto();</code></pre>
+
+      <p><strong>What you gain:</strong></p>
+      <ul>
+        <li>Mapping errors reported at <strong>build time</strong> (not runtime)</li>
+        <li>Zero startup cost — no <code>MapperConfiguration</code> needed</li>
+        <li>Zero reflection at call time</li>
+      </ul>
+
+      <hr>
+
+      <h3>Migrating a <code>CreateMap</code> with <code>ForMember</code> to <code>[EggMapper]</code></h3>
+
+      <h4>Before (runtime with customization)</h4>
+
+      <pre><code>cfg.CreateMap&lt;Customer, CustomerDto&gt;()
+   .ForMember(d =&gt; d.DisplayLabel,
+              o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"));</code></pre>
+
+      <h4>After (Tier 3 -- partial class mapper)</h4>
+
+      <pre><code>[EggMapper]
+public partial class CustomerMapper
+{
+    public partial CustomerDto Map(Customer source);
+
+    // Custom logic lives alongside the generated code
+    private string BuildDisplayLabel(Customer s)
+        =&gt; $"{s.FirstName} {s.LastName}";
+}</code></pre>
+
+      <p>The generator maps all matching properties automatically and uses <code>BuildDisplayLabel(Customer)</code> automatically if <code>CustomerDto.DisplayLabel</code> is of type <code>string</code>.</p>
+
+      <hr>
+
+      <h3>Migrating <code>ReverseMap</code></h3>
+
+      <h4>Before (runtime)</h4>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();</code></pre>
+
+      <h4>After (Tier 3)</h4>
+
+      <pre><code>[EggMapper]
+public partial class OrderMapper
+{
+    public partial OrderDto Map(Order source);
+    public partial Order    Map(OrderDto source);
+}</code></pre>
+
+      <hr>
+
+      <h3>Migrating <code>Profile</code> classes</h3>
+
+      <p>If you have a large <code>Profile</code> subclass, the Analyzer EGG1003 will flag each bare <code>CreateMap&lt;S,D&gt;()</code> call that has no customizations and suggest replacing it with <code>[MapTo]</code>. Use the IDE quick-fix to apply the suggestion automatically.</p>
+
+      <pre><code>// EGG1003 (Info): CreateMap&lt;Order, OrderDto&gt;() has no customizations.
+// Consider using [MapTo(typeof(OrderDto))] on Order with EggMapper.Generator
+// for compile-time type safety and zero-overhead mapping.</code></pre>
+
+      <hr>
+
+      <h2>Keeping the Runtime API</h2>
+
+      <p>Not everything needs to migrate. Keep <code>CreateMap</code> + <code>ForMember</code> for:</p>
+
+      <ul>
+        <li>Maps with <code>Condition</code>, <code>PreCondition</code>, <code>AfterMap</code> hooks</li>
+        <li><code>MaxDepth</code> / <code>IncludeBase</code> / polymorphic inheritance</li>
+        <li>Dynamic map selection at runtime</li>
+        <li>Patch mapping</li>
+        <li>Inline validation</li>
+        <li>Open generic maps</li>
+      </ul>
+
+      <p>The runtime API is fully retained and will not be removed.</p>
+
+      <hr>
+
+      <h2>Side-by-side checklist</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Runtime feature</th><th>Tier 2 equivalent</th><th>Tier 3 equivalent</th></tr></thead>
+        <tbody>
+          <tr><td><code>CreateMap&lt;S,D&gt;()</code></td><td><code>[MapTo(typeof(D))]</code> on S</td><td>partial method in <code>[EggMapper]</code> class</td></tr>
+          <tr><td><code>ForMember</code> rename</td><td><code>[MapProperty("Name")]</code> on source property</td><td>Custom converter method</td></tr>
+          <tr><td><code>Ignore()</code></td><td><code>[MapIgnore]</code> on source property</td><td>Omit from destination</td></tr>
+          <tr><td><code>ReverseMap()</code></td><td>Add <code>[MapTo(typeof(S))]</code> on D</td><td>Add reverse partial method</td></tr>
+          <tr><td><code>AfterMap(...)</code> hook</td><td><code>static partial void AfterMap(S,D)</code></td><td>Custom method in mapper class</td></tr>
+          <tr><td>Collection mapping</td><td><code>ToOrderDtoList()</code></td><td>Automatic via <code>List&lt;TDst&gt;</code> detection</td></tr>
+          <tr><td>Nested type mapping</td><td>Declare <code>[MapTo]</code> on nested type too</td><td>Declare additional partial method</td></tr>
+          <tr><td>DI singleton</td><td>N/A (static extension)</td><td><code>MyMapper.Instance</code> + constructor injection</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Start — EggMapper</title>
+  <meta name="description" content="Get started with EggMapper — installation, DI setup, profiles, collections, ProjectTo.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Quick Start</h1>
+
+      <hr>
+
+      <h2>Installation</h2>
+
+      <pre><code>dotnet add package EggMapper</code></pre>
+
+      <p>No separate DI package needed — <code>AddEggMapper()</code> is included.</p>
+
+      <p>Supported: <code>netstandard2.0</code>, <code>net462</code>, <code>net8.0</code>, <code>net9.0</code>, <code>net10.0</code></p>
+
+      <h2>Basic Usage</h2>
+
+      <pre><code>using EggMapper;
+
+// 1. Configure mappings
+var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.CreateMap&lt;Product, ProductDto&gt;();
+});
+
+// 2. Create mapper
+var mapper = config.CreateMapper();
+
+// 3. Map
+var dto = mapper.Map&lt;ProductDto&gt;(product);</code></pre>
+
+      <div class="note"><p>The <code>MapperConfiguration</code> constructor compiles all registered type maps into cached delegates. Create it once and keep it as a singleton.</p></div>
+
+      <h2>Dependency Injection (ASP.NET Core)</h2>
+
+      <pre><code>// Program.cs
+using EggMapper;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
+
+var app = builder.Build();
+
+app.MapGet("/products/{id}", async (int id, AppDbContext db, IMapper mapper) =&gt;
+{
+    var product = await db.Products.FindAsync(id);
+    return product is null
+        ? Results.NotFound()
+        : Results.Ok(mapper.Map&lt;Product, ProductDto&gt;(product));
+});
+
+app.Run();</code></pre>
+
+      <div class="note"><p>Both <code>MapperConfiguration</code> and <code>IMapper</code> are registered as <strong>singletons</strong>. The compiled delegate cache is built once and shared across all threads.</p></div>
+
+      <div class="note"><p>For Blazor, gRPC, Worker Service, and other DI scenarios, see <a href="Dependency-Injection.html">Dependency Injection</a>.</p></div>
+
+      <h2>Profiles</h2>
+
+      <p>Group related maps into profile classes for organization:</p>
+
+      <pre><code>using EggMapper;
+
+public class OrderProfile : Profile
+{
+    public OrderProfile()
+    {
+        CreateMap&lt;Order, OrderDto&gt;()
+            .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
+            .ForMember(d =&gt; d.Total, o =&gt; o.MapFrom(s =&gt; s.Lines.Sum(l =&gt; l.Quantity * l.UnitPrice)));
+
+        CreateMap&lt;OrderLine, OrderLineDto&gt;();
+
+        CreateMap&lt;Order, OrderSummaryDto&gt;()
+            .ForMember(d =&gt; d.LineCount, o =&gt; o.MapFrom(s =&gt; s.Lines.Count));
+    }
+}
+
+public class CustomerProfile : Profile
+{
+    public CustomerProfile()
+    {
+        CreateMap&lt;Customer, CustomerDto&gt;()
+            .ForMember(d =&gt; d.FullName, o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+            .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore());
+
+        CreateMap&lt;Address, AddressDto&gt;();
+    }
+}</code></pre>
+
+      <h2>Collection Mapping</h2>
+
+      <pre><code>// Optimized batch mapping — fully inlined compiled loop
+List&lt;ProductDto&gt; dtos = mapper.MapList&lt;Product, ProductDto&gt;(products);
+
+// Also works via Map&lt;&gt; — auto-detects collections
+var dtos2 = mapper.Map&lt;List&lt;ProductDto&gt;&gt;(products);</code></pre>
+
+      <p>No <code>CreateMap&lt;List&lt;Product&gt;, List&lt;ProductDto&gt;&gt;()</code> needed. Register the element map and collection mapping works automatically.</p>
+
+      <div class="note"><p><code>MapList&lt;S,D&gt;()</code> compiles the entire collection loop as a single expression tree. For large collections (100+ items), it is measurably faster than mapping elements individually.</p></div>
+
+      <h2>EF Core ProjectTo</h2>
+
+      <pre><code>using EggMapper;
+
+// Translates to SQL — no in-memory mapping, no entity materialization
+var dtos = await dbContext.Products
+    .Where(p =&gt; p.IsActive)
+    .ProjectTo&lt;Product, ProductDto&gt;(mapperConfig)
+    .ToListAsync();
+
+// Works with complex queries
+var orderSummaries = await dbContext.Orders
+    .Where(o =&gt; o.CreatedAt &gt;= cutoffDate)
+    .OrderByDescending(o =&gt; o.Total)
+    .ProjectTo&lt;Order, OrderSummaryDto&gt;(mapperConfig)
+    .Take(50)
+    .ToListAsync();</code></pre>
+
+      <div class="note"><p><code>ProjectTo</code> builds a pure <code>Expression&lt;Func&lt;TSource, TDest&gt;&gt;</code> and passes it to LINQ's <code>Select()</code>. EggMapper never calls <code>.Compile()</code> on this expression — the LINQ provider (EF Core) translates it to SQL.</p></div>
+
+      <h2>Same-Type Mapping (Cloning)</h2>
+
+      <pre><code>// No CreateMap needed — auto-compiles on first use
+var copy = mapper.Map&lt;Customer, Customer&gt;(customer);
+
+// Useful for creating snapshots before mutation
+var snapshot = mapper.Map&lt;Order, Order&gt;(order);
+order.Total = 0;  // snapshot.Total still has the original value</code></pre>
+
+      <h2>Patch Mapping (Partial Updates)</h2>
+
+      <pre><code>// Only non-null / set properties overwrite the destination
+var request = new UpdateProductRequest { Name = "New Name" };  // Price is null
+var product = await db.Products.FindAsync(id);
+
+mapper.Patch(request, product);
+// product.Name = "New Name", product.Price unchanged
+
+await db.SaveChangesAsync();</code></pre>
+
+      <h2>Validation</h2>
+
+      <pre><code>config.AssertConfigurationIsValid();
+// Throws if any destination members are unmapped and not ignored</code></pre>
+
+      <div class="warning"><p>Call this in your test suite to catch configuration errors at build time rather than runtime.</p></div>
+
+      <h2>Common Pitfalls</h2>
+
+      <div class="warning"><p>Do not create <code>MapperConfiguration</code> per-request. It compiles expression trees during construction, which is expensive. Always keep it as a singleton.</p></div>
+
+      <ul>
+        <li><strong>Forgetting nested type maps</strong> — If <code>CustomerDto</code> has an <code>AddressDto</code> property, you need both <code>CreateMap&lt;Customer, CustomerDto&gt;()</code> and <code>CreateMap&lt;Address, AddressDto&gt;()</code>.</li>
+        <li><strong>Using the non-generic <code>Map&lt;TDest&gt;(object)</code> overload in hot paths</strong> — The generic <code>Map&lt;TSrc, TDst&gt;(src)</code> is faster because it uses the static generic cache with zero dictionary lookups.</li>
+        <li><strong>Not calling <code>AssertConfigurationIsValid()</code> in tests</strong> — Missing maps silently leave destination properties at their default values.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

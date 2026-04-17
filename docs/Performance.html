@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Performance — EggMapper</title>
+  <meta name="description" content="EggMapper performance — benchmarks, allocation analysis, optimization techniques, and tuning tips.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub nav-link-active" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Performance</h1>
+
+      <hr>
+
+      <h2>How EggMapper Achieves High Performance</h2>
+
+      <p>EggMapper is the <strong>fastest .NET runtime object-to-object mapper</strong>, achieving near-manual mapping speed through these techniques:</p>
+
+      <ol>
+        <li><strong>Compile once, run many times</strong> — <code>MapperConfiguration</code> compiles expression-tree delegates at construction time. Every subsequent <code>Map()</code> call is a direct delegate invocation with no reflection.</li>
+        <li><strong>Context-free typed delegates</strong> — For flat and nested maps, EggMapper compiles <code>Func&lt;TSource, TDestination&gt;</code> delegates with zero boxing. Nested object mappings are <strong>inlined directly</strong> into the parent expression tree.</li>
+        <li><strong>Static generic caching</strong> — <code>FastCache&lt;TSource, TDestination&gt;</code> eliminates dictionary lookups after the first call for each type pair.</li>
+        <li><strong>Inlined collection loops</strong> — <code>MapList&lt;&gt;()</code> uses compiled <code>Func&lt;IList&lt;TSource&gt;, List&lt;TDestination&gt;&gt;</code> delegates where the entire loop + element mapping is a single expression tree.</li>
+        <li><strong>Zero extra allocations</strong> — EggMapper matches hand-written code allocation in every scenario.</li>
+      </ol>
+
+      <hr>
+
+      <h2>Why EggMapper is Faster Than AutoMapper</h2>
+
+      <h3>1. Inlined Nested Maps</h3>
+
+      <p>AutoMapper maps nested objects by calling a separate delegate for each child property. This means every nested object incurs delegate invocation overhead plus <code>ResolutionContext</code> management.</p>
+
+      <p>EggMapper <strong>inlines</strong> the entire child mapping directly into the parent expression tree. The compiled delegate for <code>Order -&gt; OrderDto</code> contains the code for <code>Customer -&gt; CustomerDto</code> and <code>Address -&gt; AddressDto</code> directly — no intermediate calls.</p>
+
+<pre><code>// What AutoMapper compiles (conceptual):
+dst.Customer = _customerMapper(src.Customer, ctx);  // delegate call
+dst.Address  = _addressMapper(src.Address, ctx);    // delegate call
+
+// What EggMapper compiles (conceptual):
+dst.Customer = new CustomerDto {
+    Id = src.Customer.Id,
+    Name = src.Customer.Name       // inlined directly
+};
+dst.Address = new AddressDto {
+    City = src.Address.City,       // inlined directly
+    Street = src.Address.Street
+};</code></pre>
+
+      <h3>2. Inlined Collection Loops</h3>
+
+      <p><code>MapList&lt;S,D&gt;()</code> compiles the entire collection loop as a single expression tree:</p>
+
+<pre><code>// Compiled delegate (conceptual):
+(IList&lt;Order&gt; src) =&gt; {
+    var result = new List&lt;OrderDto&gt;(src.Count);
+    for (int i = 0; i &lt; src.Count; i++) {
+        var item = src[i];
+        result.Add(new OrderDto {
+            Id = item.Id,
+            CustomerName = item.Customer.Name,  // nested mapping inlined
+            Total = item.Total
+        });
+    }
+    return result;
+}</code></pre>
+
+      <p>No enumerator allocation. No per-element delegate call. The JIT sees a tight <code>for</code> loop with direct property access.</p>
+
+      <h3>3. Static Generic Caching</h3>
+
+<pre><code>// EggMapper: zero-cost lookup via static generic class
+static class FastCache&lt;TSource, TDestination&gt;
+{
+    public static volatile CacheEntry? Entry;
+}
+
+// The JIT bakes the field address directly into calling code.
+// No dictionary, no hash, no key comparison.</code></pre>
+
+      <h3>4. Context-Free Delegates</h3>
+
+      <p>For the majority of maps (flat, nested, flattening), EggMapper compiles <code>Func&lt;TSource, TDestination&gt;</code> — a plain function with no context parameter, no boxing, no allocation beyond the destination object.</p>
+
+      <p>AutoMapper always passes through <code>ResolutionContext</code>, which adds overhead even when context features are not used.</p>
+
+      <hr>
+
+      <h2>Allocation Analysis</h2>
+
+      <p>EggMapper matches hand-written code allocation. The <strong>only</strong> allocation is the destination object itself:</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Scenario</th><th>Manual</th><th>EggMapper</th><th>AutoMapper</th><th>Mapster</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Flat (10 props)</td><td>104 B</td><td><strong>104 B</strong></td><td>232 B</td><td>104 B</td></tr>
+          <tr><td>Nested (2 objects)</td><td>248 B</td><td><strong>248 B</strong></td><td>504 B</td><td>248 B</td></tr>
+          <tr><td>Collection (100 items)</td><td>10,824 B</td><td><strong>10,824 B</strong></td><td>14,424 B</td><td>10,824 B</td></tr>
+          <tr><td>Deep collection (100 items, nested)</td><td>34,424 B</td><td><strong>34,424 B</strong></td><td>52,824 B</td><td>34,424 B</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>The "extra" allocations in AutoMapper come from <code>ResolutionContext</code> management and intermediate delegate infrastructure. EggMapper eliminates all of this at compile time.</p>
+
+      <div class="note"><p>These numbers are representative of .NET 10 x64 builds. Exact values vary by runtime and architecture.</p></div>
+
+      <hr>
+
+      <h2>Benchmark Setup</h2>
+
+      <p>The benchmark suite lives in <code>src/EggMapper.Benchmarks/</code> and uses <a href="https://benchmarkdotnet.org/" target="_blank" rel="noopener">BenchmarkDotNet</a>.</p>
+
+      <p>Each class compares <strong>six mappers</strong> against the same <strong>manual</strong> (hand-written) baseline:</p>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Benchmark class</th><th>Scenario</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>FlatMappingBenchmark</code></td><td>10-property flat object</td></tr>
+          <tr><td><code>FlatteningBenchmark</code></td><td>Flattening 2 nested objects into 8 properties</td></tr>
+          <tr><td><code>DeepTypeBenchmark</code></td><td>Object with two nested address objects</td></tr>
+          <tr><td><code>ComplexTypeBenchmark</code></td><td>Nested object + <code>List&lt;T&gt;</code> children</td></tr>
+          <tr><td><code>CollectionBenchmark</code></td><td><code>List&lt;T&gt;</code> with 100 elements</td></tr>
+          <tr><td><code>DeepCollectionBenchmark</code></td><td>100 elements with 2 nested objects each</td></tr>
+          <tr><td><code>LargeCollectionBenchmark</code></td><td><code>List&lt;T&gt;</code> with 1,000 elements</td></tr>
+          <tr><td><code>StartupBenchmark</code></td><td>Configuration / compilation time</td></tr>
+        </tbody>
+      </table></div>
+
+      <p><strong>Competitors tested:</strong> EggMapper, AutoMapper, Mapster, Mapperly (source-gen), AgileMapper.</p>
+
+      <hr>
+
+      <h2>Running Benchmarks Locally</h2>
+
+<pre><code>cd src/EggMapper.Benchmarks
+
+# All benchmarks on .NET 10 (recommended)
+dotnet run -c Release -f net10.0 -- --filter '*'
+
+# Single benchmark class
+dotnet run -c Release -f net10.0 -- --filter '*FlatMapping*'
+
+# Export to markdown + JSON
+dotnet run -c Release -f net10.0 -- --filter '*' --exporters markdown json
+
+# Faster CI-style run (fewer iterations)
+dotnet run -c Release -f net10.0 -- --filter '*' --job short</code></pre>
+
+      <p>Results are written to <code>BenchmarkDotNet.Artifacts/results/</code>.</p>
+
+      <hr>
+
+      <h2>CI Benchmark Results</h2>
+
+      <p>Benchmarks run automatically on every push to <code>main</code> and on every pull request via the <a href="https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml" target="_blank" rel="noopener">Benchmarks workflow</a>.</p>
+
+      <ul>
+        <li><strong>Pull requests</strong> receive a detailed comment with all tables, system info, and column descriptions.</li>
+        <li><strong>Main branch</strong> — the <code>README.md</code> Performance section is updated in-place with the latest tables.</li>
+      </ul>
+
+      <hr>
+
+      <h2>Performance Targets</h2>
+
+      <div class="table-wrap"><table>
+        <thead>
+          <tr><th>Scenario</th><th>Target</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Flat mapping</td><td>Faster than Mapster</td></tr>
+          <tr><td>Deep / nested mapping</td><td>Faster than Mapster</td></tr>
+          <tr><td>Flattening</td><td>Faster than Mapster</td></tr>
+          <tr><td>Collection (100 items)</td><td>Within 10% of Mapster</td></tr>
+          <tr><td>All scenarios</td><td>1.5-2.5x faster than AutoMapper</td></tr>
+          <tr><td>All scenarios</td><td>Zero extra allocations vs manual</td></tr>
+        </tbody>
+      </table></div>
+
+      <blockquote><p>A <strong>lower ratio</strong> is better. <code>Ratio = 1.00</code> equals the hand-written Manual baseline.</p></blockquote>
+
+      <hr>
+
+      <h2>Tips for Best Performance in Your Application</h2>
+
+      <h3>Use a Singleton <code>MapperConfiguration</code></h3>
+
+      <div class="warning"><p>Never construct <code>MapperConfiguration</code> per-request. The constructor compiles expression trees for every registered map. In DI, <code>AddEggMapper()</code> registers it as a singleton automatically.</p></div>
+
+      <h3>Prefer Generic <code>Map&lt;TSrc, TDst&gt;()</code> Over <code>Map&lt;TDst&gt;(object)</code></h3>
+
+      <div class="warning"><p>Always use the two-type-parameter overload in hot paths. It eliminates dictionary lookups entirely.</p></div>
+
+<pre><code>// Fast: uses static generic cache (zero dict lookup)
+var dto = mapper.Map&lt;Order, OrderDto&gt;(order);
+
+// Slower: requires GetType() + dictionary lookup
+var dto = mapper.Map&lt;OrderDto&gt;((object)order);</code></pre>
+
+      <p>The generic overload uses <code>FastCache&lt;TSource, TDestination&gt;</code> — a static generic class where the JIT bakes the cache field address directly into the calling code. The non-generic overload must resolve the source type at runtime.</p>
+
+      <h3>Use <code>MapList&lt;TSrc, TDst&gt;()</code> for Collections</h3>
+
+<pre><code>// Fast: fully inlined compiled loop
+List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);
+
+// Slower: per-element delegate invocation
+var dtos = orders.Select(o =&gt; mapper.Map&lt;Order, OrderDto&gt;(o)).ToList();</code></pre>
+
+      <p><code>MapList</code> compiles the entire loop as a single expression tree. For 100+ item collections, it is measurably faster.</p>
+
+      <h3>Use <code>ProjectTo</code> for Read-Only Queries</h3>
+
+      <div class="note"><p><code>ProjectTo</code> pushes the mapping into the SQL query. Only the columns needed for the DTO are selected, with no entity tracking overhead. Always prefer it for read-only data.</p></div>
+
+<pre><code>using EggMapper;
+
+// Best: SQL does the projection, no entity materialization
+var dtos = await db.Orders
+    .ProjectTo&lt;Order, OrderDto&gt;(config)
+    .ToListAsync();
+
+// Worse: loads full entities into memory, then maps
+var entities = await db.Orders.ToListAsync();
+var dtos = mapper.MapList&lt;Order, OrderDto&gt;(entities);</code></pre>
+
+      <p><code>ProjectTo</code> pushes the mapping into the SQL query. Only the columns needed for the DTO are selected. No entity tracking overhead.</p>
+
+      <h3>Register All Maps Upfront</h3>
+
+      <p>Discovered maps compiled lazily still pay a one-time cost on first use. Register everything in profiles or the configuration callback to front-load compilation at startup.</p>
+
+      <h3>Validate in Tests</h3>
+
+<pre><code>// In a unit test
+[Fact]
+public void MappingConfiguration_IsValid()
+{
+    var config = new MapperConfiguration(cfg =&gt;
+        cfg.AddProfiles(typeof(OrderProfile).Assembly));
+
+    config.AssertConfigurationIsValid();
+}</code></pre>
+
+      <p>This ensures every map is exercised during the test run. It also catches missing maps and typos in property names before production.</p>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profiles — EggMapper</title>
+  <meta name="description" content="EggMapper profiles — group related mappings into reusable Profile classes.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Profiles</h1>
+
+      <hr>
+
+      <p>Profiles let you group related <code>CreateMap</code> calls into a reusable class. This keeps your mapping configuration organised as the application grows.</p>
+
+      <hr>
+
+      <h2>Creating a Profile</h2>
+
+      <p>Inherit from <code>EggMapper.Profile</code> and call <code>CreateMap</code> inside the constructor:</p>
+
+      <pre><code>using EggMapper;
+
+public class OrderProfile : Profile
+{
+    public OrderProfile()
+    {
+        CreateMap&lt;Order, OrderDto&gt;()
+            .ForMember(d =&gt; d.CustomerName,
+                       opt =&gt; opt.MapFrom(s =&gt; s.Customer.FullName));
+
+        CreateMap&lt;OrderLine, OrderLineDto&gt;();
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Registering Profiles</h2>
+
+      <h3>Single profile</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+    cfg.AddProfile&lt;OrderProfile&gt;());</code></pre>
+
+      <h3>Multiple profiles</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.AddProfile&lt;OrderProfile&gt;();
+    cfg.AddProfile&lt;CustomerProfile&gt;();
+    cfg.AddProfile&lt;ProductProfile&gt;();
+});</code></pre>
+
+      <h3>Scan an assembly (recommended for large projects)</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+    cfg.AddProfiles(typeof(OrderProfile).Assembly));</code></pre>
+
+      <p>All classes that inherit <code>Profile</code> in the provided assembly are discovered and registered automatically.</p>
+
+      <hr>
+
+      <h2>Dependency Injection with Profiles</h2>
+
+      <p>When using the DI integration, pass the assembly directly:</p>
+
+      <pre><code>// Program.cs
+builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
+
+      <p>See <a href="Dependency-Injection.html">Dependency Injection</a> for details.</p>
+
+      <hr>
+
+      <h2>Real-World Profile Examples</h2>
+
+      <h3>E-commerce order aggregate</h3>
+
+      <pre><code>public class OrderProfile : Profile
+{
+    public OrderProfile()
+    {
+        // Entity -&gt; DTO (read operations)
+        CreateMap&lt;Order, OrderDto&gt;()
+            .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
+            .ForMember(d =&gt; d.ShippingCity, o =&gt; o.MapFrom(s =&gt; s.ShippingAddress.City))
+            .ForMember(d =&gt; d.TotalWithTax, o =&gt; o.MapFrom(s =&gt; s.Total * (1 + s.TaxRate)));
+
+        CreateMap&lt;Order, OrderSummaryDto&gt;()
+            .ForMember(d =&gt; d.LineCount, o =&gt; o.MapFrom(s =&gt; s.Lines.Count))
+            .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName));
+
+        CreateMap&lt;OrderLine, OrderLineDto&gt;();
+        CreateMap&lt;OrderLine, OrderLineSummaryDto&gt;();
+
+        // Request -&gt; Entity (write operations)
+        CreateMap&lt;CreateOrderRequest, Order&gt;()
+            .ForMember(d =&gt; d.Id, o =&gt; o.Ignore())
+            .ForMember(d =&gt; d.CreatedAt, o =&gt; o.Ignore())
+            .ForMember(d =&gt; d.Status, o =&gt; o.Ignore());
+
+        CreateMap&lt;CreateOrderLineRequest, OrderLine&gt;()
+            .ForMember(d =&gt; d.Id, o =&gt; o.Ignore());
+
+        // Patch request
+        CreateMap&lt;UpdateOrderRequest, Order&gt;();
+    }
+}</code></pre>
+
+      <h3>Customer aggregate with address</h3>
+
+      <pre><code>public class CustomerProfile : Profile
+{
+    public CustomerProfile()
+    {
+        CreateMap&lt;Customer, CustomerDto&gt;()
+            .ForMember(d =&gt; d.FullName, o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+            .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore())
+            .ForMember(d =&gt; d.SecurityStamp, o =&gt; o.Ignore());
+
+        CreateMap&lt;Customer, CustomerSummaryDto&gt;()
+            .ForMember(d =&gt; d.FullName, o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"))
+            .ForMember(d =&gt; d.OrderCount, o =&gt; o.MapFrom(s =&gt; s.Orders.Count));
+
+        CreateMap&lt;Address, AddressDto&gt;();
+
+        CreateMap&lt;CreateCustomerRequest, Customer&gt;()
+            .ForMember(d =&gt; d.Id, o =&gt; o.Ignore())
+            .ForMember(d =&gt; d.CreatedAt, o =&gt; o.Ignore());
+
+        // Bidirectional
+        CreateMap&lt;Address, AddressDto&gt;().ReverseMap();
+    }
+}</code></pre>
+
+      <h3>Product catalog with categories</h3>
+
+      <pre><code>public class ProductProfile : Profile
+{
+    public ProductProfile()
+    {
+        CreateMap&lt;Product, ProductDto&gt;()
+            .ForMember(d =&gt; d.CategoryName, o =&gt; o.MapFrom(s =&gt; s.Category.Name))
+            .ForMember(d =&gt; d.InStock, o =&gt; o.MapFrom(s =&gt; s.StockQuantity &gt; 0));
+
+        CreateMap&lt;Product, ProductDetailDto&gt;()
+            .ForMember(d =&gt; d.CategoryPath, o =&gt; o.MapFrom(s =&gt; BuildCategoryPath(s.Category)));
+
+        CreateMap&lt;Category, CategoryDto&gt;()
+            .MaxDepth(3); // Category tree
+
+        CreateMap&lt;ProductImage, ProductImageDto&gt;();
+    }
+
+    private static string BuildCategoryPath(Category? cat)
+    {
+        var parts = new List&lt;string&gt;();
+        while (cat is not null)
+        {
+            parts.Insert(0, cat.Name);
+            cat = cat.Parent;
+        }
+        return string.Join(" &gt; ", parts);
+    }
+}</code></pre>
+
+      <hr>
+
+      <h2>Profile Organisation Strategies</h2>
+
+      <h3>By aggregate root (recommended)</h3>
+
+      <p>One profile per domain aggregate:</p>
+
+      <pre><code>Profiles/
+  OrderProfile.cs          // Order, OrderLine, OrderStatus
+  CustomerProfile.cs       // Customer, Address, ContactInfo
+  ProductProfile.cs        // Product, Category, ProductImage
+  PaymentProfile.cs        // Payment, CreditCardPayment, Refund</code></pre>
+
+      <h3>By layer</h3>
+
+      <p>Separate read and write mappings:</p>
+
+      <pre><code>Profiles/
+  ReadProfiles/
+    OrderReadProfile.cs    // Order -&gt; OrderDto, OrderSummaryDto
+    CustomerReadProfile.cs // Customer -&gt; CustomerDto
+  WriteProfiles/
+    OrderWriteProfile.cs   // CreateOrderRequest -&gt; Order
+    CustomerWriteProfile.cs</code></pre>
+
+      <h3>By feature / module</h3>
+
+      <p>For modular architectures:</p>
+
+      <pre><code>Modules/
+  Orders/
+    OrderProfile.cs
+  Inventory/
+    ProductProfile.cs
+  Reporting/
+    ReportProfile.cs</code></pre>
+
+      <hr>
+
+      <h2>Best Practices</h2>
+
+      <ul>
+        <li><strong>One profile per aggregate root</strong> — e.g. <code>OrderProfile</code> maps <code>Order</code>, <code>OrderLine</code>, <code>OrderStatus</code>.</li>
+        <li><strong>Keep profiles in the same assembly as the types they map</strong> — makes discovery straightforward.</li>
+        <li><strong>Avoid logic in profiles</strong> — Profiles define <em>what</em> maps to <em>what</em>. Complex logic belongs in services.</li>
+        <li><strong>Use <code>Ignore()</code> explicitly</strong> — Do not rely on properties being left at defaults. Explicit <code>Ignore()</code> makes intent clear and passes <code>AssertConfigurationIsValid()</code>.</li>
+        <li><strong>Call <code>config.AssertConfigurationIsValid()</code></strong> in your test suite to catch unmapped properties early.</li>
+      </ul>
+
+      <hr>
+
+      <h2>Common Pitfalls</h2>
+
+      <ul>
+        <li><strong>Duplicate type pair registrations</strong> — If two profiles both call <code>CreateMap&lt;Order, OrderDto&gt;()</code>, the second one wins silently. Keep each type pair in exactly one profile.</li>
+        <li><strong>Missing nested type maps</strong> — If <code>OrderDto.Customer</code> is a <code>CustomerDto</code>, you need <code>CreateMap&lt;Customer, CustomerDto&gt;()</code> in the same or another profile. Use <code>AssertConfigurationIsValid()</code> to catch these.</li>
+        <li><strong>Profile constructor with parameters</strong> — Profile constructors must be parameterless. Do not inject services into profiles.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

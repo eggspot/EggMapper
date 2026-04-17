@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Mapper ([EggMapper]) — EggMapper</title>
+  <meta name="description" content="EggMapper.ClassMapper — partial class mapper generation with [EggMapper] attribute.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Class Mapper (<code>[EggMapper]</code>)</h1>
+
+      <p><code>EggMapper.ClassMapper</code> generates implementations for <strong>partial mapping methods</strong> you declare in a class. You get full IDE auto-complete, type-checked mapping, and the ability to add custom logic alongside the generated code — all at zero runtime cost.</p>
+
+      <hr>
+
+      <h2>Installation</h2>
+
+      <pre><code>dotnet add package EggMapper.ClassMapper</code></pre>
+
+      <hr>
+
+      <h2>Basic Usage</h2>
+
+      <h3>1 — Declare a partial mapper class</h3>
+
+      <pre><code>using EggMapper;
+
+[EggMapper]
+public partial class OrderMapper
+{
+    public partial OrderDto Map(Order source);
+}</code></pre>
+
+      <h3>2 — The generator produces the implementation</h3>
+
+      <pre><code>// Auto-generated (OrderMapper.g.cs):
+public partial class OrderMapper
+{
+    public static OrderMapper Instance { get; } = new OrderMapper();
+
+    public partial OrderDto Map(Order source)
+    {
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        return new OrderDto
+        {
+            Id           = source.Id,
+            CustomerName = source.CustomerName,
+            Total        = source.Total,
+        };
+    }
+}</code></pre>
+
+      <h3>3 — Use the mapper</h3>
+
+      <pre><code>// Option A: static singleton
+OrderDto dto = OrderMapper.Instance.Map(order);
+
+// Option B: DI registration
+services.AddSingleton&lt;OrderMapper&gt;();
+// ...
+OrderDto dto = mapper.Map(order);</code></pre>
+
+      <hr>
+
+      <h2>Reverse Mapping</h2>
+
+      <p>Declare both directions and the generator implements both:</p>
+
+      <pre><code>[EggMapper]
+public partial class OrderMapper
+{
+    public partial OrderDto Map(Order source);
+    public partial Order    Map(OrderDto source);   // reverse
+}</code></pre>
+
+      <hr>
+
+      <h2>Nested Type Mapping</h2>
+
+      <p>Declare a method for each nested type — the generator chains them automatically:</p>
+
+      <pre><code>[EggMapper]
+public partial class OrderMapper
+{
+    public partial OrderDto    Map(Order source);
+    public partial AddressDto  Map(Address source);  // auto-used for Order.Address
+}</code></pre>
+
+      <p>The generated <code>Map(Order)</code> emits <code>Address = Map(source.Address)</code>.</p>
+
+      <hr>
+
+      <h2>Collection Mapping</h2>
+
+      <p>If a destination property is <code>List&lt;TDst&gt;</code> and source is a list-like type, and you have a partial method that maps <code>TSrc → TDst</code>:</p>
+
+      <pre><code>[EggMapper]
+public partial class OrderMapper
+{
+    public partial OrderDto Map(Order source);       // Order.Lines → OrderDto.Lines
+    public partial LineDto  Map(Line source);        // element mapper
+}
+// Generated: Lines = source.Lines?.Select(Map).ToList() ?? new List&lt;LineDto&gt;()</code></pre>
+
+      <hr>
+
+      <h2>Custom Converter Methods</h2>
+
+      <p>Add non-partial methods to the mapper class — the generator detects them by signature and uses them automatically:</p>
+
+      <pre><code>[EggMapper]
+public partial class PersonMapper
+{
+    public partial PersonDto Map(Person source);
+
+    // Converter: DateTime → string — used automatically for Birthday property
+    private string FormatDate(DateTime d) =&gt; d.ToString("yyyy-MM-dd");
+}</code></pre>
+
+      <hr>
+
+      <h2>Enum Mapping</h2>
+
+      <p>Enum-to-enum properties are mapped with an explicit cast. If underlying types differ, EGG3003 (Info) is reported.</p>
+
+      <pre><code>[EggMapper]
+public partial class StatusMapper
+{
+    public partial StatusDto Map(Status source);
+}
+// Generated: Kind = (StatusDtoKind)source.Kind,</code></pre>
+
+      <hr>
+
+      <h2>Diagnostics</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Severity</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>EGG3001</td><td>Warning</td><td>A writable destination property has no matching source — left at default</td></tr>
+          <tr><td>EGG3002</td><td>Warning</td><td><code>[EggMapper]</code> class has no partial mapping methods</td></tr>
+          <tr><td>EGG3003</td><td>Info</td><td>Enum-to-enum cast where underlying types differ</td></tr>
+        </tbody>
+      </table></div>
+
+      <hr>
+
+      <h2>When to Use Class Mapper vs Attribute Mapper</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Feature</th><th>Attribute Mapper <code>[MapTo]</code></th><th>Class Mapper <code>[EggMapper]</code></th></tr></thead>
+        <tbody>
+          <tr><td>Simple property copy</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Reverse mapping</td><td>No</td><td>Yes</td></tr>
+          <tr><td>Multiple destinations from one source</td><td>Yes</td><td>Yes</td></tr>
+          <tr><td>Custom converter logic alongside generated</td><td>Limited (AfterMap hook)</td><td>Yes — full methods</td></tr>
+          <tr><td>DI-friendly mapper instance</td><td>No (static extension)</td><td>Yes (Instance + ctor)</td></tr>
+          <tr><td>Property rename/ignore</td><td>Yes — <code>[MapProperty]</code>/<code>[MapIgnore]</code></td><td>via converter method</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

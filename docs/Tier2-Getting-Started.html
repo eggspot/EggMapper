@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attribute Mapper ([MapTo]) — EggMapper</title>
+  <meta name="description" content="EggMapper.Generator — compile-time extension methods with [MapTo] attribute.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Attribute Mapper (<code>[MapTo]</code>)</h1>
+
+      <p><code>EggMapper.Generator</code> generates <strong>zero-reflection, zero-allocation extension methods</strong> at build time from a single <code>[MapTo]</code> attribute. No <code>MapperConfiguration</code>, no runtime delegates — the mapping code is emitted directly into your binary.</p>
+
+      <hr>
+
+      <h2>Installation</h2>
+
+      <pre><code>dotnet add package EggMapper.Generator</code></pre>
+
+      <blockquote><p>The generator package automatically injects the <code>[MapTo]</code>, <code>[MapProperty]</code>, and <code>[MapIgnore]</code> attributes into your compilation — no separate abstractions package needed.</p></blockquote>
+
+      <hr>
+
+      <h2>Basic Usage</h2>
+
+      <h3>1 — Annotate the source class</h3>
+
+      <pre><code>using EggMapper;
+
+[MapTo(typeof(OrderDto))]
+public class Order
+{
+    public int    Id           { get; set; }
+    public string CustomerName { get; set; } = "";
+    public decimal Total       { get; set; }
+}
+
+public class OrderDto
+{
+    public int    Id           { get; set; }
+    public string CustomerName { get; set; } = "";
+    public decimal Total       { get; set; }
+}</code></pre>
+
+      <h3>2 — Use the generated extension method</h3>
+
+      <pre><code>var order = new Order { Id = 1, CustomerName = "Alice", Total = 99.99m };
+OrderDto dto = order.ToOrderDto();               // generated extension method
+List&lt;OrderDto&gt; dtos = orders.ToOrderDtoList();   // generated list method</code></pre>
+
+      <p>No mapper instance, no DI registration, no startup cost.</p>
+
+      <hr>
+
+      <h2>Multiple Destinations</h2>
+
+      <p>Apply <code>[MapTo]</code> multiple times to map a single source to several destinations:</p>
+
+      <pre><code>[MapTo(typeof(OrderDto))]
+[MapTo(typeof(OrderSummary))]
+public class Order { ... }</code></pre>
+
+      <p>Generates <code>ToOrderDto()</code>, <code>ToOrderDtoList()</code>, <code>ToOrderSummary()</code>, and <code>ToOrderSummaryList()</code>.</p>
+
+      <hr>
+
+      <h2>Renaming Properties (<code>[MapProperty]</code>)</h2>
+
+      <pre><code>[MapTo(typeof(CustomerDto))]
+public class Customer
+{
+    public int    Id   { get; set; }
+
+    [MapProperty("FullName")]   // maps Customer.Name → CustomerDto.FullName
+    public string Name { get; set; } = "";
+}</code></pre>
+
+      <hr>
+
+      <h2>Ignoring Properties (<code>[MapIgnore]</code>)</h2>
+
+      <pre><code>[MapTo(typeof(CustomerDto))]
+public class Customer
+{
+    public int    Id       { get; set; }
+    public string Name     { get; set; } = "";
+
+    [MapIgnore]
+    public string Password { get; set; } = "";  // not copied to CustomerDto
+}</code></pre>
+
+      <hr>
+
+      <h2>Post-Map Hook (<code>AfterMap</code>)</h2>
+
+      <p>Declare a partial static method to run custom logic after the generated initializer:</p>
+
+      <pre><code>// In a separate file (user-authored):
+public static partial class OrderToOrderDtoExtensions
+{
+    static partial void AfterMap(Order source, OrderDto dest)
+    {
+        dest.DisplayName = $"#{source.Id} — {source.CustomerName}";
+    }
+}</code></pre>
+
+      <p>The generated <code>ToOrderDto()</code> calls <code>AfterMap(source, dest)</code> after building the object.</p>
+
+      <hr>
+
+      <h2>Diagnostics</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Code</th><th>Severity</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>EGG2001</td><td>Error</td><td>A destination property has no matching source member</td></tr>
+          <tr><td>EGG2002</td><td>Info</td><td>An implicit type conversion was applied</td></tr>
+        </tbody>
+      </table></div>
+
+      <hr>
+
+      <h2>When to Use Attribute Mapper vs Runtime EggMapper</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Scenario</th><th>Recommendation</th></tr></thead>
+        <tbody>
+          <tr><td>Simple 1:1 property copying, no custom logic</td><td><strong>Attribute Mapper</strong> — zero overhead, compile-time safety</td></tr>
+          <tr><td>Complex conditional mapping, <code>BeforeMap</code>/<code>AfterMap</code> hooks</td><td><strong>Runtime EggMapper</strong></td></tr>
+          <tr><td>Need <code>ForMember</code>, <code>ConvertUsing</code>, <code>MaxDepth</code></td><td><strong>Runtime EggMapper</strong></td></tr>
+          <tr><td>Want type errors at build time, not runtime</td><td><strong>Attribute Mapper</strong></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>

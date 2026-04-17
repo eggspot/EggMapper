@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EGG1003 — EggMapper Diagnostics</title>
+  <meta name="description" content="EGG1003: Consider compile-time mapping with [MapTo] — EggMapper Analyzers info.">
+  <link rel="icon" href="../favicon.ico">
+  <link rel="stylesheet" href="../assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="../index.html">
+    <img src="../assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="../index.html">Home</a>
+    <a class="nav-link" href="../quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="../Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="../Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="../Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="../Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="../Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="../Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="../API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="../vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="../Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="../Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="../Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>EGG1003 — Consider compile-time mapping with <code>[MapTo]</code></h1>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Property</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Severity</strong></td><td>Info</td></tr>
+          <tr><td><strong>Package</strong></td><td><code>EggMapper.Analyzers</code></td></tr>
+          <tr><td><strong>Category</strong></td><td>EggMapper</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Description</h2>
+
+      <p>A <code>CreateMap&lt;TSource, TDestination&gt;()</code> call has no customization chains (no <code>ForMember</code>, <code>BeforeMap</code>, <code>AfterMap</code>, etc.). Simple maps like this can be replaced with the <code>[MapTo(typeof(TDestination))]</code> attribute and <code>EggMapper.Generator</code>, gaining compile-time type checking and zero-overhead mapping.</p>
+
+      <p><code>ReverseMap()</code> alone is <strong>not</strong> considered a customization — the diagnostic still fires.</p>
+
+      <h2>Example (triggers info)</h2>
+
+      <pre><code>class MyProfile : Profile
+{
+    public MyProfile()
+    {
+        CreateMap&lt;Order, OrderDto&gt;();              // EGG1003
+        CreateMap&lt;Customer, CustomerDto&gt;()
+            .ReverseMap();                         // EGG1003 (ReverseMap alone is not a customization)
+        CreateMap&lt;Line, LineDto&gt;()
+            .ForMember(d =&gt; d.Label, o =&gt; ...);   // no diagnostic — has customization
+    }
+}</code></pre>
+
+      <h2>How to fix</h2>
+
+      <p>Install <code>EggMapper.Generator</code> and annotate the source class:</p>
+
+      <pre><code>[MapTo(typeof(OrderDto))]
+public class Order { ... }
+
+// Usage:
+var dto = order.ToOrderDto();</code></pre>
+
+      <p>See <a href="../Tier2-Getting-Started.html">Tier 2 Getting Started</a> for full details.</p>
+
+      <h2>How to suppress</h2>
+
+      <pre><code>#pragma warning disable EGG1003
+CreateMap&lt;Order, OrderDto&gt;();
+#pragma warning restore EGG1003</code></pre>
+
+      <p>Or in <code>.editorconfig</code>:</p>
+
+      <pre><code>dotnet_diagnostic.EGG1003.severity = none</code></pre>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </div>
+</footer>
+<script src="../assets/js/nav.js"></script>
+</body>
+</html>

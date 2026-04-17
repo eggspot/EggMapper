@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configuration — EggMapper</title>
+  <meta name="description" content="EggMapper configuration — MapperConfiguration, CreateMap, validation, thread safety.">
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="assets/css/eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="index.html">
+    <img src="assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="index.html">Home</a>
+    <a class="nav-link" href="quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="Performance.html">Performance</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="Tier2-Getting-Started.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="Tier3-Getting-Started.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>Configuration</h1>
+
+      <hr>
+
+      <h2><code>MapperConfiguration</code></h2>
+
+      <p><code>MapperConfiguration</code> is the <strong>entry point</strong> for EggMapper. You construct it once (typically at startup) and keep a single instance for the lifetime of the application.</p>
+
+      <pre><code>using EggMapper;
+
+var config = new MapperConfiguration(cfg =&gt;
+{
+    // Register maps here
+    cfg.CreateMap&lt;Source, Destination&gt;();
+});</code></pre>
+
+      <div class="warning"><p><code>MapperConfiguration</code> is immutable after construction. It is safe to call <code>CreateMapper()</code>, <code>Map()</code>, and <code>BuildProjection()</code> concurrently from any number of threads.</p></div>
+
+      <hr>
+
+      <h2>Registering Maps</h2>
+
+      <h3>Basic map</h3>
+
+      <pre><code>cfg.CreateMap&lt;Source, Destination&gt;();</code></pre>
+
+      <p>By convention, properties with identical names (case-insensitive) are mapped automatically. No configuration needed for matching property names.</p>
+
+      <h3>With custom member mapping</h3>
+
+      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+    .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
+    .ForMember(d =&gt; d.TotalWithTax, o =&gt; o.MapFrom(s =&gt; s.Total * 1.1m))
+    .ForMember(d =&gt; d.InternalNotes, o =&gt; o.Ignore());</code></pre>
+
+      <h3>Reverse map</h3>
+
+      <pre><code>cfg.CreateMap&lt;Source, Destination&gt;().ReverseMap();
+// Registers both Source -&gt; Destination and Destination -&gt; Source</code></pre>
+
+      <h3>Multiple maps</h3>
+
+      <pre><code>cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+cfg.CreateMap&lt;Customer, CustomerSummaryDto&gt;();
+cfg.CreateMap&lt;Address,  AddressDto&gt;();
+cfg.CreateMap&lt;Order,    OrderDto&gt;();
+cfg.CreateMap&lt;Order,    OrderSummaryDto&gt;();</code></pre>
+
+      <h3>Open generic maps</h3>
+
+      <pre><code>cfg.CreateMap(typeof(Result&lt;&gt;), typeof(ResultDto&lt;&gt;));
+cfg.CreateMap(typeof(PagedList&lt;&gt;), typeof(PagedListDto&lt;&gt;));</code></pre>
+
+      <hr>
+
+      <h2>Adding Profiles</h2>
+
+      <p>Group related maps in a <a href="Profiles.html"><code>Profile</code></a> class and register the entire profile at once:</p>
+
+      <pre><code>cfg.AddProfile&lt;OrderProfile&gt;();
+cfg.AddProfile&lt;CustomerProfile&gt;();</code></pre>
+
+      <p>Or scan an assembly for all profiles:</p>
+
+      <pre><code>cfg.AddProfiles(typeof(OrderProfile).Assembly);</code></pre>
+
+      <div class="note"><p>Assembly scanning is recommended for large projects. It automatically discovers and registers all <code>Profile</code> subclasses.</p></div>
+
+      <hr>
+
+      <h2>Creating a Mapper</h2>
+
+      <pre><code>IMapper mapper = config.CreateMapper();</code></pre>
+
+      <p><code>CreateMapper()</code> returns a lightweight <code>IMapper</code> instance backed by the compiled delegate cache. You may call it multiple times; each call returns a new wrapper around the same shared cache.</p>
+
+      <hr>
+
+      <h2>Configuration Validation</h2>
+
+      <p>Validate that every destination property has a source mapping (catches typos and missing maps early):</p>
+
+      <pre><code>config.AssertConfigurationIsValid();</code></pre>
+
+      <p>Call this in unit tests or at application startup to surface misconfiguration immediately.</p>
+
+      <pre><code>// Throws InvalidOperationException if any destination property is unmapped
+config.AssertConfigurationIsValid();</code></pre>
+
+      <h3>What validation checks</h3>
+
+      <ul>
+        <li>Every destination property must have either:
+          <ul>
+            <li>A matching source property (by name, case-insensitive)</li>
+            <li>A custom <code>MapFrom</code> expression</li>
+            <li>A flattening match (e.g., <code>AddressCity</code> matches <code>Address.City</code>)</li>
+            <li>An explicit <code>Ignore()</code> call</li>
+          </ul>
+        </li>
+        <li>Nested type maps must be registered</li>
+        <li>Constructor parameters must match source properties</li>
+      </ul>
+
+      <h3>Recommended: validate in a unit test</h3>
+
+      <pre><code>[Fact]
+public void AllMappings_ShouldBeValid()
+{
+    var config = new MapperConfiguration(cfg =&gt;
+        cfg.AddProfiles(typeof(OrderProfile).Assembly));
+
+    config.AssertConfigurationIsValid();
+}</code></pre>
+
+      <hr>
+
+      <h2><code>IMapperConfigurationExpression</code> Options</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Method</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>CreateMap&lt;TSrc, TDst&gt;()</code></td><td>Register a new type map and return the fluent builder</td></tr>
+          <tr><td><code>CreateMap(Type src, Type dst)</code></td><td>Register an open-generic type map</td></tr>
+          <tr><td><code>AddProfile&lt;TProfile&gt;()</code></td><td>Register all maps declared in a <code>Profile</code> subclass</td></tr>
+          <tr><td><code>AddProfile(profile)</code></td><td>Register a pre-constructed <code>Profile</code> instance</td></tr>
+          <tr><td><code>AddProfiles(assemblies)</code></td><td>Scan assemblies and register all <code>Profile</code> subclasses</td></tr>
+        </tbody>
+      </table></div>
+
+      <hr>
+
+      <h2>Configuration Patterns</h2>
+
+      <h3>Small application — inline configuration</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.CreateMap&lt;Product, ProductDto&gt;();
+    cfg.CreateMap&lt;Order, OrderDto&gt;()
+        .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName));
+});</code></pre>
+
+      <h3>Medium application — profiles</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.AddProfile&lt;OrderProfile&gt;();
+    cfg.AddProfile&lt;CustomerProfile&gt;();
+    cfg.AddProfile&lt;ProductProfile&gt;();
+});</code></pre>
+
+      <h3>Large application — assembly scanning</h3>
+
+      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+    cfg.AddProfiles(
+        typeof(OrderProfile).Assembly,        // Core domain
+        typeof(ReportProfile).Assembly));     // Reporting module</code></pre>
+
+      <h3>Multi-module application</h3>
+
+      <pre><code>// Each module defines its own profiles
+builder.Services.AddEggMapper(
+    typeof(OrderModule.OrderProfile).Assembly,
+    typeof(InventoryModule.ProductProfile).Assembly,
+    typeof(ReportingModule.ReportProfile).Assembly);</code></pre>
+
+      <hr>
+
+      <h2>Thread Safety</h2>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Scenario</th><th>Safe?</th></tr></thead>
+        <tbody>
+          <tr><td>Construct <code>MapperConfiguration</code> on one thread</td><td>Yes</td></tr>
+          <tr><td>Call <code>CreateMapper()</code> concurrently</td><td>Yes</td></tr>
+          <tr><td>Call <code>IMapper.Map()</code> concurrently</td><td>Yes</td></tr>
+          <tr><td>Call <code>IMapper.MapList()</code> concurrently</td><td>Yes</td></tr>
+          <tr><td>Call <code>IMapper.Patch()</code> concurrently</td><td>Yes</td></tr>
+          <tr><td>Use <code>ProjectTo()</code> concurrently</td><td>Yes</td></tr>
+          <tr><td>Add maps after construction</td><td>Not supported</td></tr>
+        </tbody>
+      </table></div>
+
+      <p>All mapping operations are thread-safe after construction. The compiled delegate cache is immutable and shared across all mapper instances.</p>
+
+      <hr>
+
+      <h2>Common Pitfalls</h2>
+
+      <ul>
+        <li><strong>Constructing <code>MapperConfiguration</code> per request</strong> — This recompiles all expression trees every time. Always keep it as a singleton.</li>
+        <li><strong>Adding maps after construction</strong> — Not supported. All maps must be registered in the constructor callback or in profiles.</li>
+        <li><strong>Not calling <code>AssertConfigurationIsValid()</code></strong> — Missing maps or typos in property names silently leave destination properties at their default values. Always validate in tests.</li>
+        <li><strong>Registering the same type pair twice</strong> — The second <code>CreateMap&lt;S,D&gt;()</code> overwrites the first. This is usually a mistake. Keep each type pair in a single profile.</li>
+      </ul>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT licensed &copy; <a href="https://eggspot.app">Eggspot</a>. Fastest .NET runtime object mapper.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+    <a href="https://github.com/eggspot/EggMapper/issues" target="_blank" rel="noopener">Issues</a>
+  </div>
+</footer>
+<script src="assets/js/nav.js"></script>
+</body>
+</html>
