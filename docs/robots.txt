@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
 Sitemap: https://eggspot.github.io/EggMapper/sitemap.xml
+

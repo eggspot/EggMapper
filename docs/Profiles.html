@@ -55,8 +55,6 @@
     <div class="content-wrapper">
       <h1>Profiles</h1>
 
-      <hr>
-
       <p>Profiles let you group related <code>CreateMap</code> calls into a reusable class. This keeps your mapping configuration organised as the application grows.</p>
 
       <hr>
@@ -268,6 +266,8 @@ builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
         <li><strong>Missing nested type maps</strong> — If <code>OrderDto.Customer</code> is a <code>CustomerDto</code>, you need <code>CreateMap&lt;Customer, CustomerDto&gt;()</code> in the same or another profile. Use <code>AssertConfigurationIsValid()</code> to catch these.</li>
         <li><strong>Profile constructor with parameters</strong> — Profile constructors must be parameterless. Do not inject services into profiles.</li>
       </ul>
+      <nav class="page-nav"><a class="page-nav-link prev" href="Configuration.html"><span class="page-nav-label">&larr; Previous</span><span class="page-nav-title">Configuration</span></a><a class="page-nav-link next" href="Dependency-Injection.html"><span class="page-nav-label">Next &rarr;</span><span class="page-nav-title">Dependency Injection</span></a></nav>
+
     </div>
   </main>
 </div>
