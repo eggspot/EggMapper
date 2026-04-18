@@ -133,6 +133,51 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 }
 .nav-link-sub { padding-left: 2.1rem; font-size: 0.84rem; }
 
+/* ── In-page TOC — sidebar sub-items ────────── */
+.nav-page-toc { margin: 0.15rem 0 0.4rem; }
+.nav-sub-link {
+  display: block;
+  padding: 0.22rem 1rem 0.22rem 2.6rem;
+  font-size: 0.77rem; color: var(--text-muted);
+  border-left: 2px solid transparent;
+  transition: color var(--ease), border-color var(--ease), background var(--ease);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5;
+}
+.nav-sub-link:hover { color: var(--text); background: var(--yellow-dim); }
+.nav-sub-link.toc-active { color: var(--yellow); border-left-color: rgba(250,180,0,0.55); font-weight: 500; }
+
+/* ── In-page TOC — right-side panel ─────────── */
+.toc-panel {
+  display: none;
+  position: fixed;
+  top: calc(var(--header-h) + 2rem);
+  right: 1.5rem;
+  width: 196px;
+  max-height: calc(100vh - var(--header-h) - 4rem);
+  overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.toc-panel::-webkit-scrollbar { width: 3px; }
+.toc-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+@media (min-width: 1380px) { .toc-panel { display: block; } }
+
+.toc-panel-label {
+  font-size: 0.68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--text-muted); margin-bottom: 0.6rem; padding-left: 0.75rem;
+}
+.toc-panel-link {
+  display: block;
+  padding: 0.28rem 0.5rem 0.28rem 0.75rem;
+  font-size: 0.8rem; color: var(--text-muted);
+  border-left: 2px solid var(--border-sub);
+  transition: color var(--ease), border-color var(--ease);
+  line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.toc-panel-link:hover { color: var(--text); border-left-color: var(--text-muted); }
+.toc-panel-link.toc-active { color: var(--yellow); border-left-color: var(--yellow); font-weight: 600; }
+
 /* ── Main content ────────────────────────────── */
 .main-content {
   flex: 1; margin-left: var(--sidebar-w);
