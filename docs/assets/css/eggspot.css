@@ -160,7 +160,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 .toc-panel::-webkit-scrollbar { width: 3px; }
 .toc-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-@media (min-width: 1380px) { .toc-panel { display: block; } }
+@media (min-width: 1280px) { .toc-panel { display: block; } }
 
 .toc-panel-label {
   font-size: 0.68rem; font-weight: 700;
