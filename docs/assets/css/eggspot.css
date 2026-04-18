@@ -368,6 +368,26 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   .feature-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Prev / Next navigation ──────────────────── */
+.page-nav {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+}
+.page-nav-link {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.75rem 1rem; border: 1px solid var(--border);
+  border-radius: var(--radius); flex: 1; min-width: 160px; max-width: 48%;
+  transition: border-color var(--ease), background var(--ease);
+  text-decoration: none;
+}
+.page-nav-link:hover { border-color: var(--yellow); background: var(--yellow-dim); }
+.page-nav-link.next { text-align: right; margin-left: auto; }
+.page-nav-label {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-muted);
+}
+.page-nav-title { font-size: 0.9rem; font-weight: 600; color: var(--yellow); }
+
 /* ── Global scrollbar ────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

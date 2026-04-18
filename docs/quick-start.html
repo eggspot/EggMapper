@@ -55,8 +55,6 @@
     <div class="content-wrapper">
       <h1>Quick Start</h1>
 
-      <hr>
-
       <h2>Installation</h2>
 
       <pre><code>dotnet add package EggMapper</code></pre>
@@ -209,6 +207,8 @@ await db.SaveChangesAsync();</code></pre>
         <li><strong>Using the non-generic <code>Map&lt;TDest&gt;(object)</code> overload in hot paths</strong> — The generic <code>Map&lt;TSrc, TDst&gt;(src)</code> is faster because it uses the static generic cache with zero dictionary lookups.</li>
         <li><strong>Not calling <code>AssertConfigurationIsValid()</code> in tests</strong> — Missing maps silently leave destination properties at their default values.</li>
       </ul>
+      <nav class="page-nav"><a class="page-nav-link next" href="Getting-Started.html"><span class="page-nav-label">Next &rarr;</span><span class="page-nav-title">Getting Started</span></a></nav>
+
     </div>
   </main>
 </div>

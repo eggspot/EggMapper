@@ -55,8 +55,6 @@
     <div class="content-wrapper">
       <h1>Configuration</h1>
 
-      <hr>
-
       <h2><code>MapperConfiguration</code></h2>
 
       <p><code>MapperConfiguration</code> is the <strong>entry point</strong> for EggMapper. You construct it once (typically at startup) and keep a single instance for the lifetime of the application.</p>
@@ -249,6 +247,8 @@ builder.Services.AddEggMapper(
         <li><strong>Not calling <code>AssertConfigurationIsValid()</code></strong> — Missing maps or typos in property names silently leave destination properties at their default values. Always validate in tests.</li>
         <li><strong>Registering the same type pair twice</strong> — The second <code>CreateMap&lt;S,D&gt;()</code> overwrites the first. This is usually a mistake. Keep each type pair in a single profile.</li>
       </ul>
+      <nav class="page-nav"><a class="page-nav-link prev" href="Getting-Started.html"><span class="page-nav-label">&larr; Previous</span><span class="page-nav-title">Getting Started</span></a><a class="page-nav-link next" href="Profiles.html"><span class="page-nav-label">Next &rarr;</span><span class="page-nav-title">Profiles</span></a></nav>
+
     </div>
   </main>
 </div>
