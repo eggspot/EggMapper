@@ -13,19 +13,19 @@
   --pink:         #FAB8C4;
   --pink-dim:     rgba(250, 184, 196, 0.12);
 
-  --bg:           #0c0c17;
-  --bg-card:      #131320;
-  --bg-sidebar:   #0f0f1c;
-  --bg-elevated:  #1c1c2d;
-  --border:       #242438;
-  --border-sub:   #1b1b2c;
+  --bg:           #12121a;
+  --bg-card:      #191928;
+  --bg-sidebar:   #0f0f18;
+  --bg-elevated:  #222234;
+  --border:       #282840;
+  --border-sub:   #1e1e2e;
 
-  --text:         #e2e2ef;
-  --text-muted:   #7878a0;
+  --text:         #e8e8f2;
+  --text-muted:   #9090b8;
   --text-link:    #FAB400;
 
-  --code-bg:      #08080f;
-  --code-border:  #1c1c2e;
+  --code-bg:      #0c0c16;
+  --code-border:  #1e1e2e;
 
   --sidebar-w:    264px;
   --header-h:     54px;
@@ -53,7 +53,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
 .site-header {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--header-h);
-  background: rgba(12, 12, 23, 0.90);
+  background: rgba(18, 18, 26, 0.92);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center;
@@ -268,10 +268,10 @@ tr:hover td { background: rgba(255,255,255,0.018); }
   border: 1.5px solid transparent; white-space: nowrap;
 }
 .btn-primary {
-  background: var(--yellow); color: #0c0c17; border-color: var(--yellow);
+  background: var(--yellow); color: #12121a; border-color: var(--yellow);
 }
 .btn-primary:hover {
-  background: var(--yellow-hover); color: #0c0c17;
+  background: var(--yellow-hover); color: #12121a;
   border-color: var(--yellow-hover);
   box-shadow: 0 4px 18px var(--yellow-glow);
   transform: translateY(-1px);
