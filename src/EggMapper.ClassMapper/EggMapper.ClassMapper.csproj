@@ -2,6 +2,19 @@
   <PropertyGroup>
     <AssemblyName>EggMapper.ClassMapper</AssemblyName>
     <RootNamespace>EggMapper.ClassMapper</RootNamespace>
+    <PackageId>EggMapper.ClassMapper</PackageId>
+    <Authors>Eggspot</Authors>
+    <Company>Eggspot</Company>
+    <Product>EggMapper</Product>
+    <Description>Roslyn source generator for EggMapper. Generates compile-time, zero-reflection mapping methods from [EggMapper] partial class declarations. Supports nested types, collections, reverse mapping, and custom converters.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>mapper;source-generator;compile-time;roslyn;class-mapper</PackageTags>
+    <Copyright>Copyright © Eggspot</Copyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591</NoWarn>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

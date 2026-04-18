@@ -151,6 +151,14 @@ jobs:
             --configuration Release --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             --output ./artifacts
+          dotnet pack src/EggMapper.Generator/EggMapper.Generator.csproj \
+            --configuration Release --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./artifacts
+          dotnet pack src/EggMapper.ClassMapper/EggMapper.ClassMapper.csproj \
+            --configuration Release --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./artifacts
 
       - name: Upload artifacts
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
