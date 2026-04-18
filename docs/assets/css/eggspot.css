@@ -187,7 +187,8 @@ pre {
 }
 pre code {
   background: none; border: none; padding: 0;
-  color: var(--text); font-size: inherit; white-space: pre;
+  font-size: inherit; white-space: pre;
+  /* colour controlled by prism-eggspot.css tokens */
 }
 
 /* ── Tables ──────────────────────────────────── */

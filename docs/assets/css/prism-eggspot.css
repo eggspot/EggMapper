@@ -1,0 +1,88 @@
+/* ================================================================
+   Prism.js syntax theme — eggspot.app brand colours
+   #FAB400 yellow · #5956E9 purple · #FAB8C4 pink · dark bg
+   ================================================================ */
+
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #e2e2ef;
+  background: none;
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+}
+
+/* Comments */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #525270;
+  font-style: italic;
+}
+
+/* Punctuation */
+.token.punctuation { color: #6868a0; }
+
+/* Namespace */
+.token.namespace { opacity: 0.75; }
+
+/* Numbers, booleans, constants */
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted { color: #f08d49; }
+
+/* Strings, chars */
+.token.string,
+.token.char,
+.token.inserted { color: #7ec699; }
+
+/* Keywords */
+.token.keyword,
+.token.atrule { color: #7b9eff; }
+
+/* Operators */
+.token.operator,
+.token.entity { color: #8888b0; }
+
+/* Class names, types — eggspot yellow */
+.token.class-name,
+.token.type-list,
+.token.builtin,
+.token.tag { color: #FAB400; }
+
+/* Functions */
+.token.function,
+.token.function-definition { color: #61afef; }
+
+/* Attributes, properties */
+.token.attr-name,
+.token.attr-value,
+.token.property { color: #c0beff; }
+
+/* Decorators / annotations — eggspot pink */
+.token.decorator,
+.token.annotation,
+.token.variable,
+.token.regex,
+.token.important { color: #FAB8C4; }
+
+/* Selector, url */
+.token.selector,
+.token.url { color: #7ec699; }
+
+/* Bold / italic markers */
+.token.important,
+.token.bold { font-weight: 700; }
+.token.italic { font-style: italic; }
+
+/* Inline entity links */
+.token.entity { cursor: help; }

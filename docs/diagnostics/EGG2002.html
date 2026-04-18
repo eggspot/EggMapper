@@ -7,6 +7,7 @@
   <meta name="description" content="EGG2002: Implicit type conversion applied (Generator) — EggMapper.Generator warning.">
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../assets/css/eggspot.css">
+  <link rel="stylesheet" href="../assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -67,7 +68,7 @@
 
       <h2>Example (triggers warning)</h2>
 
-      <pre><code>[MapTo(typeof(OrderDto))]
+      <pre><code class="language-csharp">[MapTo(typeof(OrderDto))]
 public class Order
 {
     public int Status { get; set; }   // int
@@ -84,7 +85,7 @@ public class OrderDto
 
       <h2>How to suppress</h2>
 
-      <pre><code>#pragma warning disable EGG2002
+      <pre><code class="language-csharp">#pragma warning disable EGG2002
 // ... your [MapTo]-annotated class
 #pragma warning restore EGG2002</code></pre>
     </div>
@@ -98,5 +99,7 @@ public class OrderDto
   </div>
 </footer>
 <script src="../assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

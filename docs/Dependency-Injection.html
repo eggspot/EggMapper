@@ -7,6 +7,7 @@
   <meta name="description" content="EggMapper DI integration — ASP.NET Core, Blazor, gRPC, Worker Service, minimal API setup.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -59,7 +60,7 @@
 
       <h2>Installation</h2>
 
-      <pre><code>dotnet add package EggMapper</code></pre>
+      <pre><code class="language-bash">dotnet add package EggMapper</code></pre>
 
       <hr>
 
@@ -67,7 +68,7 @@
 
       <h3>Minimal API</h3>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -119,7 +120,7 @@ app.Run();</code></pre>
 
       <h3>MVC Controller</h3>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 using EggMapper;
 
 builder.Services.AddControllers();
@@ -166,7 +167,7 @@ public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 
       <h2>Blazor Server / InteractiveServer</h2>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 using EggMapper;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -175,7 +176,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);</code></pre>
 
-      <pre><code>@* Components/Pages/Products.razor *@
+      <pre><code class="language-csharp">@* Components/Pages/Products.razor *@
 @page "/products"
 @inject IMapper Mapper
 @inject AppDbContext DbContext
@@ -204,7 +205,7 @@ builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);</code></pre>
 
       <h2>Blazor WebAssembly (WASM)</h2>
 
-      <pre><code>// Program.cs (client-side)
+      <pre><code class="language-csharp">// Program.cs (client-side)
 using EggMapper;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -216,7 +217,7 @@ builder.Services.AddEggMapper(typeof(ProductProfile).Assembly);
 
 await builder.Build().RunAsync();</code></pre>
 
-      <pre><code>// Services/ProductService.cs
+      <pre><code class="language-csharp">// Services/ProductService.cs
 public class ProductService(HttpClient http, IMapper mapper)
 {
     public async Task&lt;List&lt;ProductViewModel&gt;&gt; GetProductsAsync()
@@ -237,7 +238,7 @@ public class ProductService(HttpClient http, IMapper mapper)
 
       <h2>gRPC Service</h2>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 using EggMapper;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -248,7 +249,7 @@ var app = builder.Build();
 app.MapGrpcService&lt;OrderGrpcService&gt;();
 app.Run();</code></pre>
 
-      <pre><code>// Services/OrderGrpcService.cs
+      <pre><code class="language-csharp">// Services/OrderGrpcService.cs
 public class OrderGrpcService(IMapper mapper, AppDbContext db)
     : OrderService.OrderServiceBase
 {
@@ -284,7 +285,7 @@ public class OrderGrpcService(IMapper mapper, AppDbContext db)
 
       <h2>Worker Service / Background Service</h2>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 using EggMapper;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -296,7 +297,7 @@ builder.Services.AddHostedService&lt;DataSyncWorker&gt;();
 var host = builder.Build();
 host.Run();</code></pre>
 
-      <pre><code>// Workers/DataSyncWorker.cs
+      <pre><code class="language-csharp">// Workers/DataSyncWorker.cs
 public class DataSyncWorker(
     IMapper mapper,
     IServiceScopeFactory scopeFactory,
@@ -327,19 +328,19 @@ public class DataSyncWorker(
 
       <h3>Scan an assembly for Profiles (recommended)</h3>
 
-      <pre><code>builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
+      <pre><code class="language-csharp">builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
 
       <p>Pass one or more assemblies and every <code>Profile</code> subclass found will be registered automatically.</p>
 
       <h3>Scan multiple assemblies</h3>
 
-      <pre><code>builder.Services.AddEggMapper(
+      <pre><code class="language-csharp">builder.Services.AddEggMapper(
     typeof(OrderProfile).Assembly,    // Web layer profiles
     typeof(ReportProfile).Assembly);  // Reporting layer profiles</code></pre>
 
       <h3>Inline configuration (no profiles needed)</h3>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 builder.Services.AddEggMapper(cfg =&gt;
 {
@@ -372,7 +373,7 @@ builder.Services.AddEggMapper(cfg =&gt;
 
       <h3>With primary constructors (C# 12)</h3>
 
-      <pre><code>public class OrderService(IMapper mapper, AppDbContext db)
+      <pre><code class="language-csharp">public class OrderService(IMapper mapper, AppDbContext db)
 {
     public OrderDto GetOrder(int id)
     {
@@ -383,7 +384,7 @@ builder.Services.AddEggMapper(cfg =&gt;
 
       <h3>Traditional constructor injection</h3>
 
-      <pre><code>public class OrderService
+      <pre><code class="language-csharp">public class OrderService
 {
     private readonly IMapper _mapper;
     private readonly AppDbContext _db;
@@ -405,7 +406,7 @@ builder.Services.AddEggMapper(cfg =&gt;
 
       <p>You can also inject <code>MapperConfiguration</code> for <code>ProjectTo</code> or <code>BuildProjection</code>:</p>
 
-      <pre><code>public class ProductQueryService(MapperConfiguration config, AppDbContext db)
+      <pre><code class="language-csharp">public class ProductQueryService(MapperConfiguration config, AppDbContext db)
 {
     public async Task&lt;List&lt;ProductDto&gt;&gt; GetActiveProductsAsync()
     {
@@ -422,7 +423,7 @@ builder.Services.AddEggMapper(cfg =&gt;
 
       <p>Use <code>ServiceCollection</code> directly in unit tests without a full host:</p>
 
-      <pre><code>[Fact]
+      <pre><code class="language-csharp">[Fact]
 public void Should_MapOrderToDto()
 {
     var services = new ServiceCollection();
@@ -452,7 +453,7 @@ public void Should_MapOrderToDto()
 
       <h3>Validate all mappings in a single test</h3>
 
-      <pre><code>[Fact]
+      <pre><code class="language-csharp">[Fact]
 public void AllMappings_ShouldBeValid()
 {
     var services = new ServiceCollection();
@@ -489,5 +490,7 @@ public void AllMappings_ShouldBeValid()
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

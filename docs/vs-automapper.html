@@ -7,6 +7,7 @@
   <meta name="description" content="Compare EggMapper and AutoMapper for .NET object mapping. Same API, 2-5x faster, MIT licensed.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -133,25 +134,25 @@
 
       <h3>Step 1: Swap the NuGet Package</h3>
 
-      <pre><code>- dotnet add package AutoMapper
+      <pre><code class="language-bash">- dotnet add package AutoMapper
 - dotnet add package AutoMapper.Extensions.Microsoft.DependencyInjection
 + dotnet add package EggMapper</code></pre>
 
       <h3>Step 2: Find and Replace Namespace</h3>
 
-      <pre><code>- using AutoMapper;
+      <pre><code class="language-csharp">- using AutoMapper;
 + using EggMapper;</code></pre>
 
       <h3>Step 3: Update DI Registration</h3>
 
-      <pre><code>- services.AddAutoMapper(typeof(MyProfile).Assembly);
+      <pre><code class="language-csharp">- services.AddAutoMapper(typeof(MyProfile).Assembly);
 + services.AddEggMapper(typeof(MyProfile).Assembly);</code></pre>
 
       <h3>Step 4: Update ProjectTo Calls</h3>
 
       <p>EggMapper's <code>ProjectTo</code> takes both source and destination type parameters:</p>
 
-      <pre><code>- query.ProjectTo&lt;ProductDto&gt;(config);
+      <pre><code class="language-csharp">- query.ProjectTo&lt;ProductDto&gt;(config);
 + query.ProjectTo&lt;Product, ProductDto&gt;(config);</code></pre>
 
       <h3>Step 5: Run Tests</h3>
@@ -178,7 +179,7 @@
 
       <h3>ForMember with MapFrom</h3>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 // Identical in both libraries
 cfg.CreateMap&lt;Customer, CustomerDto&gt;()
@@ -187,18 +188,18 @@ cfg.CreateMap&lt;Customer, CustomerDto&gt;()
 
       <h3>Ignore</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 cfg.CreateMap&lt;User, UserDto&gt;()
     .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore());</code></pre>
 
       <h3>ReverseMap</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();</code></pre>
 
       <h3>Profile</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 public class OrderProfile : Profile
 {
     public OrderProfile()
@@ -210,20 +211,20 @@ public class OrderProfile : Profile
 
       <h3>Conditions</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 cfg.CreateMap&lt;Product, ProductDto&gt;()
     .ForMember(d =&gt; d.Price,
                o =&gt; o.Condition(s =&gt; s.Price &gt; 0));</code></pre>
 
       <h3>BeforeMap / AfterMap</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 cfg.CreateMap&lt;Order, OrderDto&gt;()
     .AfterMap((src, dst) =&gt; dst.MappedAt = DateTime.UtcNow);</code></pre>
 
       <h3>MaxDepth (self-referencing types)</h3>
 
-      <pre><code>// Identical in both libraries
+      <pre><code class="language-csharp">// Identical in both libraries
 cfg.CreateMap&lt;Category, CategoryDto&gt;()
     .MaxDepth(3);</code></pre>
 
@@ -240,7 +241,7 @@ cfg.CreateMap&lt;Category, CategoryDto&gt;()
 
       <h2>Ready to Migrate?</h2>
 
-      <pre><code>dotnet add package EggMapper</code></pre>
+      <pre><code class="language-bash">dotnet add package EggMapper</code></pre>
 
       <div class="note"><p>Most migrations are a find-and-replace. The entire process typically takes 5 minutes for a medium-sized project.</p></div>
 
@@ -259,5 +260,7 @@ cfg.CreateMap&lt;Category, CategoryDto&gt;()
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@
   <meta name="description" content="EggMapper performance — benchmarks, allocation analysis, optimization techniques, and tuning tips.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -113,7 +114,7 @@ dst.Address = new AddressDto {
 
       <h3>3. Static Generic Caching</h3>
 
-<pre><code>// EggMapper: zero-cost lookup via static generic class
+<pre><code class="language-csharp">// EggMapper: zero-cost lookup via static generic class
 static class FastCache&lt;TSource, TDestination&gt;
 {
     public static volatile CacheEntry? Entry;
@@ -180,7 +181,7 @@ static class FastCache&lt;TSource, TDestination&gt;
 
       <h2>Running Benchmarks Locally</h2>
 
-<pre><code>cd src/EggMapper.Benchmarks
+<pre><code class="language-bash">cd src/EggMapper.Benchmarks
 
 # All benchmarks on .NET 10 (recommended)
 dotnet run -c Release -f net10.0 -- --filter '*'
@@ -249,7 +250,7 @@ var dto = mapper.Map&lt;OrderDto&gt;((object)order);</code></pre>
 
       <h3>Use <code>MapList&lt;TSrc, TDst&gt;()</code> for Collections</h3>
 
-<pre><code>// Fast: fully inlined compiled loop
+<pre><code class="language-csharp">// Fast: fully inlined compiled loop
 List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);
 
 // Slower: per-element delegate invocation
@@ -261,7 +262,7 @@ var dtos = orders.Select(o =&gt; mapper.Map&lt;Order, OrderDto&gt;(o)).ToList();
 
       <div class="note"><p><code>ProjectTo</code> pushes the mapping into the SQL query. Only the columns needed for the DTO are selected, with no entity tracking overhead. Always prefer it for read-only data.</p></div>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 // Best: SQL does the projection, no entity materialization
 var dtos = await db.Orders
@@ -280,7 +281,7 @@ var dtos = mapper.MapList&lt;Order, OrderDto&gt;(entities);</code></pre>
 
       <h3>Validate in Tests</h3>
 
-<pre><code>// In a unit test
+<pre><code class="language-csharp">// In a unit test
 [Fact]
 public void MappingConfiguration_IsValid()
 {
@@ -305,5 +306,7 @@ public void MappingConfiguration_IsValid()
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

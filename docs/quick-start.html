@@ -7,6 +7,7 @@
   <meta name="description" content="Get started with EggMapper — installation, DI setup, profiles, collections, ProjectTo.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -57,7 +58,7 @@
 
       <h2>Installation</h2>
 
-      <pre><code>dotnet add package EggMapper</code></pre>
+      <pre><code class="language-bash">dotnet add package EggMapper</code></pre>
 
       <p>No separate DI package needed — <code>AddEggMapper()</code> is included.</p>
 
@@ -65,7 +66,7 @@
 
       <h2>Basic Usage</h2>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 // 1. Configure mappings
 var config = new MapperConfiguration(cfg =&gt;
@@ -83,7 +84,7 @@ var dto = mapper.Map&lt;ProductDto&gt;(product);</code></pre>
 
       <h2>Dependency Injection (ASP.NET Core)</h2>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 using EggMapper;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -110,7 +111,7 @@ app.Run();</code></pre>
 
       <p>Group related maps into profile classes for organization:</p>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 public class OrderProfile : Profile
 {
@@ -141,7 +142,7 @@ public class CustomerProfile : Profile
 
       <h2>Collection Mapping</h2>
 
-      <pre><code>// Optimized batch mapping — fully inlined compiled loop
+      <pre><code class="language-csharp">// Optimized batch mapping — fully inlined compiled loop
 List&lt;ProductDto&gt; dtos = mapper.MapList&lt;Product, ProductDto&gt;(products);
 
 // Also works via Map&lt;&gt; — auto-detects collections
@@ -153,7 +154,7 @@ var dtos2 = mapper.Map&lt;List&lt;ProductDto&gt;&gt;(products);</code></pre>
 
       <h2>EF Core ProjectTo</h2>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 // Translates to SQL — no in-memory mapping, no entity materialization
 var dtos = await dbContext.Products
@@ -221,5 +222,7 @@ await db.SaveChangesAsync();</code></pre>
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>
