@@ -9,7 +9,7 @@ Sponsored by [eggspot.app](https://eggspot.app)
 [![NuGet](https://img.shields.io/nuget/v/EggMapper.svg)](https://www.nuget.org/packages/EggMapper)
 [![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-📖 **[Full documentation →](https://github.com/eggspot/EggMapper/wiki)**
+📖 **[Full documentation →](https://eggspot.github.io/EggMapper/)**
 
 ## Overview
 
@@ -256,7 +256,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 
 EggMapper supports three complementary mapping approaches. Choose based on your use case:
 
-| | **Runtime** (`EggMapper`) | **Tier 2** (`EggMapper.Generator`) | **Tier 3** (`EggMapper.ClassMapper`) |
+| | **Runtime** (`EggMapper`) | **Attribute Mapper** (`EggMapper.Generator`) | **Class Mapper** (`EggMapper.ClassMapper`) |
 |---|---|---|---|
 | **API** | `MapperConfiguration` + `CreateMap` | `[MapTo(typeof(Dest))]` attribute | `[EggMapper]` partial class |
 | **Mapping errors detected** | Runtime | ✅ Build time | ✅ Build time |
@@ -268,7 +268,7 @@ EggMapper supports three complementary mapping approaches. Choose based on your 
 | **Migration from AutoMapper** | ✅ Drop-in | Via EGG1003 suggestion | New API |
 | **Best for** | Complex/conditional mapping | Simple 1:1 copies | Custom logic + compile safety |
 
-See [Migration Guide](docs/Migration-Guide.md) to move from runtime to compile-time APIs.
+See [Migration Guide](https://eggspot.github.io/EggMapper/Migration-Guide.html) to move from runtime to compile-time APIs.
 
 ---
 
@@ -276,17 +276,17 @@ See [Migration Guide](docs/Migration-Guide.md) to move from runtime to compile-t
 
 | Page | Description |
 |------|-------------|
-| [Getting Started](https://github.com/eggspot/EggMapper/wiki/Getting-Started) | Installation and your first runtime mapping |
-| [Tier 2 Getting Started](docs/Tier2-Getting-Started.md) | Compile-time extension methods with `[MapTo]` |
-| [Tier 3 Getting Started](docs/Tier3-Getting-Started.md) | Compile-time partial mapper classes with `[EggMapper]` |
-| [Migration Guide](docs/Migration-Guide.md) | Moving from runtime to compile-time APIs |
-| [Diagnostic Reference](docs/diagnostics/) | All EGG diagnostic codes explained |
-| [Configuration](https://github.com/eggspot/EggMapper/wiki/Configuration) | `MapperConfiguration` options |
-| [Profiles](https://github.com/eggspot/EggMapper/wiki/Profiles) | Organising maps with `Profile` |
-| [Dependency Injection](https://github.com/eggspot/EggMapper/wiki/Dependency-Injection) | ASP.NET Core / DI integration |
-| [Advanced Features](https://github.com/eggspot/EggMapper/wiki/Advanced-Features) | `ForMember`, conditions, hooks, etc. |
-| [Performance](https://github.com/eggspot/EggMapper/wiki/Performance) | Benchmark methodology & tips |
-| [API Reference](https://github.com/eggspot/EggMapper/wiki/API-Reference) | Full public API surface |
+| [Getting Started](https://eggspot.github.io/EggMapper/Getting-Started.html) | Installation and your first runtime mapping |
+| [Attribute Mapper](https://eggspot.github.io/EggMapper/Attribute-Mapper.html) | Compile-time extension methods with `[MapTo]` |
+| [Class Mapper](https://eggspot.github.io/EggMapper/Class-Mapper.html) | Compile-time partial mapper classes with `[EggMapper]` |
+| [Migration Guide](https://eggspot.github.io/EggMapper/Migration-Guide.html) | Moving from AutoMapper or runtime to compile-time APIs |
+| [Configuration](https://eggspot.github.io/EggMapper/Configuration.html) | `MapperConfiguration` options |
+| [Profiles](https://eggspot.github.io/EggMapper/Profiles.html) | Organising maps with `Profile` |
+| [Dependency Injection](https://eggspot.github.io/EggMapper/Dependency-Injection.html) | ASP.NET Core / DI integration |
+| [Advanced Features](https://eggspot.github.io/EggMapper/Advanced-Features.html) | `ForMember`, conditions, hooks, etc. |
+| [Performance](https://eggspot.github.io/EggMapper/Performance.html) | Benchmark methodology & tips |
+| [API Reference](https://eggspot.github.io/EggMapper/API-Reference.html) | Full public API surface |
+| [Diagnostic Reference](https://eggspot.github.io/EggMapper/diagnostics/EGG1002.html) | All EGG diagnostic codes explained |
 
 ## Sponsor
 
@@ -309,7 +309,7 @@ We welcome contributions from the community! Here's how you can help:
 - **Report bugs** — [Open an issue](https://github.com/eggspot/EggMapper/issues/new?template=bug_report.md)
 - **Request features** — [Start a discussion](https://github.com/eggspot/EggMapper/discussions/new?category=ideas)
 - **Submit code** — Fork, branch, and [open a pull request](https://github.com/eggspot/EggMapper/pulls)
-- **Improve docs** — Edit files in the `docs/` folder (auto-synced to the wiki)
+- **Improve docs** — Edit files in the `docs/` folder (published to [eggspot.github.io/EggMapper](https://eggspot.github.io/EggMapper/))
 - **Share benchmarks** — Run on your hardware and share results
 
 ### Development Setup
