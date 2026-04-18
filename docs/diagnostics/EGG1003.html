@@ -7,6 +7,7 @@
   <meta name="description" content="EGG1003: Consider compile-time mapping with [MapTo] — EggMapper Analyzers info.">
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../assets/css/eggspot.css">
+  <link rel="stylesheet" href="../assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -69,7 +70,7 @@
 
       <h2>Example (triggers info)</h2>
 
-      <pre><code>class MyProfile : Profile
+      <pre><code class="language-csharp">class MyProfile : Profile
 {
     public MyProfile()
     {
@@ -85,7 +86,7 @@
 
       <p>Install <code>EggMapper.Generator</code> and annotate the source class:</p>
 
-      <pre><code>[MapTo(typeof(OrderDto))]
+      <pre><code class="language-csharp">[MapTo(typeof(OrderDto))]
 public class Order { ... }
 
 // Usage:
@@ -95,7 +96,7 @@ var dto = order.ToOrderDto();</code></pre>
 
       <h2>How to suppress</h2>
 
-      <pre><code>#pragma warning disable EGG1003
+      <pre><code class="language-csharp">#pragma warning disable EGG1003
 CreateMap&lt;Order, OrderDto&gt;();
 #pragma warning restore EGG1003</code></pre>
 
@@ -113,5 +114,7 @@ CreateMap&lt;Order, OrderDto&gt;();
   </div>
 </footer>
 <script src="../assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

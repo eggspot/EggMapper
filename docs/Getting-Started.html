@@ -7,6 +7,7 @@
   <meta name="description" content="Getting started with EggMapper — install, define types, configure, map.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -59,11 +60,11 @@
 
       <h3>.NET CLI</h3>
 
-      <pre><code>dotnet add package EggMapper</code></pre>
+      <pre><code class="language-bash">dotnet add package EggMapper</code></pre>
 
       <h3>Package Manager Console (Visual Studio)</h3>
 
-      <pre><code>Install-Package EggMapper</code></pre>
+      <pre><code class="language-powershell">Install-Package EggMapper</code></pre>
 
       <div class="note"><p>DI support (<code>AddEggMapper()</code>) is included in the main package. No separate package needed.</p></div>
 
@@ -73,7 +74,7 @@
 
       <h3>1 -- Define your types</h3>
 
-      <pre><code>public class Order
+      <pre><code class="language-csharp">public class Order
 {
     public int Id { get; set; }
     public string CustomerName { get; set; } = "";
@@ -91,7 +92,7 @@ public class OrderDto
 
       <h3>2 -- Create a configuration</h3>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 var config = new MapperConfiguration(cfg =&gt;
 {
@@ -102,7 +103,7 @@ var config = new MapperConfiguration(cfg =&gt;
 
       <h3>3 -- Create a mapper and map</h3>
 
-      <pre><code>IMapper mapper = config.CreateMapper();
+      <pre><code class="language-csharp">IMapper mapper = config.CreateMapper();
 
 var order = new Order
 {
@@ -128,7 +129,7 @@ OrderDto dto2 = mapper.Map&lt;OrderDto&gt;(order);</code></pre>
 
       <p>When property names differ between source and destination, use <code>ForMember</code>:</p>
 
-      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+      <pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
 {
     cfg.CreateMap&lt;Customer, CustomerDto&gt;()
         .ForMember(d =&gt; d.FullName,
@@ -162,21 +163,21 @@ await db.SaveChangesAsync();</code></pre>
 
       <h3>Using <code>MapList</code> (recommended for performance)</h3>
 
-      <pre><code>List&lt;Order&gt; orders = await db.Orders.ToListAsync();
+      <pre><code class="language-csharp">List&lt;Order&gt; orders = await db.Orders.ToListAsync();
 
 // Fully inlined compiled loop — near-manual speed
 List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);</code></pre>
 
       <h3>Using <code>Map</code> with collection types</h3>
 
-      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;();
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;();
 
 // Auto-detects collection types
 var dtos = mapper.Map&lt;List&lt;OrderDto&gt;&gt;(orders);</code></pre>
 
       <h3>Nested collections</h3>
 
-      <pre><code>// Customer has List&lt;Order&gt;, Order has List&lt;OrderLine&gt;
+      <pre><code class="language-csharp">// Customer has List&lt;Order&gt;, Order has List&lt;OrderLine&gt;
 cfg.CreateMap&lt;Customer, CustomerDto&gt;();
 cfg.CreateMap&lt;Order, OrderDto&gt;();
 cfg.CreateMap&lt;OrderLine, OrderLineDto&gt;();
@@ -191,14 +192,14 @@ var dto = mapper.Map&lt;Customer, CustomerDto&gt;(customer);
 
       <p>EggMapper automatically selects the best-matching constructor:</p>
 
-      <pre><code>public record OrderDto(int Id, string CustomerName, decimal Total);
+      <pre><code class="language-csharp">public record OrderDto(int Id, string CustomerName, decimal Total);
 
 cfg.CreateMap&lt;Order, OrderDto&gt;();
 // Calls: new OrderDto(src.Id, src.CustomerName, src.Total)</code></pre>
 
       <p>Records with additional init properties:</p>
 
-      <pre><code>public record ProductDto(int Id, string Name)
+      <pre><code class="language-csharp">public record ProductDto(int Id, string Name)
 {
     public decimal Price { get; init; }
     public bool InStock { get; init; }
@@ -211,7 +212,7 @@ cfg.CreateMap&lt;Product, ProductDto&gt;();
 
       <h2>Using with DI (ASP.NET Core)</h2>
 
-      <pre><code>// Program.cs
+      <pre><code class="language-csharp">// Program.cs
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);
 
 // Any service or controller
@@ -268,5 +269,7 @@ public class OrderService(IMapper mapper, AppDbContext db)
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

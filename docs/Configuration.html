@@ -7,6 +7,7 @@
   <meta name="description" content="EggMapper configuration — MapperConfiguration, CreateMap, validation, thread safety.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -59,7 +60,7 @@
 
       <p><code>MapperConfiguration</code> is the <strong>entry point</strong> for EggMapper. You construct it once (typically at startup) and keep a single instance for the lifetime of the application.</p>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 var config = new MapperConfiguration(cfg =&gt;
 {
@@ -75,25 +76,25 @@ var config = new MapperConfiguration(cfg =&gt;
 
       <h3>Basic map</h3>
 
-      <pre><code>cfg.CreateMap&lt;Source, Destination&gt;();</code></pre>
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Source, Destination&gt;();</code></pre>
 
       <p>By convention, properties with identical names (case-insensitive) are mapped automatically. No configuration needed for matching property names.</p>
 
       <h3>With custom member mapping</h3>
 
-      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;()
     .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
     .ForMember(d =&gt; d.TotalWithTax, o =&gt; o.MapFrom(s =&gt; s.Total * 1.1m))
     .ForMember(d =&gt; d.InternalNotes, o =&gt; o.Ignore());</code></pre>
 
       <h3>Reverse map</h3>
 
-      <pre><code>cfg.CreateMap&lt;Source, Destination&gt;().ReverseMap();
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Source, Destination&gt;().ReverseMap();
 // Registers both Source -&gt; Destination and Destination -&gt; Source</code></pre>
 
       <h3>Multiple maps</h3>
 
-      <pre><code>cfg.CreateMap&lt;Customer, CustomerDto&gt;();
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Customer, CustomerDto&gt;();
 cfg.CreateMap&lt;Customer, CustomerSummaryDto&gt;();
 cfg.CreateMap&lt;Address,  AddressDto&gt;();
 cfg.CreateMap&lt;Order,    OrderDto&gt;();
@@ -101,7 +102,7 @@ cfg.CreateMap&lt;Order,    OrderSummaryDto&gt;();</code></pre>
 
       <h3>Open generic maps</h3>
 
-      <pre><code>cfg.CreateMap(typeof(Result&lt;&gt;), typeof(ResultDto&lt;&gt;));
+      <pre><code class="language-csharp">cfg.CreateMap(typeof(Result&lt;&gt;), typeof(ResultDto&lt;&gt;));
 cfg.CreateMap(typeof(PagedList&lt;&gt;), typeof(PagedListDto&lt;&gt;));</code></pre>
 
       <hr>
@@ -123,7 +124,7 @@ cfg.AddProfile&lt;CustomerProfile&gt;();</code></pre>
 
       <h2>Creating a Mapper</h2>
 
-      <pre><code>IMapper mapper = config.CreateMapper();</code></pre>
+      <pre><code class="language-csharp">IMapper mapper = config.CreateMapper();</code></pre>
 
       <p><code>CreateMapper()</code> returns a lightweight <code>IMapper</code> instance backed by the compiled delegate cache. You may call it multiple times; each call returns a new wrapper around the same shared cache.</p>
 
@@ -157,7 +158,7 @@ config.AssertConfigurationIsValid();</code></pre>
 
       <h3>Recommended: validate in a unit test</h3>
 
-      <pre><code>[Fact]
+      <pre><code class="language-csharp">[Fact]
 public void AllMappings_ShouldBeValid()
 {
     var config = new MapperConfiguration(cfg =&gt;
@@ -187,7 +188,7 @@ public void AllMappings_ShouldBeValid()
 
       <h3>Small application — inline configuration</h3>
 
-      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+      <pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
 {
     cfg.CreateMap&lt;Product, ProductDto&gt;();
     cfg.CreateMap&lt;Order, OrderDto&gt;()
@@ -196,7 +197,7 @@ public void AllMappings_ShouldBeValid()
 
       <h3>Medium application — profiles</h3>
 
-      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+      <pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
 {
     cfg.AddProfile&lt;OrderProfile&gt;();
     cfg.AddProfile&lt;CustomerProfile&gt;();
@@ -205,14 +206,14 @@ public void AllMappings_ShouldBeValid()
 
       <h3>Large application — assembly scanning</h3>
 
-      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+      <pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
     cfg.AddProfiles(
         typeof(OrderProfile).Assembly,        // Core domain
         typeof(ReportProfile).Assembly));     // Reporting module</code></pre>
 
       <h3>Multi-module application</h3>
 
-      <pre><code>// Each module defines its own profiles
+      <pre><code class="language-csharp">// Each module defines its own profiles
 builder.Services.AddEggMapper(
     typeof(OrderModule.OrderProfile).Assembly,
     typeof(InventoryModule.ProductProfile).Assembly,
@@ -261,5 +262,7 @@ builder.Services.AddEggMapper(
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

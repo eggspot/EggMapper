@@ -7,6 +7,7 @@
   <meta name="description" content="Complete API reference for EggMapper — MapperConfiguration, IMapper, profiles, fluent builders.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -63,17 +64,17 @@
 
       <p>The root configuration object. Construct once at startup; keep as a singleton.</p>
 
-<pre><code>public sealed class MapperConfiguration</code></pre>
+<pre><code class="language-csharp">public sealed class MapperConfiguration</code></pre>
 
       <h4>Constructor</h4>
 
-<pre><code>public MapperConfiguration(Action&lt;IMapperConfigurationExpression&gt; configure)</code></pre>
+<pre><code class="language-csharp">public MapperConfiguration(Action&lt;IMapperConfigurationExpression&gt; configure)</code></pre>
 
       <p>Compiles all registered type maps into cached delegates during construction. This is the only expensive call — all subsequent mapping is near-zero overhead.</p>
 
       <p><strong>Example:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 var config = new MapperConfiguration(cfg =&gt;
 {
@@ -102,14 +103,14 @@ var config = new MapperConfiguration(cfg =&gt;
 
       <p><strong><code>CreateMapper()</code> example:</strong></p>
 
-<pre><code>IMapper mapper = config.CreateMapper();
+<pre><code class="language-csharp">IMapper mapper = config.CreateMapper();
 
 // mapper is lightweight — backed by the shared compiled cache
 // Safe to call multiple times; each returns a new wrapper around the same cache</code></pre>
 
       <p><strong><code>AssertConfigurationIsValid()</code> example:</strong></p>
 
-<pre><code>// In a unit test — catch missing maps before production
+<pre><code class="language-csharp">// In a unit test — catch missing maps before production
 [Fact]
 public void MappingConfiguration_ShouldBeValid()
 {
@@ -136,7 +137,7 @@ var results = dbContext.Orders
 
       <p>The runtime mapping interface. Resolve from DI or call <code>config.CreateMapper()</code>.</p>
 
-<pre><code>public interface IMapper</code></pre>
+<pre><code class="language-csharp">public interface IMapper</code></pre>
 
       <h4>Methods</h4>
 
@@ -176,13 +177,13 @@ var dto = mapper.Map&lt;OrderDto&gt;(entity);
 
       <p><strong><code>MapList&lt;TSrc, TDst&gt;(source)</code> — batch collection mapping:</strong></p>
 
-<pre><code>var orders = await db.Orders.ToListAsync();
+<pre><code class="language-csharp">var orders = await db.Orders.ToListAsync();
 List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);
 // Entire loop compiled as a single expression tree — near-manual speed</code></pre>
 
       <p><strong><code>Patch&lt;TSrc, TDst&gt;(source, destination)</code> — partial update:</strong></p>
 
-<pre><code>// API endpoint for PATCH /products/{id}
+<pre><code class="language-csharp">// API endpoint for PATCH /products/{id}
 app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbContext db, IMapper mapper) =&gt;
 {
     var product = await db.Products.FindAsync(id);
@@ -214,7 +215,7 @@ app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbCon
 
       <p><strong><code>CreateMap&lt;TSrc, TDst&gt;()</code> example:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 var config = new MapperConfiguration(cfg =&gt;
 {
@@ -224,7 +225,7 @@ var config = new MapperConfiguration(cfg =&gt;
 
       <p><strong><code>CreateMap(Type, Type)</code> — open generics:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 var config = new MapperConfiguration(cfg =&gt;
 {
@@ -238,7 +239,7 @@ var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;Order&gt;&gt;(result);
 
       <p><strong><code>AddProfiles(assemblies)</code> example:</strong></p>
 
-<pre><code>var config = new MapperConfiguration(cfg =&gt;
+<pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
     cfg.AddProfiles(
         typeof(OrderProfile).Assembly,
         typeof(ReportProfile).Assembly));</code></pre>
@@ -271,21 +272,21 @@ var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;Order&gt;&gt;(result);
 
       <p><strong><code>ForMember</code> with <code>MapFrom</code> — custom mapping expression:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;()
     .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.Customer.FullName))
     .ForMember(d =&gt; d.TotalWithTax, o =&gt; o.MapFrom(s =&gt; s.Total * 1.1m))
     .ForMember(d =&gt; d.Status, o =&gt; o.MapFrom(s =&gt; s.Status.ToString()));</code></pre>
 
       <p><strong><code>ForMember</code> with <code>Ignore</code> — exclude sensitive data:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;User, UserDto&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;User, UserDto&gt;()
     .ForMember(d =&gt; d.PasswordHash, o =&gt; o.Ignore())
     .ForMember(d =&gt; d.SecurityStamp, o =&gt; o.Ignore())
     .ForMember(d =&gt; d.TwoFactorSecret, o =&gt; o.Ignore());</code></pre>
 
       <p><strong><code>ForMember</code> with <code>Condition</code> — conditional mapping:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;Product, ProductDto&gt;()
     .ForMember(d =&gt; d.DiscountPrice,
                o =&gt; o.Condition(s =&gt; s.Discount &gt; 0))
     .ForMember(d =&gt; d.WarehouseLocation,
@@ -293,27 +294,27 @@ var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;Order&gt;&gt;(result);
 
       <p><strong><code>ForMember</code> with <code>NullSubstitute</code> — fallback values:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;Product, ProductDto&gt;()
     .ForMember(d =&gt; d.Description, o =&gt; o.NullSubstitute("No description available"))
     .ForMember(d =&gt; d.ImageUrl, o =&gt; o.NullSubstitute("/images/placeholder.png"));</code></pre>
 
       <p><strong><code>ForPath</code> — nested destination paths:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;OrderFlatDto, Order&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;OrderFlatDto, Order&gt;()
     .ForPath(d =&gt; d.Customer.Name, o =&gt; o.MapFrom(s =&gt; s.CustomerName))
     .ForPath(d =&gt; d.Customer.Address.City, o =&gt; o.MapFrom(s =&gt; s.ShippingCity))
     .ForPath(d =&gt; d.Customer.Address.PostalCode, o =&gt; o.MapFrom(s =&gt; s.ShippingZip));</code></pre>
 
       <p><strong><code>ReverseMap</code> — bidirectional mapping:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Product, ProductDto&gt;().ReverseMap();
+<pre><code class="language-csharp">cfg.CreateMap&lt;Product, ProductDto&gt;().ReverseMap();
 // Equivalent to:
 // cfg.CreateMap&lt;Product, ProductDto&gt;();
 // cfg.CreateMap&lt;ProductDto, Product&gt;();</code></pre>
 
       <p><strong><code>BeforeMap</code> / <code>AfterMap</code> — lifecycle hooks:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;()
     .BeforeMap((src, dst) =&gt;
     {
         // Normalize data before mapping
@@ -327,14 +328,14 @@ var dto = mapper.Map&lt;Result&lt;Order&gt;, ResultDto&lt;Order&gt;&gt;(result);
 
       <p><strong><code>MaxDepth</code> — self-referencing types:</strong></p>
 
-<pre><code>// Category has Children: List&lt;Category&gt; (tree structure)
+<pre><code class="language-csharp">// Category has Children: List&lt;Category&gt; (tree structure)
 cfg.CreateMap&lt;Category, CategoryDto&gt;()
     .MaxDepth(3);
 // Maps 3 levels deep, then stops (children beyond depth 3 are null)</code></pre>
 
       <p><strong><code>IncludeBase</code> — polymorphic inheritance:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;Vehicle, VehicleDto&gt;();
+<pre><code class="language-csharp">cfg.CreateMap&lt;Vehicle, VehicleDto&gt;();
 cfg.CreateMap&lt;Car, CarDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();
 cfg.CreateMap&lt;Truck, TruckDto&gt;().IncludeBase&lt;Vehicle, VehicleDto&gt;();
 
@@ -345,7 +346,7 @@ var dto = mapper.Map&lt;Car, CarDto&gt;(car);
 
       <p><strong><code>Validate</code> — post-mapping validation:</strong></p>
 
-<pre><code>cfg.CreateMap&lt;CreateOrderRequest, Order&gt;()
+<pre><code class="language-csharp">cfg.CreateMap&lt;CreateOrderRequest, Order&gt;()
     .Validate(d =&gt; d.CustomerName, n =&gt; !string.IsNullOrWhiteSpace(n), "Customer name is required")
     .Validate(d =&gt; d.Total, t =&gt; t &gt; 0, "Order total must be positive")
     .Validate(d =&gt; d.Lines, l =&gt; l.Count &gt; 0, "Order must have at least one line");</code></pre>
@@ -362,7 +363,7 @@ var dto = mapper.Map&lt;Car, CarDto&gt;(car);
 
       <p><strong>Example — real-world profile:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 public class ECommerceProfile : Profile
 {
@@ -467,7 +468,7 @@ catch (MappingValidationException ex)
 
       <h3><code>QueryableExtensions.ProjectTo&lt;TSrc, TDst&gt;()</code></h3>
 
-<pre><code>public static IQueryable&lt;TDst&gt; ProjectTo&lt;TSrc, TDst&gt;(
+<pre><code class="language-csharp">public static IQueryable&lt;TDst&gt; ProjectTo&lt;TSrc, TDst&gt;(
     this IQueryable&lt;TSrc&gt; source,
     MapperConfiguration config)</code></pre>
 
@@ -475,7 +476,7 @@ catch (MappingValidationException ex)
 
       <p><strong>Example:</strong></p>
 
-<pre><code>// All of these work with ProjectTo
+<pre><code class="language-csharp">// All of these work with ProjectTo
 var activeProducts = await dbContext.Products
     .Where(p =&gt; p.IsActive)
     .ProjectTo&lt;Product, ProductDto&gt;(config)
@@ -509,13 +510,13 @@ var page = await dbContext.Orders
 
       <p><strong>Assembly scanning:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 builder.Services.AddEggMapper(typeof(OrderProfile).Assembly);</code></pre>
 
       <p><strong>Inline configuration:</strong></p>
 
-<pre><code>using EggMapper;
+<pre><code class="language-csharp">using EggMapper;
 
 builder.Services.AddEggMapper(cfg =&gt;
 {
@@ -525,7 +526,7 @@ builder.Services.AddEggMapper(cfg =&gt;
 
       <p><strong>Multiple assemblies:</strong></p>
 
-<pre><code>builder.Services.AddEggMapper(
+<pre><code class="language-csharp">builder.Services.AddEggMapper(
     typeof(OrderProfile).Assembly,       // Web API layer
     typeof(ReportProfile).Assembly);     // Reporting layer</code></pre>
       <nav class="page-nav"><a class="page-nav-link prev" href="Performance.html"><span class="page-nav-label">&larr; Previous</span><span class="page-nav-title">Performance</span></a><a class="page-nav-link next" href="vs-automapper.html"><span class="page-nav-label">Next &rarr;</span><span class="page-nav-title">vs AutoMapper</span></a></nav>
@@ -542,5 +543,7 @@ builder.Services.AddEggMapper(cfg =&gt;
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

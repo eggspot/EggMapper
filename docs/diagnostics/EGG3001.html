@@ -7,6 +7,7 @@
   <meta name="description" content="EGG3001: Unmapped destination property (ClassMapper) — EggMapper.ClassMapper warning.">
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../assets/css/eggspot.css">
+  <link rel="stylesheet" href="../assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -67,7 +68,7 @@
 
       <h2>Example (triggers warning)</h2>
 
-      <pre><code>[EggMapper]
+      <pre><code class="language-csharp">[EggMapper]
 public partial class OrderMapper
 {
     public partial OrderDto Map(Order source);   // EGG3001: OrderDto.Label has no source
@@ -80,11 +81,11 @@ public class OrderDto{ public int Id { get; set; } public string Label { get; se
 
       <p><strong>Option A</strong> — Add a matching property to the source type:</p>
 
-      <pre><code>public class Order { public int Id { get; set; } public string Label { get; set; } = ""; }</code></pre>
+      <pre><code class="language-csharp">public class Order { public int Id { get; set; } public string Label { get; set; } = ""; }</code></pre>
 
       <p><strong>Option B</strong> — Add a custom converter method that provides the value:</p>
 
-      <pre><code>[EggMapper]
+      <pre><code class="language-csharp">[EggMapper]
 public partial class OrderMapper
 {
     public partial OrderDto Map(Order source);
@@ -112,5 +113,7 @@ dotnet_diagnostic.EGG3001.severity = none</code></pre>
   </div>
 </footer>
 <script src="../assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@
   <meta name="description" content="Migrate from AutoMapper to EggMapper, or from runtime to compile-time mapping tiers.">
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="assets/css/eggspot.css">
+  <link rel="stylesheet" href="assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -63,23 +64,23 @@
 
       <p><strong>1. Swap NuGet packages:</strong></p>
 
-      <pre><code>dotnet remove package AutoMapper
+      <pre><code class="language-bash">dotnet remove package AutoMapper
 dotnet remove package AutoMapper.Extensions.Microsoft.DependencyInjection
 dotnet add package EggMapper</code></pre>
 
       <p><strong>2. Find and replace the namespace:</strong></p>
 
-      <pre><code>- using AutoMapper;
+      <pre><code class="language-csharp">- using AutoMapper;
 + using EggMapper;</code></pre>
 
       <p><strong>3. Update DI registration:</strong></p>
 
-      <pre><code>- services.AddAutoMapper(typeof(MyProfile).Assembly);
+      <pre><code class="language-csharp">- services.AddAutoMapper(typeof(MyProfile).Assembly);
 + services.AddEggMapper(typeof(MyProfile).Assembly);</code></pre>
 
       <p><strong>4. Update ProjectTo calls (if any):</strong></p>
 
-      <pre><code>- query.ProjectTo&lt;ProductDto&gt;(config);
+      <pre><code class="language-csharp">- query.ProjectTo&lt;ProductDto&gt;(config);
 + query.ProjectTo&lt;Product, ProductDto&gt;(config);</code></pre>
 
       <p><strong>5. Run tests.</strong> All your existing <code>CreateMap</code>, <code>ForMember</code>, <code>Profile</code>, and <code>IMapper</code> code works unchanged.</p>
@@ -124,7 +125,7 @@ dotnet add package EggMapper</code></pre>
 
       <p><strong>Before (AutoMapper):</strong></p>
 
-      <pre><code>using AutoMapper;
+      <pre><code class="language-csharp">using AutoMapper;
 
 public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 {
@@ -145,7 +146,7 @@ public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 
       <p><strong>After (EggMapper):</strong></p>
 
-      <pre><code>using EggMapper;
+      <pre><code class="language-csharp">using EggMapper;
 
 public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 {
@@ -170,7 +171,7 @@ public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 
       <p>If you had self-referencing maps for cloning, EggMapper handles these automatically:</p>
 
-      <pre><code>  // Before
+      <pre><code class="language-csharp">  // Before
   cfg.CreateMap&lt;Product, Product&gt;();
 
   // After — remove the line, it auto-compiles</code></pre>
@@ -200,7 +201,7 @@ public class OrdersController(IMapper mapper, AppDbContext db) : ControllerBase
 
       <h4>Before (runtime)</h4>
 
-      <pre><code>var config = new MapperConfiguration(cfg =&gt;
+      <pre><code class="language-csharp">var config = new MapperConfiguration(cfg =&gt;
 {
     cfg.CreateMap&lt;Order, OrderDto&gt;();
 });
@@ -211,7 +212,7 @@ var dto = mapper.Map&lt;OrderDto&gt;(order);</code></pre>
 
       <h4>After (Tier 2 -- compile-time extension method)</h4>
 
-      <pre><code>// 1. Add [MapTo] to the source class
+      <pre><code class="language-csharp">// 1. Add [MapTo] to the source class
 [MapTo(typeof(OrderDto))]
 public class Order
 {
@@ -235,13 +236,13 @@ var dto = order.ToOrderDto();</code></pre>
 
       <h4>Before (runtime with customization)</h4>
 
-      <pre><code>cfg.CreateMap&lt;Customer, CustomerDto&gt;()
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Customer, CustomerDto&gt;()
    .ForMember(d =&gt; d.DisplayLabel,
               o =&gt; o.MapFrom(s =&gt; $"{s.FirstName} {s.LastName}"));</code></pre>
 
       <h4>After (Tier 3 -- partial class mapper)</h4>
 
-      <pre><code>[EggMapper]
+      <pre><code class="language-csharp">[EggMapper]
 public partial class CustomerMapper
 {
     public partial CustomerDto Map(Customer source);
@@ -259,11 +260,11 @@ public partial class CustomerMapper
 
       <h4>Before (runtime)</h4>
 
-      <pre><code>cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();</code></pre>
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;().ReverseMap();</code></pre>
 
       <h4>After (Tier 3)</h4>
 
-      <pre><code>[EggMapper]
+      <pre><code class="language-csharp">[EggMapper]
 public partial class OrderMapper
 {
     public partial OrderDto Map(Order source);
@@ -276,7 +277,7 @@ public partial class OrderMapper
 
       <p>If you have a large <code>Profile</code> subclass, the Analyzer EGG1003 will flag each bare <code>CreateMap&lt;S,D&gt;()</code> call that has no customizations and suggest replacing it with <code>[MapTo]</code>. Use the IDE quick-fix to apply the suggestion automatically.</p>
 
-      <pre><code>// EGG1003 (Info): CreateMap&lt;Order, OrderDto&gt;() has no customizations.
+      <pre><code class="language-csharp">// EGG1003 (Info): CreateMap&lt;Order, OrderDto&gt;() has no customizations.
 // Consider using [MapTo(typeof(OrderDto))] on Order with EggMapper.Generator
 // for compile-time type safety and zero-overhead mapping.</code></pre>
 
@@ -328,5 +329,7 @@ public partial class OrderMapper
   </div>
 </footer>
 <script src="assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>

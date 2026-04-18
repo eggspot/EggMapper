@@ -7,6 +7,7 @@
   <meta name="description" content="EGG2001: Unmapped destination property (Generator) — EggMapper.Generator error.">
   <link rel="icon" href="../favicon.ico">
   <link rel="stylesheet" href="../assets/css/eggspot.css">
+  <link rel="stylesheet" href="../assets/css/prism-eggspot.css">
 </head>
 <body>
 <header class="site-header">
@@ -67,7 +68,7 @@
 
       <h2>Example (triggers error)</h2>
 
-      <pre><code>[MapTo(typeof(OrderDto))]
+      <pre><code class="language-csharp">[MapTo(typeof(OrderDto))]
 public class Order
 {
     public int Id { get; set; }
@@ -84,7 +85,7 @@ public class OrderDto
 
       <p><strong>Option A</strong> — Add the matching property to the source:</p>
 
-      <pre><code>public class Order
+      <pre><code class="language-csharp">public class Order
 {
     public int    Id    { get; set; }
     public string Label { get; set; } = "";
@@ -94,7 +95,7 @@ public class OrderDto
 
       <p>Not applicable when the property only exists on the destination. Use the <code>AfterMap</code> hook instead:</p>
 
-      <pre><code>public static partial class OrderToOrderDtoExtensions
+      <pre><code class="language-csharp">public static partial class OrderToOrderDtoExtensions
 {
     static partial void AfterMap(Order source, OrderDto dest)
     {
@@ -112,5 +113,7 @@ public class OrderDto
   </div>
 </footer>
 <script src="../assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </body>
 </html>
