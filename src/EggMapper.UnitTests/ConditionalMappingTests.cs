@@ -114,4 +114,53 @@ public class ConditionalMappingTests
         var dest = mapper.Map<FlatSource, FlatDest>(src);
         dest.Value.Should().BeApproximately(3.14, 0.001);
     }
+
+    [Fact]
+    public void Condition_without_MapFrom_still_maps_by_convention()
+    {
+        // ForMember with only Condition (no MapFrom) must still apply the convention
+        // source-member lookup — otherwise the property is silently dropped.
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, FlatDest>()
+               .ForMember(d => d.Name, opts => opts.Condition(s => !string.IsNullOrWhiteSpace(s.Name)));
+        }).CreateMapper();
+
+        var src = new FlatSource { Name = "updated" };
+        var dest = mapper.Map<FlatSource, FlatDest>(src);
+        dest.Name.Should().Be("updated");
+    }
+
+    [Fact]
+    public void Condition_without_MapFrom_skips_when_false()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, FlatDest>()
+               .ForMember(d => d.Name, opts => opts.Condition(s => !string.IsNullOrWhiteSpace(s.Name)));
+        }).CreateMapper();
+
+        var src = new FlatSource { Name = "" };
+        var dest = new FlatDest { Name = "original" };
+        var result = mapper.Map(src, dest);
+        result.Name.Should().Be("original");
+    }
+
+    [Fact]
+    public void Condition_without_MapFrom_maps_into_existing_destination()
+    {
+        // Regression: Map(source, destination) with Condition-only ForMember was silently
+        // skipping the property because SourceMemberName was null and convention fallback
+        // was blocked by processedDestProps.
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, FlatDest>()
+               .ForMember(d => d.Name, opts => opts.Condition(s => !string.IsNullOrWhiteSpace(s.Name)));
+        }).CreateMapper();
+
+        var src = new FlatSource { Name = "new name" };
+        var dest = new FlatDest { Name = "old name" };
+        mapper.Map(src, dest);
+        dest.Name.Should().Be("new name");
+    }
 }

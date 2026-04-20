@@ -2012,6 +2012,12 @@ internal static class ExpressionBuilder
             return BuildDirectPropAction(srcProp, destProp, propMap, compiledMaps);
         }
 
+        // No explicit MapFrom — fall back to convention (same name) so that ForMember with only
+        // Condition/NullSubstitute/etc. still maps the property instead of silently dropping it.
+        srcDetails.ReadableByName.TryGetValue(destProp.Name, out var conventionSrcProp);
+        if (conventionSrcProp != null)
+            return BuildDirectPropAction(conventionSrcProp, destProp, propMap, compiledMaps);
+
         return null;
     }
 
