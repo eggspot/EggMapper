@@ -30,7 +30,7 @@ internal sealed class TypeDetails
         {
             var p = allProps[i];
             if (p.CanRead) readable.Add(p);
-            if (p.CanWrite) writable.Add(p);
+            if (p.GetSetMethod() != null) writable.Add(p);
         }
         ReadableProperties = readable.ToArray();
         WritableProperties = writable.ToArray();

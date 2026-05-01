@@ -8,6 +8,7 @@ namespace EggMapper.UnitTests;
 file class SourceMulti { public string A { get; set; } = ""; public string B { get; set; } = ""; public string C { get; set; } = ""; }
 file class DestMulti { public string A { get; set; } = ""; public string B { get; set; } = ""; public string C { get; set; } = ""; }
 file class DestWithReadOnly { public string Name { get; set; } = ""; public string ReadOnly { get; } = "fixed"; }
+file class DestWithInternalSetter { public string Name { get; set; } = ""; public string Internal { get; internal set; } = ""; }
 
 public class IgnoreTests
 {
@@ -97,6 +98,21 @@ public class IgnoreTests
         var dest = mapper.Map<FlatSource, DestWithReadOnly>(new FlatSource { Name = "Alice" });
         dest.Name.Should().Be("Alice");
         dest.ReadOnly.Should().Be("fixed");
+    }
+
+    [Fact]
+    public void Internal_setter_property_is_skipped_by_convention_mapping()
+    {
+        // Properties with internal setters have CanWrite=true but no public setter —
+        // convention mapping must not attempt to call GetSetMethod() on them.
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithInternalSetter>();
+        }).CreateMapper();
+
+        var dest = mapper.Map<FlatSource, DestWithInternalSetter>(new FlatSource { Name = "Alice" });
+        dest.Name.Should().Be("Alice");
+        dest.Internal.Should().BeEmpty();
     }
 
     [Fact]

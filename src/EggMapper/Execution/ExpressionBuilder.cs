@@ -34,7 +34,9 @@ internal static class ExpressionBuilder
 
     private static Action<object, object?> BuildSetter(PropertyInfo prop)
     {
-        var setter = prop.GetSetMethod()!;
+        var setter = prop.GetSetMethod()
+            ?? throw new InvalidOperationException(
+                $"Property '{prop.DeclaringType?.Name}.{prop.Name}' has no public setter and cannot be mapped.");
         var objParam = Expression.Parameter(typeof(object), "obj");
         var valParam = Expression.Parameter(typeof(object), "val");
         var declaringType = prop.DeclaringType!;
