@@ -83,7 +83,7 @@ public class IgnoreTests
         });
 
         act.Should().Throw<InvalidOperationException>()
-           .WithMessage("*must be writable*");
+           .WithMessage("*must have a public setter*");
     }
 
     [Fact]
@@ -98,6 +98,31 @@ public class IgnoreTests
         var dest = mapper.Map<FlatSource, DestWithReadOnly>(new FlatSource { Name = "Alice" });
         dest.Name.Should().Be("Alice");
         dest.ReadOnly.Should().Be("fixed");
+    }
+
+    [Fact]
+    public void MapFrom_on_internal_setter_property_throws_at_config_time()
+    {
+        var act = () => new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithInternalSetter>()
+               .ForMember(d => d.Internal, opts => opts.MapFrom(s => s.Name));
+        });
+
+        act.Should().Throw<InvalidOperationException>()
+           .WithMessage("*must have a public setter*");
+    }
+
+    [Fact]
+    public void Ignore_on_internal_setter_property_does_not_throw()
+    {
+        var act = () => new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithInternalSetter>()
+               .ForMember(d => d.Internal, opts => opts.Ignore());
+        });
+
+        act.Should().NotThrow();
     }
 
     [Fact]

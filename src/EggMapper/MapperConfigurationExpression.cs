@@ -140,7 +140,7 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
             ?? throw new InvalidOperationException(
                 $"Property '{memberName}' not found on '{TypeNameHelper.Readable(typeof(TDestination))}'");
         var propMap = GetOrCreatePropertyMap(destProp);
-        if (!destProp.CanWrite)
+        if (destProp.GetSetMethod() == null)
             propMap.Ignored = true;
         var expr = new MemberConfigurationExpression<TSource, TDestination, TMember>(propMap);
         memberOptions(expr);
@@ -333,9 +333,9 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
 
     private void ThrowIfReadOnly()
     {
-        if (!_propMap.DestinationProperty.CanWrite)
+        if (_propMap.DestinationProperty.GetSetMethod() == null)
             throw new InvalidOperationException(
-                $"Property '{_propMap.DestinationProperty.Name}' must be writable in order to be mapped.");
+                $"Property '{_propMap.DestinationProperty.Name}' must have a public setter in order to be mapped.");
     }
 
     public void MapFrom<TSourceMember>(Expression<Func<TSource, TSourceMember>> mapExpression)
