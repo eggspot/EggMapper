@@ -2733,7 +2733,15 @@ internal static class ExpressionBuilder
         // Try registered mapping (e.g., Genre → GenreResponse)
         if (ctx.Mapper != null)
         {
-            try { return ctx.Mapper.Map(value, valueType, targetType); }
+            try
+            {
+                var mapped = ctx.Mapper.Map(value, valueType, targetType);
+                // Verify the result is actually the right type — collection mapping may return
+                // List<T> even when targetType is a custom collection like SelectList that
+                // wraps IEnumerable but is not assignable from List<T>.
+                if (mapped == null || targetType.IsAssignableFrom(mapped.GetType()))
+                    return mapped;
+            }
             catch (InvalidOperationException) { } // no mapping registered — fall through
         }
 
