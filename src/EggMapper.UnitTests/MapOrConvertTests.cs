@@ -36,14 +36,15 @@ public class MapOrConvertTests
     }
 
     [Fact]
-    public void MapOrConvert_custom_collection_null_source_maps_to_null()
+    public void MapOrConvert_custom_collection_null_source_maps_to_empty_collection()
     {
         var mapper = new MapperConfiguration(cfg =>
             cfg.CreateMap<SrcWithList, DestWithWrapper>()).CreateMapper();
 
         var dest = mapper.Map<SrcWithList, DestWithWrapper>(new SrcWithList { Items = null! });
 
-        dest.Items.Should().BeNull();
+        dest.Items.Should().NotBeNull();
+        dest.Items.Should().BeEmpty();
     }
 
     [Fact]

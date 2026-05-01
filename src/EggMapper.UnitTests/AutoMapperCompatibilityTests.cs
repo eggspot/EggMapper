@@ -5,9 +5,7 @@ using Xunit;
 
 namespace EggMapper.UnitTests;
 
-// Mirrors PAM patterns that need AutoMapper-compatible behavior.
-
-#region Value resolver pattern (PAM/MediaAssetUrlValueResolver)
+#region Value resolver pattern
 file class FakeAsset { public string Path { get; set; } = ""; }
 file class FakeAssetService { public string? GetUrl(FakeAsset? a) => a == null ? null : "/cdn/" + a.Path; }
 
@@ -23,27 +21,32 @@ file class AssetSrc { public FakeAsset? Image { get; set; } }
 file class AssetDest { public string? ImageUrl { get; set; } }
 #endregion
 
-#region Two-param MapFrom (PAM/DefaultMapperProfile.cs:431)
+#region Two-param MapFrom
 file class TpSrc { public string First { get; set; } = ""; public string Last { get; set; } = ""; }
 file class TpDest { public string FullName { get; set; } = ""; }
 #endregion
 
-#region PreCondition (PAM/ContentMapperProfile.cs:82)
+#region PreCondition
 file class PreCondSrc { public string? Optional { get; set; } public int Other { get; set; } }
 file class PreCondDest { public string Optional { get; set; } = "default"; public int Other { get; set; } }
 #endregion
 
-#region AfterMap with c.Mapper (PAM/BonusMapperProfile.cs:382)
+#region AfterMap with context.Mapper
 file class AmInner { public int Id { get; set; } }
 file class AmInnerVm { public int Id { get; set; } }
 file class AmSrc { public List<AmInner> Items { get; set; } = new(); }
 file class AmDest { public List<AmInnerVm> Items { get; set; } = new(); }
 #endregion
 
-public class PamPatternsCompatibilityTests
+#region Null collection source
+file class NcSrc { public List<int>? SelectedIds { get; set; } }
+file class NcDest { public List<int>? SelectedIds { get; set; } }
+#endregion
+
+public class AutoMapperCompatibilityTests
 {
     [Fact]
-    public void Pam_ValueResolver_with_DI_resolves_via_service()
+    public void ValueResolver_with_DI_resolves_via_service()
     {
         var services = new ServiceCollection();
         services.AddSingleton<FakeAssetService>();
@@ -61,7 +64,7 @@ public class PamPatternsCompatibilityTests
     }
 
     [Fact]
-    public void Pam_ValueResolver_null_source_member_returns_null()
+    public void ValueResolver_null_source_member_returns_null()
     {
         var services = new ServiceCollection();
         services.AddSingleton<FakeAssetService>();
@@ -79,7 +82,7 @@ public class PamPatternsCompatibilityTests
     }
 
     [Fact]
-    public void Pam_TwoParam_MapFrom_with_source_and_destination()
+    public void TwoParam_MapFrom_with_source_and_destination()
     {
         var mapper = new MapperConfiguration(cfg =>
         {
@@ -93,7 +96,7 @@ public class PamPatternsCompatibilityTests
     }
 
     [Fact]
-    public void Pam_PreCondition_skips_member_when_false()
+    public void PreCondition_skips_member_when_false()
     {
         var mapper = new MapperConfiguration(cfg =>
         {
@@ -112,7 +115,7 @@ public class PamPatternsCompatibilityTests
     }
 
     [Fact]
-    public void Pam_PreCondition_runs_member_when_true()
+    public void PreCondition_runs_member_when_true()
     {
         var mapper = new MapperConfiguration(cfg =>
         {
@@ -130,7 +133,36 @@ public class PamPatternsCompatibilityTests
     }
 
     [Fact]
-    public void Pam_AfterMap_with_context_mapper_invokes_nested_map()
+    public void Null_source_collection_maps_to_empty_collection_via_MapFrom()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NcSrc, NcDest>()
+               .ForMember(d => d.SelectedIds, o => o.MapFrom(s => s.SelectedIds));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NcSrc, NcDest>(new NcSrc { SelectedIds = null });
+
+        dest.SelectedIds.Should().NotBeNull();
+        dest.SelectedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Null_source_collection_maps_to_empty_collection_by_convention()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NcSrc, NcDest>();
+        }).CreateMapper();
+
+        var dest = mapper.Map<NcSrc, NcDest>(new NcSrc { SelectedIds = null });
+
+        dest.SelectedIds.Should().NotBeNull();
+        dest.SelectedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AfterMap_with_context_mapper_invokes_nested_map()
     {
         var mapper = new MapperConfiguration(cfg =>
         {

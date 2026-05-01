@@ -11,6 +11,38 @@ internal static class ExpressionBuilder
     private static readonly ConcurrentDictionary<PropertyInfo, Func<object, object?>> Getters = new();
     private static readonly ConcurrentDictionary<PropertyInfo, Action<object, object?>> Setters = new();
 
+    /// <summary>
+    /// Cache of constructors that build a custom collection wrapper (e.g. SelectList) from
+    /// a source list type. Keyed by (destinationType, sourceListType) — the result is the
+    /// best-matching single-arg constructor, with generic interfaces preferred over non-generic.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(Type Dest, Type Src), ConstructorInfo?> CollectionWrapperCtors = new();
+
+    private static ConstructorInfo? FindCollectionWrapperCtor(Type destType, Type sourceType) =>
+        CollectionWrapperCtors.GetOrAdd((destType, sourceType), key =>
+        {
+            // 1. Exact source type (e.g. List<T>)
+            var direct = key.Dest.GetConstructor(new[] { key.Src });
+            if (direct != null) return direct;
+
+            var ifaces = key.Src.GetInterfaces();
+            // 2. Generic interfaces (IEnumerable<T>, IList<T>, ICollection<T>, …) — prefer these
+            for (int i = 0; i < ifaces.Length; i++)
+            {
+                if (!ifaces[i].IsGenericType) continue;
+                var ctor = key.Dest.GetConstructor(new[] { ifaces[i] });
+                if (ctor != null) return ctor;
+            }
+            // 3. Non-generic interfaces (IEnumerable, IList, ICollection)
+            for (int i = 0; i < ifaces.Length; i++)
+            {
+                if (ifaces[i].IsGenericType) continue;
+                var ctor = key.Dest.GetConstructor(new[] { ifaces[i] });
+                if (ctor != null) return ctor;
+            }
+            return null;
+        });
+
     private static readonly MethodInfo EnumParseMethod =
         typeof(Enum).GetMethod("Parse", new[] { typeof(Type), typeof(string), typeof(bool) })!;
     private static readonly MethodInfo ObjectToStringMethod =
@@ -1641,8 +1673,25 @@ internal static class ExpressionBuilder
             var hashSetType = typeof(HashSet<>).MakeGenericType(elemType);
             if (destType.IsAssignableFrom(hashSetType))
                 return Activator.CreateInstance(hashSetType)!;
+
+            // Custom wrapper without a parameterless constructor (e.g. SelectList) — build an
+            // empty list of the element type and pass it through the wrapper's single-arg ctor.
+            if (destType.GetConstructor(Type.EmptyTypes) == null)
+            {
+                var emptyList = Activator.CreateInstance(listType)!;
+                var ctor = FindCollectionWrapperCtor(destType, listType);
+                if (ctor != null)
+                {
+                    try { return ctor.Invoke(new[] { emptyList }); }
+                    catch (TargetInvocationException tie) when (tie.InnerException != null)
+                    {
+                        throw tie.InnerException;
+                    }
+                }
+                return null!;
+            }
         }
-        return destType.GetConstructor(Type.EmptyTypes) != null ? Activator.CreateInstance(destType)! : null!;
+        return Activator.CreateInstance(destType)!;
     }
 
     /// <summary>
@@ -2488,14 +2537,17 @@ internal static class ExpressionBuilder
             foreach (var item in source)
                 list.Add(MapElement(item));
 
-            // destCollectionType is a custom wrapper (e.g. SelectList) — try to construct it
-            // from the mapped list via interface-based constructors (IEnumerable<T>, IEnumerable…).
-            foreach (var iface in list.GetType().GetInterfaces())
+            // destCollectionType is a custom wrapper (e.g. SelectList) — construct it from the
+            // mapped list via a cached single-arg constructor. Cache prefers generic interfaces
+            // over non-generic, eliminating per-call reflection cost and ordering nondeterminism.
+            var ctor = FindCollectionWrapperCtor(destCollectionType, list.GetType());
+            if (ctor != null)
             {
-                var ctor = destCollectionType.GetConstructor(new[] { iface });
-                if (ctor != null)
+                try { return ctor.Invoke(new[] { (object)list }); }
+                catch (TargetInvocationException tie) when (tie.InnerException != null)
                 {
-                    try { return ctor.Invoke(new[] { list }); } catch { }
+                    // Surface the real constructor exception instead of the TargetInvocation wrapper
+                    throw tie.InnerException;
                 }
             }
 
@@ -2738,7 +2790,14 @@ internal static class ExpressionBuilder
     /// </summary>
     private static object? MapOrConvert(object? value, Type targetType, ResolutionContext ctx)
     {
-        if (value == null) return null;
+        if (value == null)
+        {
+            // Null source for a collection destination produces an empty collection.
+            // Strings are explicitly excluded by IsCollectionType.
+            if (ReflectionHelper.IsCollectionType(targetType))
+                return CreateEmptyCollection(targetType);
+            return null;
+        }
         var valueType = value.GetType();
         if (targetType.IsAssignableFrom(valueType)) return value;
 
@@ -2748,9 +2807,10 @@ internal static class ExpressionBuilder
             try
             {
                 var mapped = ctx.Mapper.Map(value, valueType, targetType);
-                // Verify the result is actually the right type — collection mapping may return
-                // List<T> even when targetType is a custom collection like SelectList that
-                // wraps IEnumerable but is not assignable from List<T>.
+                // When both sides are collections with the same element type, Mapper.Map returns
+                // a List<T> even if targetType is a custom wrapper like SelectList. Validating
+                // assignability here lets ConvertValue construct the correct wrapper type via its
+                // constructor walk; the value is preserved either way.
                 if (mapped == null || targetType.IsAssignableFrom(mapped.GetType()))
                     return mapped;
             }
