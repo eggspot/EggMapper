@@ -1642,7 +1642,7 @@ internal static class ExpressionBuilder
             if (destType.IsAssignableFrom(hashSetType))
                 return Activator.CreateInstance(hashSetType)!;
         }
-        return Activator.CreateInstance(destType)!;
+        try { return Activator.CreateInstance(destType)!; } catch { return null!; }
     }
 
     /// <summary>
@@ -2487,6 +2487,18 @@ internal static class ExpressionBuilder
                 : (IList)Activator.CreateInstance(listType)!;
             foreach (var item in source)
                 list.Add(MapElement(item));
+
+            // destCollectionType is a custom wrapper (e.g. SelectList) — try to construct it
+            // from the mapped list via interface-based constructors (IEnumerable<T>, IEnumerable…).
+            foreach (var iface in list.GetType().GetInterfaces())
+            {
+                var ctor = destCollectionType.GetConstructor(new[] { iface });
+                if (ctor != null)
+                {
+                    try { return ctor.Invoke(new[] { list }); } catch { }
+                }
+            }
+
             return list;
         }
     }
