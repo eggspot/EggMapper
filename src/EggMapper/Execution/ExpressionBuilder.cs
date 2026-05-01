@@ -1642,7 +1642,7 @@ internal static class ExpressionBuilder
             if (destType.IsAssignableFrom(hashSetType))
                 return Activator.CreateInstance(hashSetType)!;
         }
-        try { return Activator.CreateInstance(destType)!; } catch { return null!; }
+        return destType.GetConstructor(Type.EmptyTypes) != null ? Activator.CreateInstance(destType)! : null!;
     }
 
     /// <summary>
