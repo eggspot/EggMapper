@@ -7,6 +7,7 @@ namespace EggMapper.UnitTests;
 
 file class SourceMulti { public string A { get; set; } = ""; public string B { get; set; } = ""; public string C { get; set; } = ""; }
 file class DestMulti { public string A { get; set; } = ""; public string B { get; set; } = ""; public string C { get; set; } = ""; }
+file class DestWithReadOnly { public string Name { get; set; } = ""; public string ReadOnly { get; } = "fixed"; }
 
 public class IgnoreTests
 {
@@ -57,6 +58,45 @@ public class IgnoreTests
         dest.A.Should().BeEmpty();
         dest.B.Should().BeEmpty();
         dest.C.Should().Be("CC");
+    }
+
+    [Fact]
+    public void Ignore_on_read_only_property_does_not_throw()
+    {
+        var act = () => new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithReadOnly>()
+               .ForMember(d => d.ReadOnly, opts => opts.Ignore());
+        });
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void MapFrom_on_read_only_property_throws_at_config_time()
+    {
+        var act = () => new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithReadOnly>()
+               .ForMember(d => d.ReadOnly, opts => opts.MapFrom(s => s.Name));
+        });
+
+        act.Should().Throw<InvalidOperationException>()
+           .WithMessage("*must be writable*");
+    }
+
+    [Fact]
+    public void Ignore_on_read_only_property_leaves_value_unchanged()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlatSource, DestWithReadOnly>()
+               .ForMember(d => d.ReadOnly, opts => opts.Ignore());
+        }).CreateMapper();
+
+        var dest = mapper.Map<FlatSource, DestWithReadOnly>(new FlatSource { Name = "Alice" });
+        dest.Name.Should().Be("Alice");
+        dest.ReadOnly.Should().Be("fixed");
     }
 
     [Fact]

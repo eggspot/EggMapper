@@ -136,9 +136,12 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         var memberName = GetMemberName(destinationMember);
         var destDetails = TypeDetails.Get(typeof(TDestination));
         var destProp = destDetails.WritableProperties.FirstOrDefault(p => p.Name == memberName)
+            ?? destDetails.ReadableProperties.FirstOrDefault(p => p.Name == memberName)
             ?? throw new InvalidOperationException(
-                $"Property '{memberName}' not found or not writable on '{TypeNameHelper.Readable(typeof(TDestination))}'");
+                $"Property '{memberName}' not found on '{TypeNameHelper.Readable(typeof(TDestination))}'");
         var propMap = GetOrCreatePropertyMap(destProp);
+        if (!destProp.CanWrite)
+            propMap.Ignored = true;
         var expr = new MemberConfigurationExpression<TSource, TDestination, TMember>(propMap);
         memberOptions(expr);
         return this;
@@ -328,8 +331,16 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
         _propMap = propMap;
     }
 
+    private void ThrowIfReadOnly()
+    {
+        if (!_propMap.DestinationProperty.CanWrite)
+            throw new InvalidOperationException(
+                $"Property '{_propMap.DestinationProperty.Name}' must be writable in order to be mapped.");
+    }
+
     public void MapFrom<TSourceMember>(Expression<Func<TSource, TSourceMember>> mapExpression)
     {
+        ThrowIfReadOnly();
         _propMap.MapFromExpression = mapExpression;
         var compiled = mapExpression.Compile();
         _propMap.CustomResolver = (src, dest) => compiled((TSource)src);
@@ -337,18 +348,21 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
 
     public void MapFrom<TSourceMember>(Func<TSource, TDestination, TSourceMember> mapFunction)
     {
+        ThrowIfReadOnly();
         _propMap.CustomResolver = (src, dest) =>
             mapFunction((TSource)src, dest is TDestination td ? td : default!);
     }
 
     public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, TSourceMember> mapFunction)
     {
+        ThrowIfReadOnly();
         _propMap.CustomResolver = (src, dest) =>
             mapFunction((TSource)src, dest is TDestination td ? td : default!, default!);
     }
 
     public void MapFrom<TSourceMember>(Func<TSource, TDestination, TMember, ResolutionContext, TSourceMember> mapFunction)
     {
+        ThrowIfReadOnly();
         _propMap.ContextResolver = (src, dest, destMember, ctx) =>
             mapFunction((TSource)src, dest is TDestination td ? td : default!,
                 destMember is TMember tm ? tm : default!, ctx);
@@ -357,6 +371,7 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
     public void MapFrom<TValueResolver, TSourceMember>(Expression<Func<TSource, TSourceMember>> sourceMember)
         where TValueResolver : IMemberValueResolver<object, object, TSourceMember, TMember>
     {
+        ThrowIfReadOnly();
         var compiled = sourceMember.Compile();
         _propMap.ValueResolverFactory = sp =>
         {
@@ -371,6 +386,7 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
 
     public void MapFrom(string sourceMemberName)
     {
+        ThrowIfReadOnly();
         _propMap.SourceMemberName = sourceMemberName;
     }
 
@@ -378,34 +394,40 @@ internal sealed class MemberConfigurationExpression<TSource, TDestination, TMemb
 
     public void Condition(Func<TSource, bool> condition)
     {
+        ThrowIfReadOnly();
         _propMap.Condition = src => condition((TSource)src);
     }
 
     public void Condition(Func<TSource, TDestination, bool> condition)
     {
+        ThrowIfReadOnly();
         _propMap.FullCondition = (src, dest) =>
             condition((TSource)src, dest is TDestination td ? td : default!);
     }
 
     public void PreCondition(Func<TSource, bool> condition)
     {
+        ThrowIfReadOnly();
         _propMap.PreCondition = src => condition((TSource)src);
     }
 
     public void NullSubstitute(TMember nullSubstitute)
     {
+        ThrowIfReadOnly();
         _propMap.NullSubstitute = nullSubstitute;
         _propMap.HasNullSubstitute = true;
     }
 
     public void UseValue(TMember value)
     {
+        ThrowIfReadOnly();
         _propMap.UseValue = value;
         _propMap.HasUseValue = true;
     }
 
     public void UseDestinationValue()
     {
+        ThrowIfReadOnly();
         _propMap.UseDestinationValue = true;
     }
 }
