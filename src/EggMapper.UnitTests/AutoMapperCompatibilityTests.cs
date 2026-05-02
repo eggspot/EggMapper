@@ -63,6 +63,11 @@ file class NestedInnerSrc { public string Title { get; set; } = ""; }
 file class NestedInnerDest { public string Title { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
 file class NestedOuterSrc { public NestedInnerSrc? Rule { get; set; } }
 file class NestedOuterDest { public NestedInnerDest? Rule { get; set; } }
+
+// Reproduces PAM scenario: MapFrom returns IEnumerable<TPrim> for IList<TPrim> dest
+file class ChildEntity { public int Id { get; set; } }
+file class IenumSrc { public List<ChildEntity>? Children { get; set; } }
+file class IenumDest { public IList<int>? SelectedIds { get; set; } }
 #endregion
 
 #region Null exclusion sibling types (string, dictionary)
@@ -233,6 +238,41 @@ public class AutoMapperCompatibilityTests
         var dest = mapper.Map<UmSrc, CtorDefDest>(new UmSrc { Name = "Alice" });
 
         dest.Items.Should().BeEquivalentTo(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void MapFrom_lambda_returning_IEnumerable_of_primitive_to_IList_of_primitive_dest()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<IenumSrc, IenumDest>()
+               .ForMember(d => d.SelectedIds, o => o.MapFrom(s =>
+                   s.Children != null ? s.Children.Select(c => c.Id) : new List<int>()));
+        }).CreateMapper();
+
+        var dest = mapper.Map<IenumSrc, IenumDest>(new IenumSrc
+        {
+            Children = new() { new ChildEntity { Id = 1 }, new ChildEntity { Id = 2 } }
+        });
+
+        dest.SelectedIds.Should().NotBeNull();
+        dest.SelectedIds.Should().BeEquivalentTo(new[] { 1, 2 });
+    }
+
+    [Fact]
+    public void MapFrom_lambda_returning_IEnumerable_of_primitive_with_null_source()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<IenumSrc, IenumDest>()
+               .ForMember(d => d.SelectedIds, o => o.MapFrom(s =>
+                   s.Children != null ? s.Children.Select(c => c.Id) : new List<int>()));
+        }).CreateMapper();
+
+        var dest = mapper.Map<IenumSrc, IenumDest>(new IenumSrc { Children = null });
+
+        dest.SelectedIds.Should().NotBeNull();
+        dest.SelectedIds.Should().BeEmpty();
     }
 
     [Fact]

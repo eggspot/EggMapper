@@ -492,7 +492,11 @@ public sealed class Mapper : IMapper
             if (destElemType != null && srcElemType != null)
             {
                 var elemDel = FindElementDelegate(srcElemType, destElemType);
-                if (elemDel != null)
+                // Fallback for primitive/string/enum or any assignable element types where no
+                // explicit CreateMap is needed: identity copy.
+                bool identityElements = elemDel == null && destElemType.IsAssignableFrom(srcElemType);
+
+                if (elemDel != null || identityElements)
                 {
                     var resultList = (IList)Activator.CreateInstance(
                         typeof(List<>).MakeGenericType(destElemType))!;
@@ -500,8 +504,15 @@ public sealed class Mapper : IMapper
                     foreach (var item in srcEnum)
                     {
                         if (item == null) { resultList.Add(null); continue; }
-                        ctx.Depth = 0;
-                        resultList.Add(elemDel(item, null, ctx));
+                        if (identityElements)
+                        {
+                            resultList.Add(item);
+                        }
+                        else
+                        {
+                            ctx.Depth = 0;
+                            resultList.Add(elemDel!(item, null, ctx));
+                        }
                     }
                     return resultList;
                 }
