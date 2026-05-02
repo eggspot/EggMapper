@@ -498,9 +498,25 @@ public sealed class Mapper : IMapper
 
                 if (elemDel != null || identityElements)
                 {
+                    var ctx = GetContext(items);
+
+                    // Fast path: pre-size an array when the destination is an array and we
+                    // know the count up-front from an ICollection source.
+                    if (destinationType.IsArray && srcEnum is ICollection coll)
+                    {
+                        var arr = Array.CreateInstance(destElemType, coll.Count);
+                        int i = 0;
+                        foreach (var item in srcEnum)
+                        {
+                            if (item == null) { i++; continue; }
+                            arr.SetValue(identityElements ? item : elemDel!(item, null, ctx), i++);
+                            if (!identityElements) ctx.Depth = 0;
+                        }
+                        return arr;
+                    }
+
                     var resultList = (IList)Activator.CreateInstance(
                         typeof(List<>).MakeGenericType(destElemType))!;
-                    var ctx = GetContext(items);
                     foreach (var item in srcEnum)
                     {
                         if (item == null) { resultList.Add(null); continue; }
@@ -515,22 +531,37 @@ public sealed class Mapper : IMapper
                         }
                     }
 
-                    // Materialize to the requested concrete collection type when the built
-                    // List<T> isn't assignable (e.g. dest is T[] or a custom wrapper type).
+                    // List<T> directly assignable to destination — return as-is.
                     if (destinationType.IsAssignableFrom(resultList.GetType()))
                         return resultList;
+
+                    // Array destination, non-ICollection source — fell through above.
                     if (destinationType.IsArray)
                     {
                         var arr = Array.CreateInstance(destElemType, resultList.Count);
                         resultList.CopyTo(arr, 0);
                         return arr;
                     }
-                    // Fall through to ConvertValue-like wrapper-ctor logic via boxed expression
-                    // path below; for now, throw a clear error so callers see the gap.
+
+                    // Custom collection wrapper — try a single-arg constructor that accepts the
+                    // mapped list (covers SelectList, MultiSelectList, and similar IEnumerable
+                    // wrappers). Cached lookup, generic interfaces preferred over non-generic.
+                    var wrapperCtor = Execution.ExpressionBuilder.FindCollectionWrapperCtor(
+                        destinationType, resultList.GetType());
+                    if (wrapperCtor != null)
+                    {
+                        try { return wrapperCtor.Invoke(new object[] { resultList }); }
+                        catch (System.Reflection.TargetInvocationException tie) when (tie.InnerException != null)
+                        {
+                            throw tie.InnerException;
+                        }
+                    }
+
                     throw new InvalidOperationException(
                         $"Cannot materialize collection of type '{TypeNameHelper.Readable(destinationType)}' " +
                         $"from List<{TypeNameHelper.Readable(destElemType)}>: " +
-                        $"destination is not assignable from List<T> and is not an array.");
+                        $"destination is not assignable from List<T>, not an array, and has no " +
+                        $"single-argument constructor accepting List<T> or any of its interfaces.");
                 }
 
                 // Element mapping not found — give a clear error pointing to the element types

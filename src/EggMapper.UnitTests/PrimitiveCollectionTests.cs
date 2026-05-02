@@ -156,4 +156,50 @@ public class PrimitiveCollectionTests
 
         dest.Items.Should().BeEquivalentTo(new[] { 20, 30 });
     }
+
+    [Fact]
+    public void Direct_Map_int_array_to_int_array()
+    {
+        var mapper = new MapperConfiguration(_ => { }).CreateMapper();
+        var dest = mapper.Map<int[], int[]>(new[] { 1, 2, 3 });
+        dest.Should().BeEquivalentTo(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void Direct_Map_List_int_to_HashSet_int()
+    {
+        var mapper = new MapperConfiguration(_ => { }).CreateMapper();
+        var dest = mapper.Map<List<int>, HashSet<int>>(new List<int> { 1, 2, 3 });
+        dest.Should().BeEquivalentTo(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void Direct_Map_List_to_custom_wrapper_with_IEnumerable_ctor()
+    {
+        var mapper = new MapperConfiguration(_ => { }).CreateMapper();
+        var dest = mapper.Map<List<int>, WrappedInts>(new List<int> { 1, 2, 3 });
+        dest.Should().NotBeNull();
+        dest.AsList().Should().BeEquivalentTo(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void Direct_Map_List_int_nullable_to_int_nullable_array()
+    {
+        var mapper = new MapperConfiguration(_ => { }).CreateMapper();
+        var dest = mapper.Map<List<int?>, int?[]>(new List<int?> { 1, null, 3 });
+        dest.Should().BeEquivalentTo(new int?[] { 1, null, 3 });
+    }
+}
+
+file class WrappedInts : System.Collections.Generic.IEnumerable<int>
+{
+    private readonly List<int> _items;
+    public WrappedInts(System.Collections.IEnumerable items)
+    {
+        _items = new List<int>();
+        foreach (var i in items) _items.Add((int)i);
+    }
+    public List<int> AsList() => _items;
+    public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
 }

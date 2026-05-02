@@ -18,7 +18,7 @@ internal static class ExpressionBuilder
     /// </summary>
     private static readonly ConcurrentDictionary<(Type Dest, Type Src), ConstructorInfo?> CollectionWrapperCtors = new();
 
-    private static ConstructorInfo? FindCollectionWrapperCtor(Type destType, Type sourceType) =>
+    internal static ConstructorInfo? FindCollectionWrapperCtor(Type destType, Type sourceType) =>
         CollectionWrapperCtors.GetOrAdd((destType, sourceType), key =>
         {
             // 1. Exact source type (e.g. List<T>)
