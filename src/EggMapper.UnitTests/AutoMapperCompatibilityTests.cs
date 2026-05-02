@@ -46,6 +46,23 @@ file class NcDest { public List<int>? SelectedIds { get; set; } }
 #region Unmatched collection property
 file class UmSrc { public string Name { get; set; } = ""; }
 file class UmDest { public string Name { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
+
+// Forces flexible-delegate path via Condition
+file class FlexUmSrc { public string Name { get; set; } = ""; }
+file class FlexUmDest { public string Name { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
+
+// Constructor-default preservation
+file class CtorDefDest { public List<int> Items { get; set; } = new() { 1, 2, 3 }; }
+
+// Incompatible same-name: source is int, dest is List<int>
+file class IncompatSrc { public int Items { get; set; } }
+file class IncompatDest { public List<int>? Items { get; set; } }
+
+// Nested type with unmatched collection on the inner type
+file class NestedInnerSrc { public string Title { get; set; } = ""; }
+file class NestedInnerDest { public string Title { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
+file class NestedOuterSrc { public NestedInnerSrc? Rule { get; set; } }
+file class NestedOuterDest { public NestedInnerDest? Rule { get; set; } }
 #endregion
 
 #region Null exclusion sibling types (string, dictionary)
@@ -187,6 +204,71 @@ public class AutoMapperCompatibilityTests
         dest.Name.Should().Be("Alice");
         dest.UnmatchedIds.Should().NotBeNull();
         dest.UnmatchedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Unmatched_collection_dest_property_is_initialized_to_empty_in_flexible_path()
+    {
+        // ForMember with Condition forces the flexible delegate path
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<FlexUmSrc, FlexUmDest>()
+               .ForMember(d => d.Name, o => o.Condition(s => true));
+        }).CreateMapper();
+
+        var dest = mapper.Map<FlexUmSrc, FlexUmDest>(new FlexUmSrc { Name = "Alice" });
+
+        dest.UnmatchedIds.Should().NotBeNull();
+        dest.UnmatchedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Constructor_default_collection_value_is_preserved()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<UmSrc, CtorDefDest>();
+        }).CreateMapper();
+
+        var dest = mapper.Map<UmSrc, CtorDefDest>(new UmSrc { Name = "Alice" });
+
+        dest.Items.Should().BeEquivalentTo(new[] { 1, 2, 3 });
+    }
+
+    [Fact]
+    public void Nested_type_unmatched_collection_property_is_initialized_to_empty()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NestedInnerSrc, NestedInnerDest>();
+            cfg.CreateMap<NestedOuterSrc, NestedOuterDest>();
+        }).CreateMapper();
+
+        var dest = mapper.Map<NestedOuterSrc, NestedOuterDest>(new NestedOuterSrc
+        {
+            Rule = new NestedInnerSrc { Title = "Rule A" }
+        });
+
+        dest.Rule.Should().NotBeNull();
+        dest.Rule!.Title.Should().Be("Rule A");
+        dest.Rule.UnmatchedIds.Should().NotBeNull();
+        dest.Rule.UnmatchedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Explicitly_ignored_collection_property_keeps_constructor_default()
+    {
+        // .Ignore() means "user takes responsibility" — the dest property keeps whatever the
+        // constructor set it to (null in this case), no auto-init kicks in.
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<IncompatSrc, IncompatDest>()
+               .ForMember(d => d.Items, o => o.Ignore());
+        }).CreateMapper();
+
+        var dest = mapper.Map<IncompatSrc, IncompatDest>(new IncompatSrc { Items = 42 });
+
+        dest.Items.Should().BeNull();
     }
 
     [Fact]

@@ -47,6 +47,9 @@ internal static class ExpressionBuilder
         typeof(Enum).GetMethod("Parse", new[] { typeof(Type), typeof(string), typeof(bool) })!;
     private static readonly MethodInfo ObjectToStringMethod =
         typeof(object).GetMethod("ToString", Type.EmptyTypes)!;
+    private static readonly MethodInfo CreateEmptyCollectionMethod =
+        typeof(ExpressionBuilder).GetMethod(nameof(CreateEmptyCollection),
+            BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static Func<object, object?> GetOrBuildGetter(PropertyInfo prop) =>
         Getters.GetOrAdd(prop, BuildGetter);
@@ -751,7 +754,12 @@ internal static class ExpressionBuilder
             processedProps.Add(cDestProp.Name);
 
             childSrcDetails.ReadableByName.TryGetValue(cDestProp.Name, out var cSrcProp);
-            if (cSrcProp == null) continue;
+            if (cSrcProp == null)
+            {
+                var emptyInit = BuildEnsureCollectionInitializedExpr(childDestVar, cDestProp);
+                if (emptyInit != null) innerStmts.Add(emptyInit);
+                continue;
+            }
 
             var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp, globalConverters);
             if (assign == null) return null;
@@ -858,7 +866,12 @@ internal static class ExpressionBuilder
                 if (processed.Contains(dp.Name)) continue;
                 processed.Add(dp.Name);
                 elemSrcDetails.ReadableByName.TryGetValue(dp.Name, out var sp);
-                if (sp == null) continue;
+                if (sp == null)
+                {
+                    var emptyInit = BuildEnsureCollectionInitializedExpr(elemDestVar, dp);
+                    if (emptyInit != null) elemStmts.Add(emptyInit);
+                    continue;
+                }
                 var a = TryBuildSimpleInlineAssign(elemSrcParam, elemDestVar, sp, dp, globalConverters);
                 if (a == null) return null;
                 elemStmts.Add(a);
@@ -1391,7 +1404,12 @@ internal static class ExpressionBuilder
             processedProps.Add(cDestProp.Name);
 
             childSrcDetails.ReadableByName.TryGetValue(cDestProp.Name, out var cSrcProp);
-            if (cSrcProp == null) continue;
+            if (cSrcProp == null)
+            {
+                var emptyInit = BuildEnsureCollectionInitializedExpr(childDestVar, cDestProp);
+                if (emptyInit != null) innerStmts.Add(emptyInit);
+                continue;
+            }
 
             var assign = TryBuildSimpleInlineAssign(childSrcVar, childDestVar, cSrcProp, cDestProp, globalConverters);
             if (assign == null) return null;
@@ -1671,13 +1689,12 @@ internal static class ExpressionBuilder
         var propType = destProp.PropertyType;
         if (propType.IsValueType) return null;
         if (!ReflectionHelper.IsCollectionType(propType)) return null;
+        var elemType = ReflectionHelper.GetCollectionElementType(propType);
+        if (elemType == null) return null;
 
         var propAccess = Expression.Property(destExpr, destProp);
-        var createEmptyMethod = typeof(ExpressionBuilder).GetMethod(
-            nameof(CreateEmptyCollection), BindingFlags.NonPublic | BindingFlags.Static)!;
-        var createEmptyCall = Expression.Call(createEmptyMethod, Expression.Constant(propType));
-        var castEmpty = Expression.Convert(createEmptyCall, propType);
-        var assignEmpty = Expression.Assign(propAccess, castEmpty);
+        var emptyExpr = BuildEmptyCollectionExpr(propType, elemType);
+        var assignEmpty = Expression.Assign(propAccess, emptyExpr);
         var nullCheck = Expression.Equal(propAccess, Expression.Constant(null, propType));
         return Expression.IfThen(nullCheck, assignEmpty);
     }
@@ -1752,10 +1769,7 @@ internal static class ExpressionBuilder
 
         // Last resort: runtime helper
         return Expression.Convert(
-            Expression.Call(
-                typeof(ExpressionBuilder).GetMethod(nameof(CreateEmptyCollection),
-                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!,
-                Expression.Constant(destType)),
+            Expression.Call(CreateEmptyCollectionMethod, Expression.Constant(destType)),
             destType);
     }
 
@@ -2109,15 +2123,22 @@ internal static class ExpressionBuilder
         srcDetails.ReadableByName.TryGetValue(destProp.Name, out var srcProp);
 
         if (srcProp != null)
-            return BuildDirectPropAction(srcProp, destProp, null, compiledMaps);
+        {
+            var direct = BuildDirectPropAction(srcProp, destProp, null, compiledMaps);
+            if (direct != null) return direct;
+            // Source exists but types are incompatible — fall through to empty-collection init
+            // for collection-typed destinations.
+        }
+        else
+        {
+            var flattened = TryBuildFlattenedAction(destProp, srcDetails, compiledMaps);
+            if (flattened != null) return flattened;
+        }
 
-        var flattened = TryBuildFlattenedAction(destProp, srcDetails, compiledMaps);
-        if (flattened != null) return flattened;
-
-        // No source match — for collection-typed properties, ensure the destination is an
+        // No usable source mapping — for collection-typed properties, ensure the destination is an
         // empty collection rather than leaving it null (matches default AllowNullCollections=false).
         var destPropType = destProp.PropertyType;
-        if (ReflectionHelper.IsCollectionType(destPropType))
+        if (!destPropType.IsValueType && ReflectionHelper.IsCollectionType(destPropType))
         {
             var setter = GetOrBuildSetter(destProp);
             var getter = GetOrBuildGetter(destProp);
