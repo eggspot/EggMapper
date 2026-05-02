@@ -43,6 +43,14 @@ file class NcSrc { public List<int>? SelectedIds { get; set; } }
 file class NcDest { public List<int>? SelectedIds { get; set; } }
 #endregion
 
+#region Null exclusion sibling types (string, dictionary)
+file class NullStringSrc { public string? Name { get; set; } }
+file class NullStringDest { public string? Name { get; set; } }
+
+file class NullDictSrc { public Dictionary<string, int>? Map { get; set; } }
+file class NullDictDest { public Dictionary<string, int>? Map { get; set; } }
+#endregion
+
 public class AutoMapperCompatibilityTests
 {
     [Fact]
@@ -159,6 +167,34 @@ public class AutoMapperCompatibilityTests
 
         dest.SelectedIds.Should().NotBeNull();
         dest.SelectedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Null_source_string_stays_null()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NullStringSrc, NullStringDest>()
+               .ForMember(d => d.Name, o => o.MapFrom(s => s.Name));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NullStringSrc, NullStringDest>(new NullStringSrc { Name = null });
+
+        dest.Name.Should().BeNull();
+    }
+
+    [Fact]
+    public void Null_source_dictionary_stays_null()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NullDictSrc, NullDictDest>()
+               .ForMember(d => d.Map, o => o.MapFrom(s => s.Map));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NullDictSrc, NullDictDest>(new NullDictSrc { Map = null });
+
+        dest.Map.Should().BeNull();
     }
 
     [Fact]

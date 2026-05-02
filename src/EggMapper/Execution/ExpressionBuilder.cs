@@ -1688,7 +1688,10 @@ internal static class ExpressionBuilder
                         throw tie.InnerException;
                     }
                 }
-                return null!;
+                throw new InvalidOperationException(
+                    $"Cannot construct empty collection of type '{TypeNameHelper.Readable(destType)}': " +
+                    $"no parameterless constructor and no single-argument constructor accepting " +
+                    $"List<{TypeNameHelper.Readable(elemType)}> or any of its interfaces.");
             }
         }
         return Activator.CreateInstance(destType)!;
