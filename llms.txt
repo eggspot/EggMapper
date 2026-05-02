@@ -94,6 +94,10 @@ public class MyProfile : Profile
 - Conditional mapping
 - Null substitution
 - Null collections → empty by default (matches common convention)
+- Unmatched destination collection properties auto-initialized to empty (no NRE on iteration)
+- Read-only / non-public-setter property `Ignore()` allowed; non-`Ignore()` operations throw at config time
+- Custom collection wrappers auto-constructed from `IEnumerable<T>`/`IEnumerable` constructor (e.g. `SelectList`, `MultiSelectList`)
+- Primitive / string / enum element collection mapping without explicit `CreateMap<T,T>()`
 - MaxDepth for self-referencing types
 - Inheritance mapping (IncludeAllDerived)
 - Enum mapping (int <-> enum, string <-> enum)

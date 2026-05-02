@@ -76,6 +76,9 @@
           <tr><td><strong>DI registration</strong></td><td><code>AddAutoMapper()</code></td><td><code>AddEggMapper()</code></td></tr>
           <tr><td><strong>EF Core ProjectTo</strong></td><td><code>ProjectTo&lt;D&gt;(cfg)</code></td><td><code>ProjectTo&lt;S,D&gt;(cfg)</code></td></tr>
           <tr><td><strong>Null collections</strong></td><td>Empty by default</td><td>Empty by default</td></tr>
+          <tr><td><strong>Unmatched dest collection</strong></td><td>Empty by default</td><td>Empty by default (top-level + nested)</td></tr>
+          <tr><td><strong>Read-only / internal-set <code>Ignore</code></strong></td><td>Allowed</td><td>Allowed; non-Ignore ops throw at config time</td></tr>
+          <tr><td><strong>Custom IEnumerable wrappers</strong></td><td>Constructed via ctor</td><td>Constructed via cached interface ctor</td></tr>
           <tr><td><strong>EF Core proxies</strong></td><td>Supported</td><td>Supported</td></tr>
           <tr><td><strong>Same-type T to T</strong></td><td>Needs CreateMap</td><td><strong>Auto-compiles</strong></td></tr>
           <tr><td><strong>Collection auto-map</strong></td><td>Automatic</td><td>Automatic</td></tr>

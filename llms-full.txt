@@ -61,7 +61,7 @@ CreateMap<Src, Dest>()
     // DI value resolver
     .ForMember(d => d.ImageUrl, o => o.MapFrom<UrlResolver, MediaAsset>(s => s.Image))
 
-    // Ignore
+    // Ignore (also valid on getter-only and non-public-setter properties)
     .ForMember(d => d.Secret, o => o.Ignore())
 
     // Constant value
@@ -259,4 +259,8 @@ mapper.Map<IList<OrderDto>>(orders);                   // IList dest
 | ProjectTo | `ProjectTo<Dest>(cfg)` | `ProjectTo<Src, Dest>(cfg)` |
 | Same-type T→T | Needs CreateMap | Auto-compiles on first use |
 | Null collections | Empty by default | Empty by default |
+| Unmatched dest collection prop | Empty by default | Empty by default (top-level + nested inline) |
+| Read-only/internal-set prop | `Ignore()` allowed | `Ignore()` allowed; other ops throw at config time |
+| Custom IEnumerable wrappers | Auto-construct via ctor | Auto-construct via cached interface ctor lookup |
+| Primitive collection mapping | No CreateMap needed | No CreateMap needed (auto identity-copy) |
 | Source generator | No | No (runtime, but near source-gen speed) |

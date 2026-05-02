@@ -103,6 +103,8 @@ cfg.CreateMap&lt;Customer, CustomerDto&gt;()
 
       <div class="note"><p>Use <code>Ignore()</code> for sensitive data (passwords, tokens, internal IDs) or computed-only properties that should not come from the source.</p></div>
 
+      <p><code>Ignore()</code> is also valid on getter-only properties and properties with non-public setters (e.g. <code>internal set</code> from another assembly). Other operations such as <code>MapFrom</code>, <code>Condition</code>, or <code>UseValue</code> on a non-publicly-writable property throw <code>InvalidOperationException</code> at configuration time with a clear message.</p>
+
       <hr>
 
       <h2><code>ReverseMap()</code> — Bidirectional Mapping</h2>
@@ -216,6 +218,32 @@ List&lt;OrderDto&gt; dtos = mapper.MapList&lt;Order, OrderDto&gt;(orders);</code
 Product[] products = GetProducts();
 var dtos = mapper.Map&lt;List&lt;ProductDto&gt;&gt;(products);
 // Also: mapper.Map&lt;ProductDto[]&gt;(products)</code></pre>
+
+      <h3>Primitive / string / enum element collections</h3>
+
+      <p>No <code>CreateMap&lt;int, int&gt;()</code> needed — element copy happens automatically when the source and destination element types are assignable:</p>
+
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Source, Dest&gt;()
+    .ForMember(d =&gt; d.SelectedIds, o =&gt; o.MapFrom(s =&gt; s.Items.Select(i =&gt; i.Id)));
+// IEnumerable&lt;int&gt; from .Select(...) materializes to IList&lt;int&gt; / List&lt;int&gt; / int[]</code></pre>
+
+      <h3>Custom collection wrappers</h3>
+
+      <p>Destination types that wrap an <code>IEnumerable</code> via a single-argument constructor (such as <code>SelectList</code>, <code>MultiSelectList</code>, or your own wrapper) are auto-constructed. The lookup is cached per <code>(destinationType, sourceListType)</code> pair, so per-call cost is one dictionary lookup.</p>
+
+      <pre><code class="language-csharp">cfg.CreateMap&lt;Filter, FilterViewModel&gt;()
+    .ForMember(d =&gt; d.Options, o =&gt; o.MapFrom(s =&gt; s.Items.Select(i =&gt; i.ToSelectListItem())));
+// FilterViewModel.Options : SelectList — constructed via SelectList(IEnumerable items)</code></pre>
+
+      <h3>Null and unmatched collection destinations</h3>
+
+      <p>Collection-typed destination properties never end up <code>null</code> after mapping unless they are explicitly <code>Ignore()</code>d — matches the default <code>AllowNullCollections = false</code> convention:</p>
+
+      <ul>
+        <li>Null source value for a collection destination → empty collection of the destination type.</li>
+        <li>Destination property has no matching source property → empty collection (top-level and nested inline maps).</li>
+        <li>Constructor-initialized non-null defaults (e.g. <code>= new List&lt;int&gt; { 1, 2, 3 }</code>) are preserved when no source mapping applies.</li>
+      </ul>
 
       <hr>
 

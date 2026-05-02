@@ -236,6 +236,10 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Before/After map hooks
 - ✅ Conditional mapping
 - ✅ Null substitution
+- ✅ Null source collection → empty destination collection (default `AllowNullCollections = false` semantics)
+- ✅ Unmatched destination collection properties auto-initialized to empty (top-level + nested inline maps)
+- ✅ `Ignore()` on getter-only and non-public-setter properties; non-`Ignore()` ops throw at config time
+- ✅ Custom `IEnumerable` wrappers (e.g. `SelectList`) auto-constructed via cached interface-ctor lookup
 - ✅ `MaxDepth` for self-referencing types
 - ✅ Inheritance mapping
 - ✅ Enum mapping (int ↔ enum and string ↔ enum auto-conversion)
