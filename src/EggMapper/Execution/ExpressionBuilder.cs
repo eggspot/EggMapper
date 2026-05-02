@@ -286,6 +286,8 @@ internal static class ExpressionBuilder
                 }
                 if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
                     return null;
+                var emptyInit = BuildEnsureCollectionInitializedExpr(dVar, destProp);
+                if (emptyInit != null) stmts.Add(emptyInit);
                 continue;
             }
 
@@ -1086,6 +1088,8 @@ internal static class ExpressionBuilder
                 // If there's a flattened source but we can't inline it, bail out
                 if (ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
                     return false;
+                var emptyInit = BuildEnsureCollectionInitializedExpr(dVar, destProp);
+                if (emptyInit != null) stmts.Add(emptyInit);
                 continue;
             }
 
@@ -1658,6 +1662,27 @@ internal static class ExpressionBuilder
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <summary>
+    /// Builds an expression that ensures a collection-typed destination property is non-null,
+    /// assigning an empty collection if it is null. Returns null when the property is not a
+    /// (reference-typed) collection — caller falls through to its existing skip path.
+    /// </summary>
+    private static Expression? BuildEnsureCollectionInitializedExpr(Expression destExpr, PropertyInfo destProp)
+    {
+        var propType = destProp.PropertyType;
+        if (propType.IsValueType) return null;
+        if (!ReflectionHelper.IsCollectionType(propType)) return null;
+
+        var propAccess = Expression.Property(destExpr, destProp);
+        var createEmptyMethod = typeof(ExpressionBuilder).GetMethod(
+            nameof(CreateEmptyCollection), BindingFlags.NonPublic | BindingFlags.Static)!;
+        var createEmptyCall = Expression.Call(createEmptyMethod, Expression.Constant(propType));
+        var castEmpty = Expression.Convert(createEmptyCall, propType);
+        var assignEmpty = Expression.Assign(propAccess, castEmpty);
+        var nullCheck = Expression.Equal(propAccess, Expression.Constant(null, propType));
+        return Expression.IfThen(nullCheck, assignEmpty);
+    }
+
+    /// <summary>
     /// Creates an empty collection matching the destination type. Used when source collection
     /// is null — default AllowNullCollections=false behavior.
     /// </summary>
@@ -2086,7 +2111,24 @@ internal static class ExpressionBuilder
         if (srcProp != null)
             return BuildDirectPropAction(srcProp, destProp, null, compiledMaps);
 
-        return TryBuildFlattenedAction(destProp, srcDetails, compiledMaps);
+        var flattened = TryBuildFlattenedAction(destProp, srcDetails, compiledMaps);
+        if (flattened != null) return flattened;
+
+        // No source match — for collection-typed properties, ensure the destination is an
+        // empty collection rather than leaving it null (matches default AllowNullCollections=false).
+        var destPropType = destProp.PropertyType;
+        if (ReflectionHelper.IsCollectionType(destPropType))
+        {
+            var setter = GetOrBuildSetter(destProp);
+            var getter = GetOrBuildGetter(destProp);
+            return (src, dest, ctx) =>
+            {
+                if (getter(dest) == null)
+                    setter(dest, CreateEmptyCollection(destPropType));
+            };
+        }
+
+        return null;
     }
 
     private static Action<object, object, ResolutionContext>? BuildDirectPropAction(

@@ -43,6 +43,11 @@ file class NcSrc { public List<int>? SelectedIds { get; set; } }
 file class NcDest { public List<int>? SelectedIds { get; set; } }
 #endregion
 
+#region Unmatched collection property
+file class UmSrc { public string Name { get; set; } = ""; }
+file class UmDest { public string Name { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
+#endregion
+
 #region Null exclusion sibling types (string, dictionary)
 file class NullStringSrc { public string? Name { get; set; } }
 file class NullStringDest { public string? Name { get; set; } }
@@ -167,6 +172,21 @@ public class AutoMapperCompatibilityTests
 
         dest.SelectedIds.Should().NotBeNull();
         dest.SelectedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Unmatched_collection_dest_property_is_initialized_to_empty()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<UmSrc, UmDest>();
+        }).CreateMapper();
+
+        var dest = mapper.Map<UmSrc, UmDest>(new UmSrc { Name = "Alice" });
+
+        dest.Name.Should().Be("Alice");
+        dest.UnmatchedIds.Should().NotBeNull();
+        dest.UnmatchedIds.Should().BeEmpty();
     }
 
     [Fact]
