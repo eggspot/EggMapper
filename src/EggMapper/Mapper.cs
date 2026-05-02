@@ -514,7 +514,23 @@ public sealed class Mapper : IMapper
                             resultList.Add(elemDel!(item, null, ctx));
                         }
                     }
-                    return resultList;
+
+                    // Materialize to the requested concrete collection type when the built
+                    // List<T> isn't assignable (e.g. dest is T[] or a custom wrapper type).
+                    if (destinationType.IsAssignableFrom(resultList.GetType()))
+                        return resultList;
+                    if (destinationType.IsArray)
+                    {
+                        var arr = Array.CreateInstance(destElemType, resultList.Count);
+                        resultList.CopyTo(arr, 0);
+                        return arr;
+                    }
+                    // Fall through to ConvertValue-like wrapper-ctor logic via boxed expression
+                    // path below; for now, throw a clear error so callers see the gap.
+                    throw new InvalidOperationException(
+                        $"Cannot materialize collection of type '{TypeNameHelper.Readable(destinationType)}' " +
+                        $"from List<{TypeNameHelper.Readable(destElemType)}>: " +
+                        $"destination is not assignable from List<T> and is not an array.");
                 }
 
                 // Element mapping not found — give a clear error pointing to the element types
