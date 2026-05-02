@@ -189,6 +189,18 @@ public class PrimitiveCollectionTests
         var dest = mapper.Map<List<int?>, int?[]>(new List<int?> { 1, null, 3 });
         dest.Should().BeEquivalentTo(new int?[] { 1, null, 3 });
     }
+
+    [Fact]
+    public void Direct_Map_List_int_to_custom_generic_list_via_Add_method()
+    {
+        var mapper = new MapperConfiguration(_ => { }).CreateMapper();
+        var dest = mapper.Map<List<int>, CustomGenericList<int>>(new List<int> { 1, 2, 3 });
+        dest.Count.Should().Be(3);
+        dest[0].Should().Be(1);
+        dest[1].Should().Be(2);
+        dest[2].Should().Be(3);
+    }
+
 }
 
 file class WrappedInts : System.Collections.Generic.IEnumerable<int>
@@ -201,5 +213,17 @@ file class WrappedInts : System.Collections.Generic.IEnumerable<int>
     }
     public List<int> AsList() => _items;
     public IEnumerator<int> GetEnumerator() => _items.GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
+}
+
+// Generic collection with parameterless ctor + Add(T) — has no IEnumerable ctor,
+// so it can only be materialized via the IsGenericType+Add path.
+file class CustomGenericList<T> : System.Collections.Generic.IEnumerable<T>
+{
+    private readonly List<T> _items = new();
+    public void Add(T item) => _items.Add(item);
+    public int Count => _items.Count;
+    public T this[int i] => _items[i];
+    public IEnumerator<T> GetEnumerator() => _items.GetEnumerator();
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => _items.GetEnumerator();
 }

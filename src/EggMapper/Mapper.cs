@@ -499,6 +499,16 @@ public sealed class Mapper : IMapper
                 if (elemDel != null || identityElements)
                 {
                     var ctx = GetContext(items);
+                    // For non-nullable value-type elements, IList.Add(null) for List<int> rejects
+                    // null. Substitute the boxed default — matches array semantics.
+                    var nullSub = destElemType.IsValueType ? Activator.CreateInstance(destElemType) : null;
+
+                    object MapItem(object item)
+                    {
+                        if (identityElements) return item;
+                        ctx.Depth = 0;
+                        return elemDel!(item, null, ctx);
+                    }
 
                     // Fast path: pre-size an array when the destination is an array and we
                     // know the count up-front from an ICollection source.
@@ -508,9 +518,7 @@ public sealed class Mapper : IMapper
                         int i = 0;
                         foreach (var item in srcEnum)
                         {
-                            if (item == null) { i++; continue; }
-                            arr.SetValue(identityElements ? item : elemDel!(item, null, ctx), i++);
-                            if (!identityElements) ctx.Depth = 0;
+                            arr.SetValue(item == null ? nullSub : MapItem(item), i++);
                         }
                         return arr;
                     }
@@ -518,18 +526,7 @@ public sealed class Mapper : IMapper
                     var resultList = (IList)Activator.CreateInstance(
                         typeof(List<>).MakeGenericType(destElemType))!;
                     foreach (var item in srcEnum)
-                    {
-                        if (item == null) { resultList.Add(null); continue; }
-                        if (identityElements)
-                        {
-                            resultList.Add(item);
-                        }
-                        else
-                        {
-                            ctx.Depth = 0;
-                            resultList.Add(elemDel!(item, null, ctx));
-                        }
-                    }
+                        resultList.Add(item == null ? nullSub : MapItem(item));
 
                     // List<T> directly assignable to destination — return as-is.
                     if (destinationType.IsAssignableFrom(resultList.GetType()))
@@ -541,6 +538,25 @@ public sealed class Mapper : IMapper
                         var arr = Array.CreateInstance(destElemType, resultList.Count);
                         resultList.CopyTo(arr, 0);
                         return arr;
+                    }
+
+                    // Generic collection with parameterless ctor + Add(T) method (e.g. a custom
+                    // collection like MyList<T> : ICollection<T> with Add).
+                    if (destinationType.IsGenericType && !destinationType.IsAbstract)
+                    {
+                        var emptyCtor = destinationType.GetConstructor(Type.EmptyTypes);
+                        var addMethod = destinationType.GetMethod("Add", new[] { destElemType });
+                        if (emptyCtor != null && addMethod != null)
+                        {
+                            var dest = emptyCtor.Invoke(Array.Empty<object>());
+                            var addArgs = new object?[1];
+                            for (int i = 0; i < resultList.Count; i++)
+                            {
+                                addArgs[0] = resultList[i];
+                                addMethod.Invoke(dest, addArgs);
+                            }
+                            return dest!;
+                        }
                     }
 
                     // Custom collection wrapper — try a single-arg constructor that accepts the
