@@ -43,6 +43,12 @@ file class NcSrc { public List<int>? SelectedIds { get; set; } }
 file class NcDest { public List<int>? SelectedIds { get; set; } }
 #endregion
 
+#region Null-conditional MapFrom to non-nullable value type
+file class NullableNestedSrc { public InnerWithBool? Inner { get; set; } }
+file class InnerWithBool { public bool IsEnabled { get; set; } }
+file class BoolDest { public bool IsEnabled { get; set; } public int Count { get; set; } public DateTime When { get; set; } }
+#endregion
+
 #region Unmatched collection property
 file class UmSrc { public string Name { get; set; } = ""; }
 file class UmDest { public string Name { get; set; } = ""; public List<int>? UnmatchedIds { get; set; } }
@@ -194,6 +200,36 @@ public class AutoMapperCompatibilityTests
 
         dest.SelectedIds.Should().NotBeNull();
         dest.SelectedIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MapFrom_null_conditional_to_non_nullable_bool_returns_default()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NullableNestedSrc, BoolDest>()
+               .ForMember(d => d.IsEnabled, o => o.MapFrom((s, d) => s.Inner != null ? s.Inner.IsEnabled : (bool?)null));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NullableNestedSrc, BoolDest>(new NullableNestedSrc { Inner = null });
+
+        dest.IsEnabled.Should().BeFalse(); // default(bool) = false, no NRE
+    }
+
+    [Fact]
+    public void MapFrom_null_returns_default_for_int_and_DateTime()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NullableNestedSrc, BoolDest>()
+               .ForMember(d => d.Count, o => o.MapFrom((s, d) => (int?)null))
+               .ForMember(d => d.When,  o => o.MapFrom((s, d) => (DateTime?)null));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NullableNestedSrc, BoolDest>(new NullableNestedSrc());
+
+        dest.Count.Should().Be(0);
+        dest.When.Should().Be(default);
     }
 
     [Fact]

@@ -2862,6 +2862,10 @@ internal static class ExpressionBuilder
             // Strings are explicitly excluded by IsCollectionType.
             if (ReflectionHelper.IsCollectionType(targetType))
                 return CreateEmptyCollection(targetType);
+            // Null source for a non-nullable value-type destination produces default(T).
+            // Common case: MapFrom((s, d) => s.Nested?.SomeBool) → bool destination.
+            if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
+                return Activator.CreateInstance(targetType);
             return null;
         }
         var valueType = value.GetType();
