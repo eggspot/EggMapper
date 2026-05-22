@@ -43,10 +43,25 @@ file class NcSrc { public List<int>? SelectedIds { get; set; } }
 file class NcDest { public List<int>? SelectedIds { get; set; } }
 #endregion
 
+#region Single-type-arg Map to collection destination
+file class CgmSrc { public int Id { get; set; } public string Name { get; set; } = ""; }
+file class CgmDest { public int Id { get; set; } public string Name { get; set; } = ""; }
+#endregion
+
 #region Null-conditional MapFrom to non-nullable value type
 file class NullableNestedSrc { public InnerWithBool? Inner { get; set; } }
 file class InnerWithBool { public bool IsEnabled { get; set; } }
 file class BoolDest { public bool IsEnabled { get; set; } public int Count { get; set; } public DateTime When { get; set; } }
+
+file enum Color { Red, Green, Blue }
+file struct Coord { public int X; public int Y; }
+file class ValueTypeDest
+{
+    public Guid Id { get; set; }
+    public decimal Amount { get; set; }
+    public Color Color { get; set; }
+    public Coord Position { get; set; }
+}
 #endregion
 
 #region Unmatched collection property
@@ -203,6 +218,67 @@ public class AutoMapperCompatibilityTests
     }
 
     [Fact]
+    public void Map_with_single_type_arg_to_List_destination_maps_each_element()
+    {
+        // Mirrors PAM pattern: _mapper.Map<List<RowViewModel>>(entities) with only the element
+        // map registered. AutoMapper supports this implicitly; EggMapper routes through
+        // Map<TDestination>(object) -> MapInternal which iterates via the registered element map.
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<CgmSrc, CgmDest>();
+        }).CreateMapper();
+
+        var source = new List<CgmSrc>
+        {
+            new() { Id = 1, Name = "Alice" },
+            new() { Id = 2, Name = "Bob" },
+        };
+
+        var rows = mapper.Map<List<CgmDest>>(source);
+
+        rows.Should().NotBeNull();
+        rows.Should().HaveCount(2);
+        rows[0].Id.Should().Be(1);
+        rows[0].Name.Should().Be("Alice");
+        rows[1].Id.Should().Be(2);
+        rows[1].Name.Should().Be("Bob");
+    }
+
+    [Fact]
+    public void Map_with_single_type_arg_to_array_destination_maps_each_element()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<CgmSrc, CgmDest>();
+        }).CreateMapper();
+
+        var source = new List<CgmSrc> { new() { Id = 1 }, new() { Id = 2 } };
+
+        var rows = mapper.Map<CgmDest[]>(source);
+
+        rows.Should().NotBeNull();
+        rows.Should().HaveCount(2);
+        rows[0].Id.Should().Be(1);
+        rows[1].Id.Should().Be(2);
+    }
+
+    [Fact]
+    public void Map_with_single_type_arg_to_IEnumerable_destination_maps_each_element()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<CgmSrc, CgmDest>();
+        }).CreateMapper();
+
+        var source = new List<CgmSrc> { new() { Id = 1 }, new() { Id = 2 } };
+
+        var rows = mapper.Map<IEnumerable<CgmDest>>(source);
+
+        rows.Should().NotBeNull();
+        rows.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void MapFrom_null_conditional_to_non_nullable_bool_returns_default()
     {
         var mapper = new MapperConfiguration(cfg =>
@@ -214,6 +290,26 @@ public class AutoMapperCompatibilityTests
         var dest = mapper.Map<NullableNestedSrc, BoolDest>(new NullableNestedSrc { Inner = null });
 
         dest.IsEnabled.Should().BeFalse(); // default(bool) = false, no NRE
+    }
+
+    [Fact]
+    public void MapFrom_null_returns_default_for_Guid_decimal_enum_and_custom_struct()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<NullableNestedSrc, ValueTypeDest>()
+               .ForMember(d => d.Id,       o => o.MapFrom((s, d) => (Guid?)null))
+               .ForMember(d => d.Amount,   o => o.MapFrom((s, d) => (decimal?)null))
+               .ForMember(d => d.Color,    o => o.MapFrom((s, d) => (Color?)null))
+               .ForMember(d => d.Position, o => o.MapFrom((s, d) => (Coord?)null));
+        }).CreateMapper();
+
+        var dest = mapper.Map<NullableNestedSrc, ValueTypeDest>(new NullableNestedSrc());
+
+        dest.Id.Should().Be(Guid.Empty);
+        dest.Amount.Should().Be(0m);
+        dest.Color.Should().Be(Color.Red); // first enum member = default
+        dest.Position.Should().Be(default(Coord));
     }
 
     [Fact]

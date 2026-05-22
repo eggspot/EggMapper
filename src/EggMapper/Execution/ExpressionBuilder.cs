@@ -2863,7 +2863,12 @@ internal static class ExpressionBuilder
             if (ReflectionHelper.IsCollectionType(targetType))
                 return CreateEmptyCollection(targetType);
             // Null source for a non-nullable value-type destination produces default(T).
-            // Common case: MapFrom((s, d) => s.Nested?.SomeBool) → bool destination.
+            // Equivalent to calling .GetValueOrDefault() on a Nullable<T> source. Applies to
+            // every non-nullable value type — bool, int, long, decimal, DateTime, Guid, enums,
+            // and user-defined structs. Common trigger: MapFrom((s, d) => s.Nested?.SomeValue)
+            // where the null-conditional yields Nullable<T> and the destination property is T.
+            // Nullable<T> destinations (where GetUnderlyingType returns non-null) are excluded
+            // so they keep null semantics.
             if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
                 return Activator.CreateInstance(targetType);
             return null;
