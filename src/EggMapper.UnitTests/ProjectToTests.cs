@@ -66,6 +66,13 @@ public class ProjectToTests
     private class Child : TheBase { public int MyProperty { get; set; } }
     private class ChildDto : BaseDto { public int MyProperty { get; set; } }
 
+    private class GrandBaseSrc { public string TheName { get; set; } = ""; }
+    private class GrandBaseDto { public string Name { get; set; } = ""; }
+    private class MidSrc : GrandBaseSrc { public int MidProp { get; set; } }
+    private class MidDto : GrandBaseDto { public int MidProp { get; set; } }
+    private class LeafSrc : MidSrc { public int LeafProp { get; set; } }
+    private class LeafDto : MidDto { public int LeafProp { get; set; } }
+
     // ── Basic flat projection ──────────────────────────────────────────────
 
     [Fact]
@@ -223,5 +230,28 @@ public class ProjectToTests
 
         result[0].Name.Should().Be("aaa");
         result[0].MyProperty.Should().Be(7);
+    }
+
+    [Fact]
+    public void ProjectTo_MemberMappedViaMultiLevelIncludeBase_MapsCorrectly()
+    {
+        var cfg = new MapperConfiguration(c =>
+        {
+            c.CreateMap<GrandBaseSrc, GrandBaseDto>()
+             .ForMember(d => d.Name, m => m.MapFrom(s => s.TheName));
+            c.CreateMap<MidSrc, MidDto>().IncludeBase<GrandBaseSrc, GrandBaseDto>();
+            c.CreateMap<LeafSrc, LeafDto>().IncludeBase<MidSrc, MidDto>();
+        });
+
+        var source = new List<LeafSrc>
+        {
+            new() { TheName = "aaa", MidProp = 1, LeafProp = 2 }
+        }.AsQueryable();
+
+        var result = source.ProjectTo<LeafSrc, LeafDto>(cfg).ToList();
+
+        result[0].Name.Should().Be("aaa");
+        result[0].MidProp.Should().Be(1);
+        result[0].LeafProp.Should().Be(2);
     }
 }

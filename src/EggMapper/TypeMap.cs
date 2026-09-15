@@ -17,6 +17,14 @@ internal sealed class TypeMap
     public Action<object, object, ResolutionContext>? BeforeMapCtxAction { get; set; }
     public Action<object, object, ResolutionContext>? AfterMapCtxAction { get; set; }
     public TypePair? BaseMapTypePair { get; set; }
+    /// <summary>
+    /// Precomputed (at configuration time) effective property maps for a map that uses
+    /// <c>IncludeBase()</c>, resolved most-base-to-most-derived and cycle-checked, with a
+    /// more-derived level's own <see cref="PropertyMap"/> for a given member always winning
+    /// over an ancestor's. Null when this map has no <see cref="BaseMapTypePair"/> — callers
+    /// should fall back to <see cref="PropertyMaps"/> in that case.
+    /// </summary>
+    public List<PropertyMap>? EffectivePropertyMaps { get; set; }
     public int MaxDepth { get; set; }
     public bool HasReverseMap { get; set; }
     public bool IncludeAllDerivedFlag { get; set; }

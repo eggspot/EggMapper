@@ -1880,32 +1880,21 @@ internal static class ExpressionBuilder
         var mappingActionNames = new List<string>();
         var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // Walk the IncludeBase chain from most-derived to most-base (cycle-guarded), so a
-        // level's own PropertyMaps always take priority over an ancestor's for the same
-        // destination member, however many IncludeBase() hops away that ancestor is.
-        var mapChain = new List<TypeMap> { typeMap };
-        var visitedBasePairs = new HashSet<TypePair>();
-        var currentMap = typeMap;
-        while (currentMap.BaseMapTypePair.HasValue && visitedBasePairs.Add(currentMap.BaseMapTypePair.Value) &&
-               allTypeMaps.TryGetValue(currentMap.BaseMapTypePair.Value, out var baseTypeMap))
+        // EffectivePropertyMaps (precomputed at configuration time by
+        // MapperConfiguration.ResolveIncludeBaseChains, for maps that use IncludeBase()) is
+        // already resolved most-base-to-most-derived, one entry per destination member with
+        // the nearest declaration winning — base-level actions run before derived-level ones
+        // that might depend on them (e.g. a Condition reading a base-populated member).
+        foreach (var propMap in typeMap.EffectivePropertyMaps ?? typeMap.PropertyMaps)
         {
-            mapChain.Add(baseTypeMap);
-            currentMap = baseTypeMap;
-        }
-
-        foreach (var levelMap in mapChain)
-        {
-            foreach (var propMap in levelMap.PropertyMaps)
+            var propName = propMap.DestinationProperty.Name;
+            processedDestProps.Add(propName);
+            if (propMap.Ignored) continue;
+            var action = BuildPropertyAction(propMap, srcDetails, compiledMaps);
+            if (action != null)
             {
-                var propName = propMap.DestinationProperty.Name;
-                if (!processedDestProps.Add(propName)) continue;
-                if (propMap.Ignored) continue;
-                var action = BuildPropertyAction(propMap, srcDetails, compiledMaps);
-                if (action != null)
-                {
-                    mappingActions.Add(action);
-                    mappingActionNames.Add(propName);
-                }
+                mappingActions.Add(action);
+                mappingActionNames.Add(propName);
             }
         }
 
