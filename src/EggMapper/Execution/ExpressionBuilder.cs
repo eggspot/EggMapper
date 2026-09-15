@@ -1880,42 +1880,32 @@ internal static class ExpressionBuilder
         var mappingActionNames = new List<string>();
         var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (typeMap.BaseMapTypePair.HasValue &&
-            allTypeMaps.TryGetValue(typeMap.BaseMapTypePair.Value, out var baseTypeMap))
+        // Walk the IncludeBase chain from most-derived to most-base (cycle-guarded), so a
+        // level's own PropertyMaps always take priority over an ancestor's for the same
+        // destination member, however many IncludeBase() hops away that ancestor is.
+        var mapChain = new List<TypeMap> { typeMap };
+        var visitedBasePairs = new HashSet<TypePair>();
+        var currentMap = typeMap;
+        while (currentMap.BaseMapTypePair.HasValue && visitedBasePairs.Add(currentMap.BaseMapTypePair.Value) &&
+               allTypeMaps.TryGetValue(currentMap.BaseMapTypePair.Value, out var baseTypeMap))
         {
-            // Build a set of overriding property names upfront — avoids O(n*m) .Any() scan
-            var overriddenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int oi = 0; oi < typeMap.PropertyMaps.Count; oi++)
-                overriddenNames.Add(typeMap.PropertyMaps[oi].DestinationProperty.Name);
-
-            foreach (var basePropMap in baseTypeMap.PropertyMaps)
-            {
-                var propName = basePropMap.DestinationProperty.Name;
-                if (processedDestProps.Contains(propName)) continue;
-                if (!overriddenNames.Contains(propName))
-                {
-                    processedDestProps.Add(propName);
-                    if (basePropMap.Ignored) continue;
-                    var action = BuildPropertyAction(basePropMap, srcDetails, compiledMaps);
-                    if (action != null)
-                    {
-                        mappingActions.Add(action);
-                        mappingActionNames.Add(propName);
-                    }
-                }
-            }
+            mapChain.Add(baseTypeMap);
+            currentMap = baseTypeMap;
         }
 
-        foreach (var propMap in typeMap.PropertyMaps)
+        foreach (var levelMap in mapChain)
         {
-            var propName = propMap.DestinationProperty.Name;
-            processedDestProps.Add(propName);
-            if (propMap.Ignored) continue;
-            var action = BuildPropertyAction(propMap, srcDetails, compiledMaps);
-            if (action != null)
+            foreach (var propMap in levelMap.PropertyMaps)
             {
-                mappingActions.Add(action);
-                mappingActionNames.Add(propName);
+                var propName = propMap.DestinationProperty.Name;
+                if (!processedDestProps.Add(propName)) continue;
+                if (propMap.Ignored) continue;
+                var action = BuildPropertyAction(propMap, srcDetails, compiledMaps);
+                if (action != null)
+                {
+                    mappingActions.Add(action);
+                    mappingActionNames.Add(propName);
+                }
             }
         }
 

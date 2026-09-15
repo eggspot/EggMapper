@@ -61,6 +61,11 @@ public class ProjectToTests
 
     private record UserRecord(string Name, int Age);
 
+    private class TheBase { public string TheName { get; set; } = ""; }
+    private class BaseDto { public string Name { get; set; } = ""; }
+    private class Child : TheBase { public int MyProperty { get; set; } }
+    private class ChildDto : BaseDto { public int MyProperty { get; set; } }
+
     // ── Basic flat projection ──────────────────────────────────────────────
 
     [Fact]
@@ -198,5 +203,25 @@ public class ProjectToTests
             result[i].Name.Should().Be($"User{i + 1}");
             result[i].Age.Should().Be(21 + i);
         }
+    }
+
+    // ── IncludeBase projection ──────────────────────────────────────────────
+
+    [Fact]
+    public void ProjectTo_MemberMappedViaIncludeBase_MapsCorrectly()
+    {
+        var cfg = new MapperConfiguration(c =>
+        {
+            c.CreateMap<TheBase, BaseDto>()
+             .ForMember(dto => dto.Name, map => map.MapFrom(src => src.TheName));
+            c.CreateMap<Child, ChildDto>().IncludeBase<TheBase, BaseDto>();
+        });
+
+        var source = new List<Child> { new() { TheName = "aaa", MyProperty = 7 } }.AsQueryable();
+
+        var result = source.ProjectTo<Child, ChildDto>(cfg).ToList();
+
+        result[0].Name.Should().Be("aaa");
+        result[0].MyProperty.Should().Be(7);
     }
 }

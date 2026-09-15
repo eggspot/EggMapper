@@ -552,7 +552,8 @@ public sealed class MapperConfiguration
         if (propMap != null) return propMap;
 
         var current = typeMap;
-        while (current.BaseMapTypePair.HasValue &&
+        var visited = new HashSet<TypePair>();
+        while (current.BaseMapTypePair.HasValue && visited.Add(current.BaseMapTypePair.Value) &&
                _typeMaps.TryGetValue(current.BaseMapTypePair.Value, out var baseTypeMap))
         {
             propMap = baseTypeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destPropName);

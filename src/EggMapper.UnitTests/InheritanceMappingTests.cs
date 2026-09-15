@@ -11,6 +11,14 @@ file class BaseDestWithCustom { public string BaseProp { get; set; } = ""; }
 file class DerivedSrcWithCustom : BaseSrcWithCustom { public string Extra { get; set; } = ""; }
 file class DerivedDestWithCustom : BaseDestWithCustom { public string Extra { get; set; } = ""; }
 
+// Three-level IncludeBase chain: Leaf -> Mid -> GrandBase, custom ForMember only on GrandBase
+file class GrandBaseSrc { public string TheName { get; set; } = ""; }
+file class GrandBaseDto { public string Name { get; set; } = ""; }
+file class MidSrc : GrandBaseSrc { public int MidProp { get; set; } }
+file class MidDto : GrandBaseDto { public int MidProp { get; set; } }
+file class LeafSrc : MidSrc { public int LeafProp { get; set; } }
+file class LeafDto : MidDto { public int LeafProp { get; set; } }
+
 public class InheritanceMappingTests
 {
     [Fact]
@@ -93,5 +101,26 @@ public class InheritanceMappingTests
         var src = new DerivedSrcWithCustom { BaseProp = "original" };
         var dest = mapper.Map<DerivedSrcWithCustom, DerivedDestWithCustom>(src);
         dest.BaseProp.Should().Be("from-derived");
+    }
+
+    [Fact]
+    public void IncludeBase_applies_ForMember_transitively_across_multiple_levels()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<GrandBaseSrc, GrandBaseDto>()
+               .ForMember(d => d.Name, opts => opts.MapFrom(s => s.TheName));
+
+            cfg.CreateMap<MidSrc, MidDto>().IncludeBase<GrandBaseSrc, GrandBaseDto>();
+
+            cfg.CreateMap<LeafSrc, LeafDto>().IncludeBase<MidSrc, MidDto>();
+        }).CreateMapper();
+
+        var src = new LeafSrc { TheName = "aaa", MidProp = 1, LeafProp = 2 };
+        var dest = mapper.Map<LeafSrc, LeafDto>(src);
+
+        dest.Name.Should().Be("aaa");
+        dest.MidProp.Should().Be(1);
+        dest.LeafProp.Should().Be(2);
     }
 }

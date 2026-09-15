@@ -30,8 +30,7 @@ internal static class ProjectionBuilder
 
         foreach (var destProp in destDetails.WritableProperties)
         {
-            var propMap = typeMap?.PropertyMaps.FirstOrDefault(p =>
-                p.DestinationProperty.Name == destProp.Name);
+            var propMap = typeMap == null ? null : FindPropertyMapIncludingBase(typeMap, destProp.Name, config);
             if (propMap?.Ignored == true) continue;
 
             Expression? valueExpr;
@@ -117,6 +116,25 @@ internal static class ProjectionBuilder
         return extraBindings.Count > 0
             ? (Expression)Expression.MemberInit(newExpr, extraBindings)
             : newExpr;
+    }
+
+    private static PropertyMap? FindPropertyMapIncludingBase(
+        TypeMap typeMap, string destPropName, MapperConfiguration config)
+    {
+        var propMap = typeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destPropName);
+        if (propMap != null) return propMap;
+
+        var current = typeMap;
+        var visited = new HashSet<TypePair>();
+        while (current.BaseMapTypePair.HasValue && visited.Add(current.BaseMapTypePair.Value) &&
+               config.TypeMaps.TryGetValue(current.BaseMapTypePair.Value, out var baseTypeMap))
+        {
+            propMap = baseTypeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destPropName);
+            if (propMap != null) return propMap;
+            current = baseTypeMap;
+        }
+
+        return null;
     }
 
     private static Expression? TryBuildFlattenedExpr(
