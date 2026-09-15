@@ -10,6 +10,11 @@ file class ValidDest { public string Name { get; set; } = ""; public int Age { g
 file class InvalidDest { public string Name { get; set; } = ""; public string Unmatched { get; set; } = ""; }
 file class PartialSource { public string Name { get; set; } = ""; }
 
+file class TheBase { public string TheName { get; set; } = ""; }
+file class BaseDto { public string Name { get; set; } = ""; }
+file class Child : TheBase { public int MyProperty { get; set; } }
+file class ChildDto : BaseDto { public int MyProperty { get; set; } }
+
 public class ConfigurationValidationTests
 {
     [Fact]
@@ -70,5 +75,23 @@ public class ConfigurationValidationTests
 
         var act = () => config.AssertConfigurationIsValid();
         act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void AssertConfigurationIsValid_passes_for_member_mapped_via_IncludeBase()
+    {
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<TheBase, BaseDto>()
+               .ForMember(dto => dto.Name, map => map.MapFrom(src => src.TheName));
+            cfg.CreateMap<Child, ChildDto>().IncludeBase<TheBase, BaseDto>();
+        });
+
+        var act = () => config.AssertConfigurationIsValid();
+        act.Should().NotThrow();
+
+        var mapper = config.CreateMapper();
+        var result = mapper.Map<ChildDto>(new Child { TheName = "aaa" });
+        result.Name.Should().Be("aaa");
     }
 }

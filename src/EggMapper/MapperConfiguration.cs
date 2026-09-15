@@ -520,8 +520,7 @@ public sealed class MapperConfiguration
             {
                 if (ShouldMapProperty != null && !ShouldMapProperty(destProp)) continue;
 
-                var propMap = typeMap.PropertyMaps.FirstOrDefault(p =>
-                    p.DestinationProperty.Name == destProp.Name);
+                var propMap = FindPropertyMapIncludingBase(typeMap, destProp.Name);
 
                 if (propMap?.Ignored == true) continue;
                 if (propMap?.HasUseValue == true) continue;
@@ -545,5 +544,22 @@ public sealed class MapperConfiguration
         if (errors.Count > 0)
             throw new InvalidOperationException(
                 "EggMapper configuration is invalid:\n" + string.Join("\n", errors));
+    }
+
+    private PropertyMap? FindPropertyMapIncludingBase(TypeMap typeMap, string destPropName)
+    {
+        var propMap = typeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destPropName);
+        if (propMap != null) return propMap;
+
+        var current = typeMap;
+        while (current.BaseMapTypePair.HasValue &&
+               _typeMaps.TryGetValue(current.BaseMapTypePair.Value, out var baseTypeMap))
+        {
+            propMap = baseTypeMap.PropertyMaps.FirstOrDefault(p => p.DestinationProperty.Name == destPropName);
+            if (propMap != null) return propMap;
+            current = baseTypeMap;
+        }
+
+        return null;
     }
 }
