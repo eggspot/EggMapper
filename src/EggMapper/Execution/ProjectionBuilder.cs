@@ -28,10 +28,11 @@ internal static class ProjectionBuilder
         var srcDetails = TypeDetails.Get(srcType);
         var bindings = new List<MemberBinding>();
 
+        var propMaps = typeMap?.EffectivePropertyMaps ?? typeMap?.PropertyMaps;
+
         foreach (var destProp in destDetails.WritableProperties)
         {
-            var propMap = typeMap?.PropertyMaps.FirstOrDefault(p =>
-                p.DestinationProperty.Name == destProp.Name);
+            var propMap = propMaps?.FirstOrDefault(p => p.DestinationProperty.Name == destProp.Name);
             if (propMap?.Ignored == true) continue;
 
             Expression? valueExpr;

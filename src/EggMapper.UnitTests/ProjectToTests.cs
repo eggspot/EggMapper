@@ -61,6 +61,18 @@ public class ProjectToTests
 
     private record UserRecord(string Name, int Age);
 
+    private class TheBase { public string TheName { get; set; } = ""; }
+    private class BaseDto { public string Name { get; set; } = ""; }
+    private class Child : TheBase { public int MyProperty { get; set; } }
+    private class ChildDto : BaseDto { public int MyProperty { get; set; } }
+
+    private class GrandBaseSrc { public string TheName { get; set; } = ""; }
+    private class GrandBaseDto { public string Name { get; set; } = ""; }
+    private class MidSrc : GrandBaseSrc { public int MidProp { get; set; } }
+    private class MidDto : GrandBaseDto { public int MidProp { get; set; } }
+    private class LeafSrc : MidSrc { public int LeafProp { get; set; } }
+    private class LeafDto : MidDto { public int LeafProp { get; set; } }
+
     // ── Basic flat projection ──────────────────────────────────────────────
 
     [Fact]
@@ -198,5 +210,48 @@ public class ProjectToTests
             result[i].Name.Should().Be($"User{i + 1}");
             result[i].Age.Should().Be(21 + i);
         }
+    }
+
+    // ── IncludeBase projection ──────────────────────────────────────────────
+
+    [Fact]
+    public void ProjectTo_MemberMappedViaIncludeBase_MapsCorrectly()
+    {
+        var cfg = new MapperConfiguration(c =>
+        {
+            c.CreateMap<TheBase, BaseDto>()
+             .ForMember(dto => dto.Name, map => map.MapFrom(src => src.TheName));
+            c.CreateMap<Child, ChildDto>().IncludeBase<TheBase, BaseDto>();
+        });
+
+        var source = new List<Child> { new() { TheName = "aaa", MyProperty = 7 } }.AsQueryable();
+
+        var result = source.ProjectTo<Child, ChildDto>(cfg).ToList();
+
+        result[0].Name.Should().Be("aaa");
+        result[0].MyProperty.Should().Be(7);
+    }
+
+    [Fact]
+    public void ProjectTo_MemberMappedViaMultiLevelIncludeBase_MapsCorrectly()
+    {
+        var cfg = new MapperConfiguration(c =>
+        {
+            c.CreateMap<GrandBaseSrc, GrandBaseDto>()
+             .ForMember(d => d.Name, m => m.MapFrom(s => s.TheName));
+            c.CreateMap<MidSrc, MidDto>().IncludeBase<GrandBaseSrc, GrandBaseDto>();
+            c.CreateMap<LeafSrc, LeafDto>().IncludeBase<MidSrc, MidDto>();
+        });
+
+        var source = new List<LeafSrc>
+        {
+            new() { TheName = "aaa", MidProp = 1, LeafProp = 2 }
+        }.AsQueryable();
+
+        var result = source.ProjectTo<LeafSrc, LeafDto>(cfg).ToList();
+
+        result[0].Name.Should().Be("aaa");
+        result[0].MidProp.Should().Be(1);
+        result[0].LeafProp.Should().Be(2);
     }
 }

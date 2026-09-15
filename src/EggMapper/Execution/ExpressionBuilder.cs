@@ -1880,33 +1880,12 @@ internal static class ExpressionBuilder
         var mappingActionNames = new List<string>();
         var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (typeMap.BaseMapTypePair.HasValue &&
-            allTypeMaps.TryGetValue(typeMap.BaseMapTypePair.Value, out var baseTypeMap))
-        {
-            // Build a set of overriding property names upfront — avoids O(n*m) .Any() scan
-            var overriddenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int oi = 0; oi < typeMap.PropertyMaps.Count; oi++)
-                overriddenNames.Add(typeMap.PropertyMaps[oi].DestinationProperty.Name);
-
-            foreach (var basePropMap in baseTypeMap.PropertyMaps)
-            {
-                var propName = basePropMap.DestinationProperty.Name;
-                if (processedDestProps.Contains(propName)) continue;
-                if (!overriddenNames.Contains(propName))
-                {
-                    processedDestProps.Add(propName);
-                    if (basePropMap.Ignored) continue;
-                    var action = BuildPropertyAction(basePropMap, srcDetails, compiledMaps);
-                    if (action != null)
-                    {
-                        mappingActions.Add(action);
-                        mappingActionNames.Add(propName);
-                    }
-                }
-            }
-        }
-
-        foreach (var propMap in typeMap.PropertyMaps)
+        // EffectivePropertyMaps (precomputed at configuration time by
+        // MapperConfiguration.ResolveIncludeBaseChains, for maps that use IncludeBase()) is
+        // already resolved most-base-to-most-derived, one entry per destination member with
+        // the nearest declaration winning — base-level actions run before derived-level ones
+        // that might depend on them (e.g. a Condition reading a base-populated member).
+        foreach (var propMap in typeMap.EffectivePropertyMaps ?? typeMap.PropertyMaps)
         {
             var propName = propMap.DestinationProperty.Name;
             processedDestProps.Add(propName);

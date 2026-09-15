@@ -85,6 +85,11 @@ public sealed class MapperConfiguration
         // find derived type maps and auto-set their BaseMapTypePair.
         ResolveIncludeAllDerived();
 
+        // Resolve IncludeBase chains once, at configuration time: every map that walks
+        // BaseMapTypePair (BuildFlexibleDelegate, ProjectionBuilder, AssertConfigurationIsValid)
+        // reads the precomputed EffectivePropertyMaps instead of re-walking ancestors live.
+        ResolveIncludeBaseChains();
+
         var orderedMaps = TopologicalOrder(_typeMaps).ToList();
         var ctxFree = new Dictionary<TypePair, Delegate>(orderedMaps.Count);
 
@@ -198,6 +203,66 @@ public sealed class MapperConfiguration
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Precomputes <see cref="TypeMap.EffectivePropertyMaps"/> for every map that uses
+    /// IncludeBase(), so the runtime/validation/projection paths never need to walk
+    /// BaseMapTypePair chains themselves.
+    /// </summary>
+    private void ResolveIncludeBaseChains()
+    {
+        foreach (var typeMap in _typeMaps.Values)
+        {
+            if (typeMap.BaseMapTypePair.HasValue)
+                typeMap.EffectivePropertyMaps = BuildEffectivePropertyMaps(typeMap);
+        }
+    }
+
+    /// <summary>
+    /// Walks the IncludeBase chain from <paramref name="typeMap"/> (most-derived) up through
+    /// its ancestors, cycle-checked, and returns one PropertyMap per distinct destination
+    /// member — the nearest (most-derived) declaration wins — ordered most-base-to-most-derived
+    /// so a base-level mapping always executes before a derived-level one that might depend on
+    /// it (e.g. via <c>Condition((src, dest) => ...)</c> reading a base-populated member).
+    /// </summary>
+    private List<PropertyMap> BuildEffectivePropertyMaps(TypeMap typeMap)
+    {
+        var chain = new List<TypeMap> { typeMap };
+        var visited = new HashSet<TypePair> { new TypePair(typeMap.SourceType, typeMap.DestinationType) };
+        var current = typeMap;
+        while (current.BaseMapTypePair.HasValue)
+        {
+            var basePair = current.BaseMapTypePair.Value;
+            if (!visited.Add(basePair))
+                throw new InvalidOperationException(
+                    $"Circular IncludeBase() reference detected involving map " +
+                    $"{typeMap.SourceType.Name} -> {typeMap.DestinationType.Name}.");
+            if (!_typeMaps.TryGetValue(basePair, out var baseTypeMap)) break;
+            chain.Add(baseTypeMap);
+            current = baseTypeMap;
+        }
+
+        var winners = new Dictionary<string, PropertyMap>(StringComparer.OrdinalIgnoreCase);
+        foreach (var levelMap in chain)
+            foreach (var propMap in levelMap.PropertyMaps)
+                if (!winners.ContainsKey(propMap.DestinationProperty.Name))
+                    winners[propMap.DestinationProperty.Name] = propMap;
+
+        var ordered = new List<PropertyMap>();
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = chain.Count - 1; i >= 0; i--)
+        {
+            foreach (var propMap in chain[i].PropertyMaps)
+            {
+                var name = propMap.DestinationProperty.Name;
+                if (!ReferenceEquals(winners[name], propMap)) continue;
+                if (!emitted.Add(name)) continue;
+                ordered.Add(propMap);
+            }
+        }
+
+        return ordered;
     }
 
     public IMapper CreateMapper() => new Mapper(this);
@@ -520,8 +585,8 @@ public sealed class MapperConfiguration
             {
                 if (ShouldMapProperty != null && !ShouldMapProperty(destProp)) continue;
 
-                var propMap = typeMap.PropertyMaps.FirstOrDefault(p =>
-                    p.DestinationProperty.Name == destProp.Name);
+                var propMaps = typeMap.EffectivePropertyMaps ?? typeMap.PropertyMaps;
+                var propMap = propMaps.FirstOrDefault(p => p.DestinationProperty.Name == destProp.Name);
 
                 if (propMap?.Ignored == true) continue;
                 if (propMap?.HasUseValue == true) continue;
