@@ -8,7 +8,7 @@
     <Company>Eggspot</Company>
     <Product>EggMapper</Product>
     <Description>Drop-in AutoMapper replacement — fastest .NET runtime object-to-object mapper. Same API (CreateMap, ForMember, Profile, IMapper), 2-5x faster. Zero runtime reflection, zero extra allocations, compiled expression trees. Supports DI, EF Core, Blazor, collections, flattening, nested types, and all AutoMapper features.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
