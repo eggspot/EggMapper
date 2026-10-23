@@ -249,7 +249,7 @@ mapper.Map<IList<OrderDto>>(orders);                   // IList dest
 
 | Feature | AutoMapper | EggMapper |
 |---------|-----------|-----------|
-| License | Commercial (v13+) | MIT (free forever) |
+| License | Commercial (v13+) | MIT OR Apache-2.0 (free forever) |
 | Performance | Baseline | 2-5x faster |
 | Allocations | Extra allocations | Zero extra |
 | Runtime reflection | Yes | No (compiled expressions) |

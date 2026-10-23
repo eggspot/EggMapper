@@ -8,7 +8,7 @@
     <Company>Eggspot</Company>
     <Product>EggMapper</Product>
     <Description>Attributes for compile-time object mapping with EggMapper.Generator. Decorate source types with [MapTo] to auto-generate type-safe extension methods.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

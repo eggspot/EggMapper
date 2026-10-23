@@ -7,7 +7,7 @@ Sponsored by [eggspot.app](https://eggspot.app)
 [![CI](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/ci.yml)
 [![Benchmarks](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml/badge.svg)](https://github.com/eggspot/EggMapper/actions/workflows/benchmarks.yml)
 [![NuGet](https://img.shields.io/nuget/v/EggMapper.svg)](https://www.nuget.org/packages/EggMapper)
-[![MIT License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](LICENSE-MIT)
 
 📖 **[Full documentation →](https://eggspot.github.io/EggMapper/)**
 
@@ -32,7 +32,7 @@ The same `CreateMap<>()`, `ForMember()`, `ReverseMap()`, `Profile`, and `IMapper
 - 🔁 **Drop-in AutoMapper replacement** — same fluent API, same patterns
 - 🧩 **Full feature set** — profiles, `ForMember`, `ReverseMap`, nested types, collections, DI, and more
 - 🪶 **Lightweight** — no runtime reflection, no unnecessary allocations
-- 📖 **MIT licensed** — free for commercial use, forever
+- 📖 **MIT OR Apache-2.0 licensed** — free for commercial use, forever
 
 ## Installation
 

@@ -8,7 +8,7 @@
     <Company>Eggspot</Company>
     <Product>EggMapper</Product>
     <Description>Roslyn source generator for EggMapper. Generates compile-time, type-safe extension methods from [MapTo] attributes. Zero runtime reflection, zero allocations.</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/eggspot/EggMapper</PackageProjectUrl>
     <RepositoryUrl>https://github.com/eggspot/EggMapper</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
