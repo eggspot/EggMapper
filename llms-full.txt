@@ -1,266 +1,170 @@
-# EggMapper — Full API Reference for AI Agents
+# EggMapper — full reference for AI coding assistants
 
-## Core API
+Fast .NET object mapper with AutoMapper's API. Package `EggMapper` (runtime, includes DI). Compile-time tiers:
+`EggMapper.Generator` (`[MapTo]`) and `EggMapper.ClassMapper` (`[EggMapper]` partial classes). Targets netstandard2.0,
+net462, net8.0-net11.0. License MIT OR Apache-2.0. Short version: llms.txt.
 
-### MapperConfiguration
+## Rules that save round trips
 
-```csharp
-// Basic
-var config = new MapperConfiguration(cfg =>
+- Register maps in `Profile` classes; scan with `cfg.AddMaps(assembly)` or `services.AddEggMapper(assembly)`.
+- Prefer `mapper.Map<S, D>(src)`; inject `IMapper<S, D>` on hot paths.
+- Keep one `MapperConfiguration` (singleton). Maps compile on first use; `CompileMappings()` compiles all.
+- Add one test calling `CompileMappings()` and `AssertConfigurationIsValid()`.
+- `ProjectTo<S, D>(config)` needs both type arguments.
+- Read error messages: they name the missing `CreateMap` or member.
+
+## Configuration and mapping
+
+```csharp compile
+public class Address { public string Street { get; set; } = ""; public string City { get; set; } = ""; }
+public class Person
 {
-    cfg.CreateMap<Source, Dest>();
-});
-
-// With profiles (recommended for large projects)
-var config = new MapperConfiguration(cfg =>
+    public int Id { get; set; }
+    public string FirstName { get; set; } = "";
+    public string LastName { get; set; } = "";
+    public Address Address { get; set; } = new();
+    public string? Nickname { get; set; }
+}
+public class PersonDto
 {
-    cfg.AddProfile<MyProfile>();
-    cfg.AddProfiles(typeof(MyProfile).Assembly); // scan assembly
-});
+    public int Id { get; set; }
+    public string FullName { get; set; } = "";
+    public string AddressCity { get; set; } = "";
+    public string Nickname { get; set; } = "";
+    public string Secret { get; set; } = "";
+}
+public record PersonSummary(int Id, string FirstName);
 
-// Configuration validation
-config.AssertConfigurationIsValid();
-```
-
-### IMapper
-
-```csharp
-// All Map overloads
-TDest Map<TDest>(object source);
-TDest Map<TSrc, TDest>(TSrc source);
-TDest Map<TSrc, TDest>(TSrc source, TDest existingDest);
-object Map(object source, Type srcType, Type destType);
-
-// Collection mapping (optimized, zero per-element overhead)
-List<TDest> MapList<TSrc, TDest>(IEnumerable<TSrc> source);
-
-// Partial/patch mapping (only non-null properties copied)
-TDest Patch<TSrc, TDest>(TSrc source, TDest destination);
-
-// With call-site options
-TDest Map<TDest>(object source, Action<IMappingOperationOptions<object, TDest>> opts);
-TDest Map<TSrc, TDest>(TSrc source, Action<IMappingOperationOptions<TSrc, TDest>> opts);
-```
-
-### ForMember Options
-
-```csharp
-CreateMap<Src, Dest>()
-    // Map from expression
-    .ForMember(d => d.FullName, o => o.MapFrom(s => $"{s.First} {s.Last}"))
-
-    // Map from different source member name
-    .ForMember(d => d.Name, o => o.MapFrom("FullName"))
-
-    // Map from two-arg lambda (source + dest)
-    .ForMember(d => d.Total, o => o.MapFrom((s, d) => s.Price * s.Qty))
-
-    // Map with ResolutionContext
-    .ForMember(d => d.Url, o => o.MapFrom((s, d, m, ctx) => ctx.Mapper.Map<Url>(s.Link)))
-
-    // DI value resolver
-    .ForMember(d => d.ImageUrl, o => o.MapFrom<UrlResolver, MediaAsset>(s => s.Image))
-
-    // Ignore (also valid on getter-only and non-public-setter properties)
-    .ForMember(d => d.Secret, o => o.Ignore())
-
-    // Constant value
-    .ForMember(d => d.Source, o => o.UseValue("API"))
-
-    // Null substitute
-    .ForMember(d => d.Name, o => o.NullSubstitute("Unknown"))
-
-    // Condition
-    .ForMember(d => d.Email, o => o.Condition(s => s.IsActive))
-
-    // Use destination value (don't overwrite)
-    .ForMember(d => d.Id, o => o.UseDestinationValue());
-```
-
-### Profile
-
-```csharp
-public class OrderProfile : Profile
+public class PersonProfile : Profile
 {
-    public OrderProfile()
+    public PersonProfile()
     {
-        CreateMap<Order, OrderDto>()
-            .ForMember(d => d.Items, o => o.MapFrom(s => s.OrderItems))
-            .ReverseMap(); // creates OrderDto -> Order too
-
-        CreateMap<OrderItem, OrderItemDto>();
-
-        // Before/After map hooks
-        CreateMap<User, UserDto>()
-            .BeforeMap((src, dest) => { /* pre-processing */ })
-            .AfterMap((src, dest) => { /* post-processing */ });
-
-        // MaxDepth for recursive types
-        CreateMap<Category, CategoryDto>()
-            .MaxDepth(3);
-
-        // Inheritance
-        CreateMap<Animal, AnimalDto>()
-            .IncludeAllDerived();
-        CreateMap<Cat, CatDto>();
-        CreateMap<Dog, DogDto>();
+        CreateMap<Person, PersonDto>()
+            .ForMember(d => d.FullName, o => o.MapFrom(s => s.FirstName + " " + s.LastName))
+            .ForMember(d => d.Nickname, o => o.NullSubstitute("none"))
+            .ForMember(d => d.Secret, o => o.Ignore());
+        CreateMap<Person, PersonSummary>();
     }
 }
 ```
 
-### Dependency Injection
+`AddressCity` maps from `Address.City` by flattening. `PersonSummary` is built through its constructor.
 
-```csharp
-// ASP.NET / Blazor / gRPC — Program.cs
-builder.Services.AddEggMapper(typeof(MyProfile).Assembly);
-// or
-builder.Services.AddEggMapper(cfg =>
-{
-    cfg.CreateMap<Source, Dest>();
-});
+```csharp compile
+var config = new MapperConfiguration(cfg => cfg.AddMaps(typeof(PersonProfile).Assembly));
+var mapper = config.CreateMapper();
+var person = new Person { Id = 1, FirstName = "Ada", LastName = "Lovelace" };
 
-// Inject in controller/service/component
-public class MyService(IMapper mapper) { }
-
-// IMapper is registered as Transient (matches AutoMapper)
-// MapperConfiguration is Singleton
+PersonDto dto = mapper.Map<Person, PersonDto>(person);
+PersonDto viaObject = mapper.Map<PersonDto>(person);
+mapper.Map(person, dto);
+List<PersonDto> many = mapper.MapList<Person, PersonDto>(new List<Person> { person });
+mapper.Patch(new Person { FirstName = "Grace" }, dto);
+Person copy = mapper.Map<Person, Person>(person);
+IMapper<Person, PersonDto> typed = config.CreateMapper<Person, PersonDto>();
+PersonDto fast = typed.Map(person);
 ```
 
-### DI Value Resolver
+`Map<T, T>` deep-copies without a `CreateMap`. `Patch` copies only non-null source members.
 
-```csharp
-public class UrlResolver : IMemberValueResolver<object, object, MediaAsset, string>
-{
-    private readonly IMediaService _svc;
-    public UrlResolver(IMediaService svc) => _svc = svc;
+## Member options
 
-    public string Resolve(object src, object dest, MediaAsset asset, string destMember, ResolutionContext ctx)
-        => _svc.GetUrl(asset);
-}
+`ForMember(d => d.X, o => ...)`: `MapFrom(s => expr)`, `MapFrom("SourceName")`, `Ignore()`, `Condition(s => bool)`,
+`PreCondition(s => bool)`, `NullSubstitute(value)`, `UseValue(value)`, `UseDestinationValue()`,
+`MapFrom<TResolver, TSourceMember>(s => s.Member)` (DI resolver). `ForPath(d => d.A.B, o => o.MapFrom(...))` sets a
+nested destination member. `ForAllOtherMembers(o => o.Ignore())` ignores everything not configured.
 
-// Usage in profile
-CreateMap<Product, ProductDto>()
-    .ForMember(d => d.ImageUrl, o => o.MapFrom<UrlResolver, MediaAsset>(s => s.Image));
-```
+## Map-level options
 
-### IQueryable Projection (EF Core)
-
-```csharp
-// In a repository or service — expression tree passed to EF Core, translated to SQL
-var dtos = await dbContext.Products
-    .Where(p => p.IsActive)
-    .ProjectTo<Product, ProductDto>(mapperConfig)
-    .ToListAsync();
-
-// Equivalent to: .Select(p => new ProductDto { Name = p.Name, ... })
-// No in-memory mapping — all done in SQL
-```
-
-### Same-Type Auto-Mapping (T → T)
-
-```csharp
-// No CreateMap<T, T>() needed — works automatically for cloning/copying
-var copy = mapper.Map<Customer, Customer>(customer);
-copy.Id == customer.Id     // true — all properties copied
-copy != customer           // true — new instance
-
-// Also works through collections
-var copies = mapper.Map<List<Order>>(orders);
-```
-
-### ConvertUsing (Custom Type Converter)
-
-```csharp
-CreateMap<string, DateTime>()
-    .ConvertUsing(s => DateTime.Parse(s));
-
-CreateMap<Order, OrderSummary>()
-    .ConvertUsing((src, dest, ctx) => new OrderSummary { Total = src.Items.Sum(i => i.Price) });
-```
-
-### Global Type Converter
-
-```csharp
+```csharp compile
 var config = new MapperConfiguration(cfg =>
 {
-    cfg.AddTypeConverter<string, Uri>(s => new Uri(s));
-    cfg.CreateMap<Link, LinkDto>(); // string -> Uri auto-converted
+    cfg.CreateMap<Order, OrderDto>()
+        .BeforeMap((s, d) => d.Note = "")
+        .AfterMap((s, d) => d.Total = s.Items.Sum(i => i.Price))
+        .ForMember(d => d.CustomerName, o => o.MapFrom(s => s.Customer!.Name))
+        .ForMember(d => d.Internal, o => o.Ignore())
+        .Validate(d => d.Total, total => total >= 0, "Total must not be negative");
+    cfg.CreateMap<OrderItem, OrderItemDto>().ReverseMap();
+    cfg.CreateMap<Product, ProductDto>().ConvertUsing(p => new ProductDto { Id = p.Id });
+    cfg.AddTypeConverter<DateTime, string>(d => d.ToString("O"));
+    cfg.ShouldMapProperty = p => p.Name != "Internal";
 });
+config.CompileMappings();
 ```
 
-### Open Generic Mapping
+Also: `ConstructUsing(s => new D(...))`, `IncludeBase<SBase, DBase>()` (inherit a base map's configuration),
+`MaxDepth(n)` (self-referencing types), `CreateMap(typeof(Page<>), typeof(PageDto<>))` (open generics),
+`ConvertUsing<TConverter>()` with `ITypeConverter<S, D>`, call-site options
+`mapper.Map<S, D>(src, opts => opts.AfterMap((s, d) => ...))` with `opts.Items`.
 
-```csharp
-cfg.CreateMap(typeof(PagedResult<>), typeof(PagedResultDto<>));
-// Automatically maps PagedResult<Order> -> PagedResultDto<OrderDto>
-// when Order -> OrderDto is also registered
+## Enums
+
+Different enum types map by name (exact, then ignoring case, else by value), like AutoMapper.
+`cfg.EnumMapping = EnumMappingMode.ByValue` restores numeric mapping. Per pair:
+`CreateMap<EA, EB>().ConvertUsingEnumMapping(o => o.MapByName().MapValue(EA.X, EB.Y))`. Enum <-> string and int <-> enum
+convert automatically. `ProjectTo` maps enums by value.
+
+## Dependency injection
+
+```csharp compile
+services.AddEggMapper(typeof(OrderItemDto).Assembly);
+services.AddEggMapper(cfg => cfg.CreateMap<Order, OrderDto>());
 ```
 
-### Validation Rules
+Registers `MapperConfiguration` (singleton), `IMapper` and `IMapper<S, D>` (transient; each carries the scope's
+`IServiceProvider`, so DI value resolvers get scoped services).
 
-```csharp
-CreateMap<OrderRequest, Order>()
-    .Validate(dest => dest.Total > 0, "Total must be positive")
-    .Validate(dest => dest.Items.Count > 0, "Must have at least one item");
+## IQueryable projection
+
+```csharp compile
+var config = new MapperConfiguration(cfg => cfg.CreateMap<Product, ProductDto>());
+IQueryable<ProductDto> query = products.ProjectTo<Product, ProductDto>(config);
 ```
 
-### Call-site AfterMap
+Translatable members only: same-name, flattened, nested registered maps, `MapFrom` expressions. Child collections,
+converters and resolvers are skipped.
+
+## Compile-time tiers (separate packages)
 
 ```csharp
-var result = mapper.Map<List<ProductDto>>(products, opt =>
+[MapTo(typeof(OrderDto))]          // EggMapper.Generator: generates order.ToOrderDto()
+public class Order { /* ... */ }
+
+[EggMapper]                        // EggMapper.ClassMapper: generates the method bodies
+public partial class OrderMapper
 {
-    opt.AfterMap((src, dest) =>
-    {
-        dest.ForEach(d => d.Computed = Calculate(d));
-    });
-});
+    public partial OrderDto Map(Order source);
+}
 ```
 
-### Collection Auto-Mapping
+Analyzer EGG1003 suggests `[MapTo]` for `CreateMap` calls without customization; EGG1002 flags configurations never
+validated.
 
-```csharp
-// No CreateMap<List<A>, List<B>>() needed — just register the element map
-cfg.CreateMap<Order, OrderDto>();
+## Differences from AutoMapper
 
-// All these work automatically:
-mapper.Map<List<OrderDto>>(orders);                    // Map<TDest>(object)
-mapper.Map<List<Order>, List<OrderDto>>(orders);       // Map<TSrc, TDest>
-mapper.Map<IEnumerable<OrderDto>>(orders);             // interface dest
-mapper.Map<IList<OrderDto>>(orders);                   // IList dest
-```
+| AutoMapper | EggMapper |
+|---|---|
+| `ProjectTo<D>(cfg)` | `ProjectTo<S, D>(cfg)` |
+| `mapper.ConfigurationProvider` | keep the `MapperConfiguration` instance |
+| `ForCtorParam` | constructor parameters match source members by name; else `ConstructUsing` |
+| `ForSourceMember`, `IncludeMembers` | not supported; use `ForMember` with `MapFrom` |
+| `Include<,>`, `As<>`, polymorphic dispatch | not supported; `IncludeAllDerived()` only shares base configuration |
+| `IValueResolver<S, D, M>` | `IMemberValueResolver<S, D, TSourceMember, M>` with `MapFrom<TResolver, TSourceMember>` |
+| `ReverseMap()` inverting `MapFrom` / unflattening | convention-only reverse map; configure it with its own `CreateMap` |
+| AutoMapper licence (commercial from v15) | MIT OR Apache-2.0 |
 
-## Migration Cheat Sheet (AutoMapper → EggMapper)
+## Errors and fixes
 
-| AutoMapper | EggMapper | Notes |
-|-----------|-----------|-------|
-| `using AutoMapper;` | `using EggMapper;` | |
-| `services.AddAutoMapper(asm)` | `services.AddEggMapper(asm)` | |
-| `mapper.Map<Dest>(src)` | `mapper.Map<Dest>(src)` | Same API |
-| `mapper.Map<S, D>(src)` | `mapper.Map<S, D>(src)` | Same API |
-| `mapper.Map(src, dest)` | `mapper.Map(src, dest)` | Same API |
-| `.ProjectTo<Dest>(config)` | `.ProjectTo<Src, Dest>(config)` | Two type args |
-| `mapper.Map<List<D>>(list)` | `mapper.Map<List<D>>(list)` | Auto-maps elements |
-| `mapper.Map<T, T>(obj)` | `mapper.Map<T, T>(obj)` | No CreateMap needed |
-| `ForMember(...)` | `ForMember(...)` | Same API |
-| `ReverseMap()` | `ReverseMap()` | Same API |
-| `Profile` | `Profile` | Same base class |
+| Message | Fix |
+|---|---|
+| `No mapping configured for S -> D` | `cfg.CreateMap<S, D>()`; for a list, the element map |
+| `Unmapped destination member 'D.X' in map S -> D` | `.ForMember(d => d.X, o => o.MapFrom(s => ...))` or `o.Ignore()` |
+| `MappingValidationException` | a `Validate` rule failed; the message lists every failed rule |
+| `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
+| `Circular IncludeBase() reference` | remove the cycle between `IncludeBase` calls |
 
-## Key Differences from AutoMapper
+## Performance
 
-| Feature | AutoMapper | EggMapper |
-|---------|-----------|-----------|
-| License | Commercial (v13+) | MIT OR Apache-2.0 (free forever) |
-| Performance | Baseline | 2-5x faster |
-| Allocations | Extra allocations | Zero extra |
-| Runtime reflection | Yes | No (compiled expressions) |
-| API compatibility | Original | Same API, drop-in replacement |
-| DI registration | AddAutoMapper() | AddEggMapper() |
-| EF Core proxies | Handled | Handled (base-type + interface walk) |
-| ProjectTo | `ProjectTo<Dest>(cfg)` | `ProjectTo<Src, Dest>(cfg)` |
-| Same-type T→T | Needs CreateMap | Auto-compiles on first use |
-| Null collections | Empty by default | Empty by default |
-| Unmatched dest collection prop | Empty by default | Empty by default (top-level + nested inline) |
-| Read-only/internal-set prop | `Ignore()` allowed | `Ignore()` allowed; other ops throw at config time |
-| Custom IEnumerable wrappers | Auto-construct via ctor | Auto-construct via cached interface ctor lookup |
-| Primitive collection mapping | No CreateMap needed | No CreateMap needed (auto identity-copy) |
-| Source generator | No | No (runtime, but near source-gen speed) |
+Benchmarks (BenchmarkDotNet, .NET 10) are in the README and regenerated by CI on every merge:
+https://github.com/eggspot/EggMapper#performance

@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'llms.txt'
+      - 'llms-full.txt'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -27,6 +30,9 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: Copy AI guidance into the site root
+        run: cp llms.txt llms-full.txt docs/
 
       - name: Upload static docs
         uses: actions/upload-pages-artifact@v3
