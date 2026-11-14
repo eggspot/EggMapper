@@ -42,6 +42,10 @@ dotnet add package EggMapper
 
 DI support (`AddEggMapper`) is included in the main package — no separate package needed.
 
+Optional build-time checks: `dotnet add package EggMapper.Analyzers` warns when a `MapperConfiguration` is never
+validated ([EGG1002](https://eggspot.github.io/EggMapper/diagnostics/EGG1002.html)) and suggests compile-time `[MapTo]`
+for maps without customization ([EGG1003](https://eggspot.github.io/EggMapper/diagnostics/EGG1003.html)).
+
 ## Quick Start
 
 ```csharp
