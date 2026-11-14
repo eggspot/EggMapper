@@ -35,7 +35,26 @@ public sealed class Mapper : IMapper
     public TDestination Map<TDestination>(object? source)
     {
         if (source == null) return default!;
-        return (TDestination)MapInternal(source, source.GetType(), typeof(TDestination), null);
+        var entry = ObjectSourceCache<TDestination>.Entry;
+        if (entry != null && entry.SourceType == source.GetType() && entry.Generation == _generation)
+            return (TDestination)entry.Map(source, null, entry.NeedsContext ? GetContext() : null!);
+        return MapObjectSourceSlow<TDestination>(source);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private TDestination MapObjectSourceSlow<TDestination>(object source)
+    {
+        var sourceType = source.GetType();
+        var destinationType = typeof(TDestination);
+        if (TryFindMapDelegate(sourceType, destinationType, out var map, out var needsContext)
+            || (!ReflectionHelper.IsCollectionType(destinationType)
+                && TryFindSameTypeMap(sourceType, destinationType, out map, out needsContext)))
+        {
+            ObjectSourceCache<TDestination>.Entry =
+                new ObjectSourceCache<TDestination>.CacheEntry(sourceType, map, needsContext, _generation);
+            return (TDestination)map(source, null, needsContext ? GetContext() : null!);
+        }
+        return (TDestination)MapInternal(source, sourceType, destinationType, null);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -139,22 +158,39 @@ public sealed class Mapper : IMapper
     public TDestination Map<TSource, TDestination>(TSource source, TDestination destination)
     {
         if (source == null) return destination;
+        var entry = FastCache<TSource, TDestination>.Entry;
+        if (entry != null && entry.Generation == _generation)
+            return entry.Func(source, destination);
+        return MapIntoSlow(source, destination);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private TDestination MapIntoSlow<TSource, TDestination>(TSource source, TDestination destination)
+    {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
-            return ((Func<TSource, TDestination, TDestination>)ctxFreeDel)(source, destination);
+        {
+            var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
+            FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+            return typed(source, destination);
+        }
 
         if (_config.FrozenMaps.TryGetValue(key, out var del))
         {
             var ctx = GetContext();
-            return (TDestination)del(source, destination, ctx);
+            return (TDestination)del(source!, destination, ctx);
         }
         if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out var openCtxFree))
         {
             if (openCtxFree != null)
-                return ((Func<TSource, TDestination, TDestination>)openCtxFree)(source, destination);
+            {
+                var typed = (Func<TSource, TDestination, TDestination>)openCtxFree;
+                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                return typed(source, destination);
+            }
             var ctx = GetContext();
-            return (TDestination)openDel!(source, destination, ctx);
+            return (TDestination)openDel!(source!, destination, ctx);
         }
 
         var runtimeType = source!.GetType();
@@ -167,7 +203,11 @@ public sealed class Mapper : IMapper
         if (_config.TryGetOrCompileSameTypeMap(key, out var sameBoxed, out var sameCtxFree))
         {
             if (sameCtxFree != null)
-                return ((Func<TSource, TDestination, TDestination>)sameCtxFree)(source, destination);
+            {
+                var typed = (Func<TSource, TDestination, TDestination>)sameCtxFree;
+                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                return typed(source, destination);
+            }
             return (TDestination)sameBoxed!(source, destination, GetContext());
         }
 
@@ -412,48 +452,8 @@ public sealed class Mapper : IMapper
     private object MapInternal(object source, Type sourceType, Type destinationType, object? destination,
         IDictionary<string, object>? items = null)
     {
-        var key = new TypePair(sourceType, destinationType);
-        if (_config.FrozenMaps.TryGetValue(key, out var del))
-        {
-            var ctx = GetContext(items);
-            return del(source, destination, ctx);
-        }
-
-        if (sourceType.IsValueType && Nullable.GetUnderlyingType(sourceType) == null)
-        {
-            var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(sourceType), destinationType);
-            if (_config.FrozenMaps.TryGetValue(nullableKey, out del))
-            {
-                var ctx = GetContext(items);
-                return del(source, destination, ctx);
-            }
-        }
-
-        if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
-        {
-            var ctx = GetContext(items);
-            return openDel!(source, destination, ctx);
-        }
-
-        for (var baseType = sourceType.BaseType; baseType != null && baseType != typeof(object); baseType = baseType.BaseType)
-        {
-            var baseKey = new TypePair(baseType, destinationType);
-            if (_config.FrozenMaps.TryGetValue(baseKey, out var baseDel))
-            {
-                var ctx = GetContext(items);
-                return baseDel(source, destination, ctx);
-            }
-        }
-
-        foreach (var iface in sourceType.GetInterfaces())
-        {
-            var ifaceKey = new TypePair(iface, destinationType);
-            if (_config.FrozenMaps.TryGetValue(ifaceKey, out var ifaceDel))
-            {
-                var ctx = GetContext(items);
-                return ifaceDel(source, destination, ctx);
-            }
-        }
+        if (TryFindMapDelegate(sourceType, destinationType, out var map, out _))
+            return map(source, destination, GetContext(items));
 
         if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
         {
@@ -555,6 +555,70 @@ public sealed class Mapper : IMapper
             $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
     }
 
+    private bool TryFindMapDelegate(Type sourceType, Type destinationType,
+        out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
+    {
+        var key = new TypePair(sourceType, destinationType);
+        if (TryGetConfiguredMap(key, out map, out needsContext))
+            return true;
+
+        if (sourceType.IsValueType && Nullable.GetUnderlyingType(sourceType) == null
+            && TryGetConfiguredMap(new TypePair(typeof(Nullable<>).MakeGenericType(sourceType), destinationType),
+                out map, out needsContext))
+            return true;
+
+        if (_config.TryGetOrCompileOpenGenericMap(key, out var openMap, out var openCtxFree))
+        {
+            map = openMap!;
+            needsContext = openCtxFree == null;
+            return true;
+        }
+
+        for (var baseType = sourceType.BaseType; baseType != null && baseType != typeof(object); baseType = baseType.BaseType)
+        {
+            if (TryGetConfiguredMap(new TypePair(baseType, destinationType), out map, out needsContext))
+                return true;
+        }
+
+        foreach (var iface in sourceType.GetInterfaces())
+        {
+            if (TryGetConfiguredMap(new TypePair(iface, destinationType), out map, out needsContext))
+                return true;
+        }
+
+        map = null!;
+        needsContext = false;
+        return false;
+    }
+
+    private bool TryGetConfiguredMap(TypePair key,
+        out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
+    {
+        if (_config.FrozenMaps.TryGetValue(key, out var found))
+        {
+            map = found;
+            needsContext = !_config.FrozenCtxFreeMaps.ContainsKey(key);
+            return true;
+        }
+        map = null!;
+        needsContext = false;
+        return false;
+    }
+
+    private bool TryFindSameTypeMap(Type sourceType, Type destinationType,
+        out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
+    {
+        if (_config.TryGetOrCompileSameTypeMap(new TypePair(sourceType, destinationType), out var sameMap, out var sameCtxFree))
+        {
+            map = sameMap!;
+            needsContext = sameCtxFree == null;
+            return true;
+        }
+        map = null!;
+        needsContext = false;
+        return false;
+    }
+
     private Func<object, object?, ResolutionContext, object>? FindElementDelegate(Type srcElemType, Type destElemType)
     {
         var elemKey = new TypePair(srcElemType, destElemType);
@@ -606,6 +670,22 @@ public sealed class Mapper : IMapper
         internal sealed class CacheEntry(Func<TSource, TDestination, TDestination> func, int generation)
         {
             public readonly Func<TSource, TDestination, TDestination> Func = func;
+            public readonly int Generation = generation;
+        }
+    }
+
+    private static class ObjectSourceCache<TDestination>
+    {
+        public static volatile CacheEntry? Entry;
+        internal sealed class CacheEntry(
+            Type sourceType,
+            Func<object, object?, ResolutionContext, object> map,
+            bool needsContext,
+            int generation)
+        {
+            public readonly Type SourceType = sourceType;
+            public readonly Func<object, object?, ResolutionContext, object> Map = map;
+            public readonly bool NeedsContext = needsContext;
             public readonly int Generation = generation;
         }
     }
