@@ -181,6 +181,7 @@ public class ConfigurationErrorMessageTests
         });
 
         message.Should().Contain("A CreateMap<Narrow, Wide>() in a profile was ignored because this ReverseMap() registered the pair first; remove .ReverseMap() from CreateMap<Wide, Narrow>() to use it.");
+        message.Should().NotContain("Configure this direction");
     }
 
     [Fact]

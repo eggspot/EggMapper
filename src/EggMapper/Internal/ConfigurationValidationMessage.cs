@@ -86,14 +86,15 @@ internal static class ConfigurationValidationMessage
 
         var forward = $"CreateMap<{TypeNameHelper.Readable(origin.SourceType)}, {TypeNameHelper.Readable(origin.DestinationType)}>()";
         var reverse = $"CreateMap<{TypeNameHelper.Readable(typeMap.SourceType)}, {TypeNameHelper.Readable(typeMap.DestinationType)}>()";
-        sb.Append("\n  Created by .ReverseMap() on ").Append(forward)
-          .Append(", which maps by name only. Configure this direction with its own ").Append(reverse).Append('.');
+        sb.Append("\n  Created by .ReverseMap() on ").Append(forward).Append(", which maps by name only.");
         if (typeMap.IgnoredExplicitCreateMap)
         {
             sb.Append("\n  A ").Append(reverse)
               .Append(" in a profile was ignored because this ReverseMap() registered the pair first; remove .ReverseMap() from ")
               .Append(forward).Append(" to use it.");
+            return;
         }
+        sb.Append(" Configure this direction with its own ").Append(reverse).Append('.');
     }
 
     private static List<string> PairHeaders(IReadOnlyList<UnmappedMap> unmappedMaps)
