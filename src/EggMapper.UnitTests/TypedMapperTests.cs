@@ -190,8 +190,25 @@ public class TypedMapperTests
 
         typed.Map(new TmSource { Id = 5 });
         typed.Map(new TmSource { Id = 6 });
+        typed.Map(new TmSource { Id = 7 }, new TmDest());
+        typed.MapList(new[] { new TmSource() });
+        typed.Patch(new TmSource(), new TmDest());
 
-        custom.Calls.Should().Be(2);
+        custom.Calls.Should().Be(5);
+    }
+
+    [Fact]
+    public void Map_TwoConfigurationsForSamePair_EachUsesOwnMap()
+    {
+        var plain = Config().CreateMapper<TmSource, TmDest>();
+        var shouting = new MapperConfiguration(cfg => cfg.CreateMap<TmSource, TmDest>()
+            .ForMember(d => d.Name, o => o.MapFrom(s => s.Name!.ToUpperInvariant()))).CreateMapper<TmSource, TmDest>();
+
+        for (var i = 0; i < 3; i++)
+        {
+            plain.Map(new TmSource { Name = "abc" }).Name.Should().Be("abc");
+            shouting.Map(new TmSource { Name = "abc" }).Name.Should().Be("ABC");
+        }
     }
 
     private sealed class RecordingMapper : IMapper
@@ -203,7 +220,7 @@ public class TypedMapperTests
         public TDestination Map<TDestination>(object? source, Action<IMappingOperationOptions<object, TDestination>> opts) => throw new NotSupportedException();
         public TDestination Map<TSource, TDestination>(TSource source, Action<IMappingOperationOptions<TSource, TDestination>> opts) => throw new NotSupportedException();
         public object Map(object source, Type sourceType, Type destinationType) => throw new NotSupportedException();
-        public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source) => throw new NotSupportedException();
-        public TDestination Patch<TSource, TDestination>(TSource source, TDestination destination) => throw new NotSupportedException();
+        public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source) { Calls++; return new List<TDestination>(); }
+        public TDestination Patch<TSource, TDestination>(TSource source, TDestination destination) { Calls++; return destination; }
     }
 }

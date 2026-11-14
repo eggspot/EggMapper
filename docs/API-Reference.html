@@ -524,7 +524,7 @@ var page = await dbContext.Orders
           <tr><th>Extension method</th><th>Description</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>AddEggMapper(params Assembly[])</code></td><td>Scan assemblies for <code>Profile</code> subclasses and register <code>IMapper</code> as singleton</td></tr>
+          <tr><td><code>AddEggMapper(params Assembly[])</code></td><td>Scan assemblies for <code>Profile</code> subclasses; registers <code>MapperConfiguration</code> as a singleton and <code>IMapper</code> / <code>IMapper&lt;TSource, TDestination&gt;</code> as transient</td></tr>
           <tr><td><code>AddEggMapper(Action&lt;IMapperConfigurationExpression&gt;)</code></td><td>Inline configuration without profiles</td></tr>
         </tbody>
       </table></div>
