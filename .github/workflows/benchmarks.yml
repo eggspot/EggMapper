@@ -36,7 +36,9 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Setup Python
         uses: actions/setup-python@v5
