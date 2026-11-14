@@ -78,7 +78,7 @@ internal static class ExpressionBuilder
     private static NewExpression NewWithoutArguments(Type type, ConstructorInfo? parameterlessCtor)
         => parameterlessCtor != null ? Expression.New(parameterlessCtor) : Expression.New(type);
 
-    private static Func<object, object> BuildFactory(TypeMap typeMap)
+    private static Func<object, object> BuildFactory(TypeMap typeMap, TypeConversionRegistry? conversions)
     {
         if (typeMap.CustomConstructor != null)
             return typeMap.CustomConstructor;
@@ -103,7 +103,7 @@ internal static class ExpressionBuilder
             var (bestCtor, bestParams) = found.Value;
             var objSrcParam = Expression.Parameter(typeof(object), "src");
             var typedSrcVar = Expression.Variable(srcType, "s");
-            var args = BuildCtorArgExpressions(bestParams, typedSrcVar, srcDetails);
+            var args = BuildCtorArgExpressions(bestParams, typedSrcVar, srcDetails, conversions);
             var newExpr = Expression.New(bestCtor, args);
             var boxed = Expression.Convert(newExpr, typeof(object));
             var body = Expression.Block(new[] { typedSrcVar },
@@ -126,7 +126,7 @@ internal static class ExpressionBuilder
         if (TryBuildTypedDelegate(typeMap, allTypeMaps, compiledMaps, out var fastDel, globalConverters))
             return fastDel!;
 
-        return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps, defaultMaxDepth);
+        return BuildFlexibleDelegate(typeMap, allTypeMaps, compiledMaps, defaultMaxDepth, globalConverters);
     }
 
     public static Delegate? TryBuildCtxFreeDelegate(
@@ -1777,9 +1777,10 @@ internal static class ExpressionBuilder
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
         CompiledMapStore compiledMaps,
-        int defaultMaxDepth = 32)
+        int defaultMaxDepth = 32,
+        TypeConversionRegistry? conversions = null)
     {
-        var factory = BuildFactory(typeMap);
+        var factory = BuildFactory(typeMap, conversions);
         var ctxCtor = typeMap.CustomConstructorWithCtx;
         var srcDetails = TypeDetails.Get(typeMap.SourceType);
         var destDetails = TypeDetails.Get(typeMap.DestinationType);

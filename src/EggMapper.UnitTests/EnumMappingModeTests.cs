@@ -93,11 +93,31 @@ public class EnumMappingModeTests
         new MapperConfiguration(configure).CreateMapper();
 
     [Fact]
-    public void Map_DifferentEnumsDefault_MapsByValue()
+    public void Map_DifferentEnumsDefault_MapsByNameLikeAutoMapper()
     {
         var mapper = Mapper(cfg => cfg.CreateMap<EmHolder, EmHolderDto>());
 
+        mapper.Map<EmHolder, EmHolderDto>(new EmHolder { Status = EmSource.Pending }).Status.Should().Be(EmDest.Pending);
+    }
+
+    [Fact]
+    public void Map_GlobalByValue_MapsByValue()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.EnumMapping = EnumMappingMode.ByValue;
+            cfg.CreateMap<EmHolder, EmHolderDto>();
+        });
+
         mapper.Map<EmHolder, EmHolderDto>(new EmHolder { Status = EmSource.Pending }).Status.Should().Be(EmDest.Active);
+    }
+
+    [Fact]
+    public void Map_RecordConstructorArgumentOnFlexiblePath_UsesDefaultByName()
+    {
+        var mapper = Mapper(cfg => cfg.CreateMap<EmRecordSource, EmRecordDto>().AfterMap((s, d) => { }));
+
+        mapper.Map<EmRecordSource, EmRecordDto>(new EmRecordSource { Status = EmSource.Closed }).Status.Should().Be(EmDest.Closed);
     }
 
     [Fact]
@@ -249,8 +269,8 @@ public class EnumMappingModeTests
     [Fact]
     public void Map_TopLevelEnumPairWithoutCreateMap_Maps()
     {
-        var byValue = Mapper(cfg => { });
-        var byName = Mapper(cfg => cfg.EnumMapping = EnumMappingMode.ByName);
+        var byValue = Mapper(cfg => cfg.EnumMapping = EnumMappingMode.ByValue);
+        var byName = Mapper(cfg => { });
 
         byValue.Map<EmSource, EmDest>(EmSource.Closed).Should().Be(EmDest.Pending);
         byName.Map<EmSource, EmDest>(EmSource.Closed).Should().Be(EmDest.Closed);

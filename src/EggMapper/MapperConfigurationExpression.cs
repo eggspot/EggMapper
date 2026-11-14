@@ -81,7 +81,7 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 
     public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
 
-    public EnumMappingMode EnumMapping { get; set; }
+    public EnumMappingMode EnumMapping { get; set; } = EnumMappingMode.ByName;
     public int DefaultMaxDepth { get; set; } = 32;
 
     public void AddTypeConverter<TSource, TDest>(Func<TSource, TDest> converter)

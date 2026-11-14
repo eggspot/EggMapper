@@ -27,7 +27,8 @@ public interface IMapperConfigurationExpression
 
     /// <summary>
     /// How a value of one enum type maps to a different enum type when the pair has no
-    /// <c>ConvertUsingEnumMapping</c>, <c>ConvertUsing</c> or type converter. Defaults to <see cref="EnumMappingMode.ByValue"/>.
+    /// <c>ConvertUsingEnumMapping</c>, <c>ConvertUsing</c> or type converter. Defaults to <see cref="EnumMappingMode.ByName"/>,
+    /// AutoMapper's behavior. <c>ProjectTo</c> always maps enums by value.
     /// </summary>
     EnumMappingMode EnumMapping { get; set; }
 
