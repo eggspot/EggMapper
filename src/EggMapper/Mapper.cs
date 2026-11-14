@@ -566,6 +566,12 @@ public sealed class Mapper : IMapper
             $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
     }
 
+    internal Func<TSource, TDestination, TDestination>? GetCachedCtxFreeMap<TSource, TDestination>()
+    {
+        var entry = FastCache<TSource, TDestination>.Entry;
+        return entry != null && entry.Generation == _generation ? entry.Func : null;
+    }
+
     private bool TryFindMapDelegate(Type sourceType, Type destinationType,
         out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
     {

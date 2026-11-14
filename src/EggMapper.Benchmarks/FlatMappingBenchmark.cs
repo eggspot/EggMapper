@@ -52,6 +52,9 @@ public class FlatMappingBenchmark
     public ModelDto EggMapper() => EggMapperConfig.Mapper.Map<ModelObject, ModelDto>(_source);
 
     [Benchmark]
+    public ModelDto EggMapperTyped() => EggMapperConfig.TypedFlatMapper.Map(_source);
+
+    [Benchmark]
     public ModelDto AutoMapper() => AutoMapperConfig.Mapper.Map<ModelDto>(_source);
 
     [Benchmark]

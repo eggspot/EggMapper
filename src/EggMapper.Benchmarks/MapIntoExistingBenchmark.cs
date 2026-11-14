@@ -53,6 +53,9 @@ public class MapIntoExistingBenchmark
     public ModelDto EggMapper() => EggMapperConfig.Mapper.Map(_source, _destination);
 
     [Benchmark]
+    public ModelDto EggMapperTyped() => EggMapperConfig.TypedFlatMapper.Map(_source, _destination);
+
+    [Benchmark]
     public ModelDto AutoMapper() => AutoMapperConfig.Mapper.Map(_source, _destination);
 
     [Benchmark]

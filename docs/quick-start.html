@@ -103,7 +103,7 @@ app.MapGet("/products/{id}", async (int id, AppDbContext db, IMapper mapper) =&g
 
 app.Run();</code></pre>
 
-      <div class="note"><p>Both <code>MapperConfiguration</code> and <code>IMapper</code> are registered as <strong>singletons</strong>. The compiled delegate cache is built once and shared across all threads.</p></div>
+      <div class="note"><p><code>MapperConfiguration</code> is registered as a <strong>singleton</strong> (it holds the compiled delegate cache). <code>IMapper</code> and the typed <code>IMapper&lt;TSource, TDestination&gt;</code> are <strong>transient</strong>: each injection gets a lightweight mapper carrying the current scope's <code>IServiceProvider</code>, so DI-resolved value resolvers use the right scope.</p></div>
 
       <div class="note"><p>For Blazor, gRPC, Worker Service, and other DI scenarios, see <a href="Dependency-Injection.html">Dependency Injection</a>.</p></div>
 

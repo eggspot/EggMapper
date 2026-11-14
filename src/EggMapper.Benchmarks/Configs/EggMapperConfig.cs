@@ -6,6 +6,7 @@ public static class EggMapperConfig
 {
     public static readonly global::EggMapper.MapperConfiguration Configuration;
     public static readonly global::EggMapper.IMapper Mapper;
+    public static readonly global::EggMapper.IMapper<ModelObject, ModelDto> TypedFlatMapper;
 
     static EggMapperConfig()
     {
@@ -18,5 +19,6 @@ public static class EggMapperConfig
             cfg.CreateMap<InnerFoo, InnerFooDest>();
         });
         Mapper = Configuration.CreateMapper();
+        TypedFlatMapper = Configuration.CreateMapper<ModelObject, ModelDto>();
     }
 }

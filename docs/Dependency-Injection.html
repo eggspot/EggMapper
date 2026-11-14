@@ -361,11 +361,14 @@ builder.Services.AddEggMapper(cfg =&gt;
         </thead>
         <tbody>
           <tr><td><code>MapperConfiguration</code></td><td>Singleton</td><td>The compiled configuration (keeps the delegate cache)</td></tr>
-          <tr><td><code>IMapper</code></td><td>Singleton</td><td>Resolved from <code>MapperConfiguration.CreateMapper()</code></td></tr>
+          <tr><td><code>IMapper</code></td><td>Transient</td><td>A lightweight <code>Mapper</code> over the singleton configuration, carrying the resolving scope's <code>IServiceProvider</code></td></tr>
+          <tr><td><code>IMapper&lt;TSource, TDestination&gt;</code></td><td>Transient</td><td>Typed mapper for one pair; same scope behavior as <code>IMapper</code></td></tr>
         </tbody>
       </table></div>
 
-      <p>Both services are safe to inject anywhere. <code>MapperConfiguration</code> is immutable after construction, and <code>IMapper</code> is backed by the same immutable compiled cache.</p>
+      <p>All three are safe to inject anywhere. <code>MapperConfiguration</code> holds the compiled delegates and is shared. <code>IMapper</code> is <strong>transient</strong> on purpose: each injection gets a fresh <code>Mapper</code> (a few bytes wrapping the singleton configuration) that carries the caller's <code>IServiceProvider</code>, so value resolvers and converters resolved from DI (a <code>DbContext</code>, a scoped service) come from the right scope. That holds in every hosting model: per request in ASP.NET Core API/MVC, per circuit in Blazor Server, per scope created with <code>IServiceScopeFactory</code> in worker services, and per call in gRPC.</p>
+
+      <p><code>IMapper&lt;TSource, TDestination&gt;</code> maps a single pair through ordinary interface calls, avoiding the generic virtual dispatch of <code>IMapper</code>'s generic methods. Inject it on hot paths. Resolving it for a pair with no <code>CreateMap</code> succeeds; the first <code>Map</code> call throws the usual "No mapping configured" error.</p>
 
       <hr>
 

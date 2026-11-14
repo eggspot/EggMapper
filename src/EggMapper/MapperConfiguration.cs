@@ -364,6 +364,13 @@ public sealed class MapperConfiguration
 
     public IMapper CreateMapper() => new Mapper(this);
 
+    /// <summary>
+    /// Creates a mapper for one source/destination pair. Its calls are ordinary interface calls rather than generic
+    /// virtual calls, which makes it the fastest way to call a single map repeatedly.
+    /// </summary>
+    public IMapper<TSource, TDestination> CreateMapper<TSource, TDestination>()
+        => new TypedMapper<TSource, TDestination>(CreateMapper());
+
     internal Delegate? GetOrCompileListDelegate(TypePair key)
     {
         if (_runtimeListMaps.TryGetValue(key, out var cached)) return cached;
