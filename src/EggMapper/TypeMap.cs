@@ -19,7 +19,7 @@ internal sealed class TypeMap
     public int MaxDepth { get; set; }
     public bool HasReverseMap { get; set; }
     public TypePair? ReverseMapOrigin { get; set; }
-    public string? DefinedInProfile { get; set; }
+    public Type? DefinedInProfile { get; set; }
     public List<string>? AlsoDefinedIn { get; set; }
     public bool IncludeAllDerivedFlag { get; set; }
     public Func<object, object?, ResolutionContext, object>? ConvertUsingFunc { get; set; }

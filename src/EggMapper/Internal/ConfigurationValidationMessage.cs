@@ -90,7 +90,7 @@ internal static class ConfigurationValidationMessage
         if (typeMap.AlsoDefinedIn is not { Count: > 0 } others) return;
 
         var createMap = $"CreateMap<{TypeNameHelper.Readable(typeMap.SourceType)}, {TypeNameHelper.Readable(typeMap.DestinationType)}>()";
-        var used = typeMap.DefinedInProfile ?? MapperConfigurationExpression.RootConfigurationName;
+        var used = MapperConfigurationExpression.DefinerName(typeMap.DefinedInProfile);
         var all = new List<string> { used };
         all.AddRange(others);
         sb.Append("\n  ").Append(createMap).Append(" is configured in ").Append(JoinNames(all))

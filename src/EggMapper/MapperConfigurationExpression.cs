@@ -56,14 +56,14 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 
     private static void RecordDuplicateDefinition(TypeMap kept, TypeMap dropped)
     {
-        if (string.Equals(kept.DefinedInProfile, dropped.DefinedInProfile, StringComparison.Ordinal)) return;
-        var definer = dropped.DefinedInProfile ?? RootConfigurationName;
+        if (kept.DefinedInProfile == dropped.DefinedInProfile) return;
+        var definer = DefinerName(dropped.DefinedInProfile);
         kept.AlsoDefinedIn ??= new List<string>();
         if (!kept.AlsoDefinedIn.Contains(definer))
             kept.AlsoDefinedIn.Add(definer);
     }
 
-    internal const string RootConfigurationName = "the root configuration";
+    internal static string DefinerName(Type? profileType) => profileType?.Name ?? "the root configuration";
 
     public void AddProfile<TProfile>() where TProfile : Profile, new()
         => AddProfile(new TProfile());
@@ -72,7 +72,7 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     {
         foreach (var typeMap in profile.GetTypeMaps())
         {
-            typeMap.DefinedInProfile = profile.ProfileName;
+            typeMap.DefinedInProfile = profile.GetType();
             RegisterTypeMap(typeMap);
         }
     }
