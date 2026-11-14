@@ -42,7 +42,7 @@ public sealed class MapperConfiguration
 
     internal int DefaultMaxDepth { get; private set; }
 
-    private readonly Dictionary<TypePair, Delegate> _globalConverters;
+    private readonly Execution.TypeConversionRegistry _globalConverters;
 
     private readonly Dictionary<(Type, Type), TypeMap> _openGenericRegistrations;
 
@@ -61,6 +61,36 @@ public sealed class MapperConfiguration
 
     private readonly ConcurrentDictionary<TypePair, OpenGenericEntry> _runtimeSameTypeMaps = new();
 
+    private readonly ConcurrentDictionary<TypePair, OpenGenericEntry?> _runtimeEnumPairMaps = new();
+
+    internal bool TryGetOrCompileEnumPairMap(TypePair key,
+        out Func<object, object?, ResolutionContext, object> boxedMap, out Delegate ctxFreeMap)
+    {
+        var entry = _runtimeEnumPairMaps.GetOrAdd(key, k =>
+            TryBuildEnumPairMap(k.SourceType, k.DestinationType, out var boxed, out var ctxFree)
+                ? new OpenGenericEntry(boxed, ctxFree)
+                : null);
+        boxedMap = entry?.Boxed!;
+        ctxFreeMap = entry?.CtxFree!;
+        return entry != null;
+    }
+
+    private bool TryBuildEnumPairMap(Type sourceType, Type destinationType,
+        out Func<object, object?, ResolutionContext, object> boxedMap, out Delegate ctxFreeMap)
+    {
+        boxedMap = null!;
+        ctxFreeMap = null!;
+        if (!Execution.EnumConversion.IsEnumPair(sourceType, destinationType)) return false;
+        var source = System.Linq.Expressions.Expression.Parameter(sourceType, "source");
+        var existing = System.Linq.Expressions.Expression.Parameter(destinationType, "existing");
+        var body = Execution.EnumConversion.TryBuild(source, destinationType, _globalConverters);
+        if (body == null) return false;
+        var funcType = typeof(Func<,,>).MakeGenericType(sourceType, destinationType, destinationType);
+        ctxFreeMap = System.Linq.Expressions.Expression.Lambda(funcType, body, source, existing).Compile();
+        boxedMap = Execution.ExpressionBuilder.CreateBoxedWrapper(sourceType, destinationType, ctxFreeMap);
+        return true;
+    }
+
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         Generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
@@ -69,7 +99,6 @@ public sealed class MapperConfiguration
         configure(expr);
         ShouldMapProperty = expr.GetShouldMapProperty();
         DefaultMaxDepth = expr.GetDefaultMaxDepth();
-        _globalConverters = expr.GetGlobalConverters();
         _openGenericRegistrations = expr.GetOpenGenericTypeMaps();
 
         foreach (var typeMap in expr.GetTypeMaps())
@@ -78,6 +107,9 @@ public sealed class MapperConfiguration
             var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
             _typeMaps[key] = typeMap;
         }
+
+        _globalConverters = new Execution.TypeConversionRegistry(
+            expr.GetGlobalConverters(), expr.GetEnumMapping(), _typeMaps.Values);
 
         ResolveIncludeAllDerived();
 
@@ -102,6 +134,7 @@ public sealed class MapperConfiguration
         Parallel.ForEach(pending, typeMap =>
         {
             if (typeMap.ConvertUsingFunc != null) return;
+            if (Execution.EnumConversion.IsEnumPair(typeMap.SourceType, typeMap.DestinationType)) return;
             try
             {
                 var ctxFree = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps, _globalConverters);
@@ -237,6 +270,12 @@ public sealed class MapperConfiguration
         if (typeMap.ConvertUsingFunc != null)
         {
             AddCompiled(key, typeMap.ConvertUsingFunc, null);
+            return;
+        }
+
+        if (TryBuildEnumPairMap(typeMap.SourceType, typeMap.DestinationType, out var enumBoxed, out var enumCtxFree))
+        {
+            AddCompiled(key, enumBoxed, enumCtxFree);
             return;
         }
 

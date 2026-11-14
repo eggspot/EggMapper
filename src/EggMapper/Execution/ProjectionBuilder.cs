@@ -72,6 +72,10 @@ internal static class ProjectionBuilder
                     {
                         valueExpr = Expression.Convert(srcAccess, destProp.PropertyType);
                     }
+                    else if (EnumConversion.IsEnumPair(srcProp.PropertyType, destProp.PropertyType))
+                    {
+                        valueExpr = EnumConversion.TryBuild(srcAccess, destProp.PropertyType, null)!;
+                    }
                     else
                     {
                         continue; // incompatible types — skip

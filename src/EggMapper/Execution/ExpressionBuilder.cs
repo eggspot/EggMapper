@@ -121,7 +121,7 @@ internal static class ExpressionBuilder
         Dictionary<TypePair, TypeMap> allTypeMaps,
         CompiledMapStore compiledMaps,
         int defaultMaxDepth = 32,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         if (TryBuildTypedDelegate(typeMap, allTypeMaps, compiledMaps, out var fastDel, globalConverters))
             return fastDel!;
@@ -132,7 +132,7 @@ internal static class ExpressionBuilder
     public static Delegate? TryBuildCtxFreeDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap>? allTypeMaps = null,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         if (typeMap.ConvertUsingFunc != null) return null;
         if (typeMap.ShouldMapProperty != null) return null;
@@ -177,7 +177,7 @@ internal static class ExpressionBuilder
                 destType);
         else if (bestCtorCf != null)
             newDestExpr = Expression.New(bestCtorCf.Value.Ctor,
-                BuildCtorArgExpressions(bestCtorCf.Value.Params, srcParam, srcDetails));
+                BuildCtorArgExpressions(bestCtorCf.Value.Params, srcParam, srcDetails, globalConverters));
         else
             newDestExpr = NewWithoutArguments(destType, defaultCtor);
 
@@ -299,7 +299,7 @@ internal static class ExpressionBuilder
     public static Delegate? TryBuildCtxFreeListDelegate(
         TypeMap elemTypeMap,
         Dictionary<TypePair, TypeMap>? allTypeMaps = null,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         var srcElem = elemTypeMap.SourceType;
         var destElem = elemTypeMap.DestinationType;
@@ -333,7 +333,7 @@ internal static class ExpressionBuilder
                 destElem);
         else if (bestCtorList != null)
             newDestExpr = Expression.New(bestCtorList.Value.Ctor,
-                BuildCtorArgExpressions(bestCtorList.Value.Params, elemSrcParam, srcDetails));
+                BuildCtorArgExpressions(bestCtorList.Value.Params, elemSrcParam, srcDetails, globalConverters));
         else
             newDestExpr = NewWithoutArguments(destElem, destCtor);
         elemStmts.Add(Expression.Assign(elemDestVar, newDestExpr));
@@ -533,7 +533,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap>? allTypeMaps = null,
-        Dictionary<TypePair, Delegate>? globalConverters = null,
+        TypeConversionRegistry? globalConverters = null,
         ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType    = srcProp.PropertyType;
@@ -568,6 +568,12 @@ internal static class ExpressionBuilder
                 return Expression.Assign(destAccess,
                     Expression.Invoke(Expression.Constant(converterDel, funcType), srcAccess));
             }
+        }
+
+        if (EnumConversion.IsEnumPair(srcType, destType))
+        {
+            var enumConversion = EnumConversion.TryBuild(srcAccess, destType, globalConverters);
+            return enumConversion == null ? null : Expression.Assign(destAccess, enumConversion);
         }
 
         if (destType.IsAssignableFrom(srcType))
@@ -670,7 +676,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        Dictionary<TypePair, Delegate>? globalConverters = null,
+        TypeConversionRegistry? globalConverters = null,
         ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType = srcProp.PropertyType;
@@ -718,7 +724,7 @@ internal static class ExpressionBuilder
                 destType);
         else if (bestCtorCfn != null)
             newExpr = Expression.New(bestCtorCfn.Value.Ctor,
-                BuildCtorArgExpressions(bestCtorCfn.Value.Params, childSrcVar, childSrcDetails));
+                BuildCtorArgExpressions(bestCtorCfn.Value.Params, childSrcVar, childSrcDetails, globalConverters));
         else
         {
             newExpr = NewWithoutArguments(destType, childDestCtor);
@@ -790,7 +796,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        Dictionary<TypePair, Delegate>? globalConverters = null,
+        TypeConversionRegistry? globalConverters = null,
         ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType = srcProp.PropertyType;
@@ -838,7 +844,7 @@ internal static class ExpressionBuilder
                 newElemExpr = bestCtorCol == null
                     ? Expression.New(destElem)
                     : Expression.New(bestCtorCol.Value.Ctor,
-                        BuildCtorArgExpressions(bestCtorCol.Value.Params, elemSrcParam, srcElemDetails2));
+                        BuildCtorArgExpressions(bestCtorCol.Value.Params, elemSrcParam, srcElemDetails2, globalConverters));
             }
             elemStmts.Add(Expression.Assign(elemDestVar, newElemExpr));
 
@@ -967,7 +973,7 @@ internal static class ExpressionBuilder
         Dictionary<TypePair, TypeMap> allTypeMaps,
         CompiledMapStore compiledMaps,
         out Func<object, object?, ResolutionContext, object>? result,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         result = null;
 
@@ -1016,7 +1022,7 @@ internal static class ExpressionBuilder
                 destType);
         else if (bestCtorT != null)
             newDestExpr = Expression.New(bestCtorT.Value.Ctor,
-                BuildCtorArgExpressions(bestCtorT.Value.Params, sVar, srcDetails));
+                BuildCtorArgExpressions(bestCtorT.Value.Params, sVar, srcDetails, globalConverters));
         else
             newDestExpr = NewWithoutArguments(destType, defaultCtor);
 
@@ -1115,7 +1121,7 @@ internal static class ExpressionBuilder
         Dictionary<TypePair, TypeMap> allTypeMaps,
         CompiledMapStore compiledMaps,
         ParameterExpression ctxParam,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         var srcType    = srcProp.PropertyType;
         var destType   = destProp.PropertyType;
@@ -1192,6 +1198,12 @@ internal static class ExpressionBuilder
             }
         }
 
+        if (EnumConversion.IsEnumPair(srcType, destType))
+        {
+            var enumConversion = EnumConversion.TryBuild(srcAccess, destType, globalConverters);
+            return enumConversion == null ? null : Expression.Assign(destAccess, enumConversion);
+        }
+
         if (destType.IsAssignableFrom(srcType))
             return Expression.Assign(destAccess, Expression.Convert(srcAccess, destType));
 
@@ -1266,7 +1278,7 @@ internal static class ExpressionBuilder
         Dictionary<TypePair, TypeMap> allTypeMaps,
         CompiledMapStore compiledMaps,
         ParameterExpression ctxParam,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -1314,7 +1326,7 @@ internal static class ExpressionBuilder
                 destType);
         else if (bestCtorTn != null)
             newChildExpr = Expression.New(bestCtorTn.Value.Ctor,
-                BuildCtorArgExpressions(bestCtorTn.Value.Params, childSrcVar, childSrcDetails));
+                BuildCtorArgExpressions(bestCtorTn.Value.Params, childSrcVar, childSrcDetails, globalConverters));
         else
             newChildExpr = NewWithoutArguments(destType, childDestCtor);
         innerStmts.Add(Expression.Assign(childDestVar, newChildExpr));
@@ -1382,7 +1394,7 @@ internal static class ExpressionBuilder
     private static Expression? TryBuildSimpleInlineAssign(
         ParameterExpression srcVar, ParameterExpression destVar,
         PropertyInfo srcProp, PropertyInfo destProp,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        TypeConversionRegistry? globalConverters = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -1404,6 +1416,12 @@ internal static class ExpressionBuilder
                 return Expression.Assign(destAccess,
                     Expression.Invoke(Expression.Constant(converterDel, funcType), srcAccess));
             }
+        }
+
+        if (EnumConversion.IsEnumPair(srcType, destType))
+        {
+            var enumConversion = EnumConversion.TryBuild(srcAccess, destType, globalConverters);
+            return enumConversion == null ? null : Expression.Assign(destAccess, enumConversion);
         }
 
         if (destType.IsAssignableFrom(srcType))
@@ -2586,7 +2604,8 @@ internal static class ExpressionBuilder
     }
 
     private static Expression[] BuildCtorArgExpressions(
-        ParameterInfo[] ctorParams, Expression typedSrc, TypeDetails srcDetails)
+        ParameterInfo[] ctorParams, Expression typedSrc, TypeDetails srcDetails,
+        TypeConversionRegistry? conversions = null)
     {
         var args = new Expression[ctorParams.Length];
         for (int i = 0; i < ctorParams.Length; i++)
@@ -2599,6 +2618,9 @@ internal static class ExpressionBuilder
                     args[i] = srcAccess;
                 else if (p.ParameterType.IsAssignableFrom(srcProp.PropertyType))
                     args[i] = Expression.Convert(srcAccess, p.ParameterType);
+                else if (EnumConversion.IsEnumPair(srcProp.PropertyType, p.ParameterType))
+                    args[i] = EnumConversion.TryBuild(srcAccess, p.ParameterType, conversions)
+                        ?? EnumConversion.TryBuild(srcAccess, p.ParameterType, null)!;
                 else
                     args[i] = Expression.Default(p.ParameterType);
             }

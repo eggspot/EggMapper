@@ -85,6 +85,8 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         AddProfiles(markerTypes.Select(t => t.Assembly).Distinct());
 
     public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
+
+    public EnumMappingMode EnumMapping { get; set; }
     public int DefaultMaxDepth { get; set; } = 32;
 
     public void AddTypeConverter<TSource, TDest>(Func<TSource, TDest> converter)
@@ -95,6 +97,8 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
     internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
+
+    internal EnumMappingMode GetEnumMapping() => EnumMapping;
     internal int GetDefaultMaxDepth() => DefaultMaxDepth;
     internal Dictionary<TypePair, Delegate> GetGlobalConverters() => _globalConverters;
     internal Dictionary<(Type, Type), TypeMap> GetOpenGenericTypeMaps() => _openGenericTypeMaps;
@@ -229,6 +233,8 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         _typeMap.MaxDepth = depth;
         return this;
     }
+
+    internal void SetEnumMapping(Execution.EnumPairMapping mapping) => _typeMap.EnumMapping = mapping;
 
     public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination> converter)
     {

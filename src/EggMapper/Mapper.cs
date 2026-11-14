@@ -52,7 +52,8 @@ public sealed class Mapper : IMapper
         var destinationType = typeof(TDestination);
         if (TryFindMapDelegate(sourceType, destinationType, out var map, out var needsContext)
             || (!ReflectionHelper.IsCollectionType(destinationType)
-                && TryFindSameTypeMap(sourceType, destinationType, out map, out needsContext)))
+                && TryFindSameTypeMap(sourceType, destinationType, out map, out needsContext))
+            || TryFindEnumPairMap(sourceType, destinationType, out map, out needsContext))
         {
             ObjectSourceCache<TDestination>.PreviousEntry = ObjectSourceCache<TDestination>.Entry;
             ObjectSourceCache<TDestination>.Entry =
@@ -146,6 +147,13 @@ public sealed class Mapper : IMapper
                 var ctx = GetContext();
                 return (TDestination)sameBoxed!(source!, null, ctx);
             }
+
+            if (_config.TryGetOrCompileEnumPairMap(key, out _, out var enumCtxFree))
+            {
+                var typed = (Func<TSource, TDestination, TDestination>)enumCtxFree;
+                FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+                return typed(source, default!);
+            }
         }
         catch (MappingException) { throw; }
         catch (MappingValidationException) { throw; }
@@ -214,6 +222,13 @@ public sealed class Mapper : IMapper
                 return typed(source, destination);
             }
             return (TDestination)sameBoxed!(source, destination, GetContext());
+        }
+
+        if (_config.TryGetOrCompileEnumPairMap(key, out _, out var enumCtxFree))
+        {
+            var typed = (Func<TSource, TDestination, TDestination>)enumCtxFree;
+            FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
+            return typed(source, destination);
         }
 
         throw new InvalidOperationException(
@@ -561,6 +576,9 @@ public sealed class Mapper : IMapper
             return sameBoxed!(source, destination, ctx);
         }
 
+        if (_config.TryGetOrCompileEnumPairMap(sameKey, out var enumBoxed, out _))
+            return enumBoxed(source, destination, null!);
+
         throw new InvalidOperationException(
             $"No mapping configured for {TypeNameHelper.Pair(sourceType, destinationType)}. " +
             $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
@@ -620,6 +638,13 @@ public sealed class Mapper : IMapper
         map = null!;
         needsContext = false;
         return false;
+    }
+
+    private bool TryFindEnumPairMap(Type sourceType, Type destinationType,
+        out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
+    {
+        needsContext = false;
+        return _config.TryGetOrCompileEnumPairMap(new TypePair(sourceType, destinationType), out map, out _);
     }
 
     private bool TryFindSameTypeMap(Type sourceType, Type destinationType,

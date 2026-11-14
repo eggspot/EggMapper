@@ -26,6 +26,12 @@ public interface IMapperConfigurationExpression
     Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
 
     /// <summary>
+    /// How a value of one enum type maps to a different enum type when the pair has no
+    /// <c>ConvertUsingEnumMapping</c>, <c>ConvertUsing</c> or type converter. Defaults to <see cref="EnumMappingMode.ByValue"/>.
+    /// </summary>
+    EnumMappingMode EnumMapping { get; set; }
+
+    /// <summary>
     /// Global maximum recursion depth applied as a safety net in the flexible delegate path.
     /// Default is 32. Set to 0 to disable. Individual maps can override with .MaxDepth(n).
     /// Prevents stack exhaustion from deeply or infinitely nested object graphs (CVE-class issue).

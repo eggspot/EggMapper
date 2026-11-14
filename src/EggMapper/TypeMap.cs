@@ -24,6 +24,7 @@ internal sealed class TypeMap
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
     public LambdaExpression? MappingExpression { get; set; }
     public string[]? ReusedConstructorMembers { get; set; }
+    public Execution.EnumPairMapping? EnumMapping { get; set; }
 
     public List<(Func<object, bool> Predicate, string Message)>? ValidationRules { get; set; }
 }
