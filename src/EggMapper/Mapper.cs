@@ -35,9 +35,13 @@ public sealed class Mapper : IMapper
     public TDestination Map<TDestination>(object? source)
     {
         if (source == null) return default!;
+        var sourceType = source.GetType();
         var entry = ObjectSourceCache<TDestination>.Entry;
-        if (entry != null && entry.SourceType == source.GetType() && entry.Generation == _generation)
+        if (entry != null && entry.SourceType == sourceType && entry.Generation == _generation)
             return (TDestination)entry.Map(source, null, entry.NeedsContext ? GetContext() : null!);
+        var previous = ObjectSourceCache<TDestination>.PreviousEntry;
+        if (previous != null && previous.SourceType == sourceType && previous.Generation == _generation)
+            return (TDestination)previous.Map(source, null, previous.NeedsContext ? GetContext() : null!);
         return MapObjectSourceSlow<TDestination>(source);
     }
 
@@ -50,6 +54,7 @@ public sealed class Mapper : IMapper
             || (!ReflectionHelper.IsCollectionType(destinationType)
                 && TryFindSameTypeMap(sourceType, destinationType, out map, out needsContext)))
         {
+            ObjectSourceCache<TDestination>.PreviousEntry = ObjectSourceCache<TDestination>.Entry;
             ObjectSourceCache<TDestination>.Entry =
                 new ObjectSourceCache<TDestination>.CacheEntry(sourceType, map, needsContext, _generation);
             return (TDestination)map(source, null, needsContext ? GetContext() : null!);
@@ -683,6 +688,7 @@ public sealed class Mapper : IMapper
     private static class ObjectSourceCache<TDestination>
     {
         public static volatile CacheEntry? Entry;
+        public static volatile CacheEntry? PreviousEntry;
         internal sealed class CacheEntry(
             Type sourceType,
             Func<object, object?, ResolutionContext, object> map,
