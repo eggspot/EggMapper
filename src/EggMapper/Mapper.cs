@@ -164,6 +164,13 @@ public sealed class Mapper : IMapper
         if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
             return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), destination);
 
+        if (_config.TryGetOrCompileSameTypeMap(key, out var sameBoxed, out var sameCtxFree))
+        {
+            if (sameCtxFree != null)
+                return ((Func<TSource, TDestination, TDestination>)sameCtxFree)(source, destination);
+            return (TDestination)sameBoxed!(source, destination, GetContext());
+        }
+
         throw new InvalidOperationException(
             $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
             $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
