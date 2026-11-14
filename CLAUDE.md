@@ -162,10 +162,11 @@ Fully automatic tag-based versioning — every push to `main` triggers a release
 
 No manual version editing needed. No commits pushed back to main. Just use conventional commit prefixes.
 
-Publishing credentials: the publish workflow uses NuGet Trusted Publishing (GitHub OIDC exchanged for a 1-hour API
-key via `NuGet/login`) when the repository variable `NUGET_USER` holds the nuget.org username (profile name, not
-email) of the account that created the trusted-publishing policy for the `eggspot` organization. If the variable is
-missing or the login fails, it falls back to the `NUGET_API_KEY` repository secret.
+Publishing credentials: the publish workflow uses NuGet Trusted Publishing only (GitHub OIDC exchanged for a 1-hour
+API key via `NuGet/login`); there is no long-lived API key. The repository variable `NUGET_USER` holds the nuget.org
+username (profile name, not email) of the account that created the policy. The nuget.org policy is owned by the
+`eggspot` organization and names Repository `EggMapper` and Workflow `publish.yml` exactly (wildcards do not match),
+so renaming the workflow file requires updating the policy.
 
 ## Working Style
 
