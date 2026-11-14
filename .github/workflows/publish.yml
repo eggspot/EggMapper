@@ -141,8 +141,7 @@ jobs:
 
       - name: NuGet login (trusted publishing)
         id: nuget_login
-        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false' && vars.NUGET_USER != ''
-        continue-on-error: true
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         uses: NuGet/login@v1
         with:
           user: ${{ vars.NUGET_USER }}
@@ -150,7 +149,7 @@ jobs:
       - name: Push to NuGet.org
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
         env:
-          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY || secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
         run: |
           dotnet nuget push ./artifacts/*.nupkg \
             --api-key "${NUGET_API_KEY}" \
