@@ -15,6 +15,9 @@ internal sealed class CompiledMapStore
 
     internal void Add(TypePair key, Func<object, object?, ResolutionContext, object> map) => _maps[key] = map;
 
+    internal bool TryGetCompiled(TypePair key, out Func<object, object?, ResolutionContext, object> map)
+        => _maps.TryGetValue(key, out map!);
+
     internal bool TryGetOrCompile(TypePair key, out Func<object, object?, ResolutionContext, object> map)
     {
         if (_maps.TryGetValue(key, out map!))

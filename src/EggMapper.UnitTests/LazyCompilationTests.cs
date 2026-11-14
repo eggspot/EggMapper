@@ -76,6 +76,23 @@ public class LazyCompilationTests
         public string Boom { get; set; } = "";
     }
 
+    public class LcBrokenDest2
+    {
+        public string Boom { get; set; } = "";
+    }
+
+    public class LcParent
+    {
+        public string Name { get; set; } = "";
+        public LcBroken? Child { get; set; }
+    }
+
+    public class LcParentDto
+    {
+        public string Name { get; set; } = "";
+        public LcBrokenDest? Child { get; set; }
+    }
+
     public class LcWrapper<T>
     {
         public T Value { get; set; } = default!;
@@ -331,30 +348,75 @@ public class LazyCompilationTests
     }
 
     [Fact]
-    public void Map_BrokenMap_FailsOnFirstMapNotInConstructor_AndRethrowsSameErrorType()
+    public void Map_BrokenMap_FailsOnFirstMapNotInConstructor_AndCachesTheFailure()
     {
+        var boomChecks = 0;
         MapperConfiguration? config = null;
         var construct = () =>
         {
             config = new MapperConfiguration(cfg =>
             {
-                cfg.ShouldMapProperty = p => p.Name == nameof(LcBrokenDest.Boom)
-                    ? throw new InvalidOperationException("boom")
-                    : true;
+                cfg.ShouldMapProperty = p =>
+                {
+                    if (p.Name != nameof(LcBrokenDest.Boom)) return true;
+                    Interlocked.Increment(ref boomChecks);
+                    throw new InvalidOperationException("boom");
+                };
                 cfg.CreateMap<LcBroken, LcBrokenDest>();
                 cfg.CreateMap<LcSource, LcDest>();
             });
         };
         construct.Should().NotThrow();
+        boomChecks.Should().Be(0);
         var mapper = config!.CreateMapper();
 
         var first = Record.Exception(() => mapper.Map<LcBroken, LcBrokenDest>(new LcBroken { Text = "abc" }));
+        var checksAfterFirst = boomChecks;
         var second = Record.Exception(() => mapper.Map<LcBroken, LcBrokenDest>(new LcBroken { Text = "abc" }));
 
         first.Should().NotBeNull();
         second.Should().NotBeNull();
         second!.GetType().Should().Be(first!.GetType());
+        checksAfterFirst.Should().BeGreaterThan(0);
+        boomChecks.Should().Be(checksAfterFirst);
         mapper.Map<LcSource, LcDest>(new LcSource { Id = 9 }).Id.Should().Be(9);
+    }
+
+    [Fact]
+    public void CompileMappings_TwoBrokenMaps_ThrowsAggregateException()
+    {
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.ShouldMapProperty = p => p.Name == nameof(LcBrokenDest.Boom)
+                ? throw new InvalidOperationException("boom")
+                : true;
+            cfg.CreateMap<LcBroken, LcBrokenDest>();
+            cfg.CreateMap<LcBroken, LcBrokenDest2>();
+            cfg.CreateMap<LcSource, LcDest>();
+        });
+
+        var act = () => config.CompileMappings();
+
+        act.Should().Throw<AggregateException>().Which.InnerExceptions.Should().HaveCount(2);
+        config.FrozenMaps.Should().ContainKey(Pair<LcSource, LcDest>());
+    }
+
+    [Fact]
+    public void Map_ParentWithBrokenChildMap_FailsOnlyWhenChildIsMapped()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.ShouldMapProperty = p => p.Name == nameof(LcBrokenDest.Boom)
+                ? throw new InvalidOperationException("boom")
+                : true;
+            cfg.CreateMap<LcBroken, LcBrokenDest>();
+            cfg.CreateMap<LcParent, LcParentDto>();
+        }).CreateMapper();
+
+        mapper.Map<LcParent, LcParentDto>(new LcParent { Name = "no child" }).Name.Should().Be("no child");
+        var withChild = () => mapper.Map<LcParent, LcParentDto>(new LcParent { Name = "p", Child = new LcBroken() });
+
+        withChild.Should().Throw<Exception>();
     }
 
     [Fact]

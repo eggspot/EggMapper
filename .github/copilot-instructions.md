@@ -86,8 +86,8 @@ dotnet run --configuration Release -- --filter *FlatMappingBenchmark*
 
 ## 🏗️ Architecture Constraints
 
-- **Zero reflection at map time** — all delegates compiled in `MapperConfiguration` constructor
-- **Compiled delegates cached** in `ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>>`
+- **Zero reflection at map time** — delegates are compiled per type pair on first use (`MapperConfiguration.TryGetOrCompile`), or all at once by `CompileMappings()`
+- **Compiled delegates cached** in an immutable `MapSnapshot` (plain dictionaries, copy-on-write) and in `CompiledMapStore` for nested-map lookups
 - **No LINQ in hot paths** — use `for` loops with pre-sized collections
 - **AggressiveInlining** on `IMapper.Map<S,D>()` and delegate lookup
 - **Value-type `TypePair` key** for dictionary lookups (no boxing)

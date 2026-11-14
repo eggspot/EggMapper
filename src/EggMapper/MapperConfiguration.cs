@@ -157,7 +157,7 @@ public sealed class MapperConfiguration
             return true;
         if (!TryGetOrCompile(key))
             return false;
-        return _snapshot.Boxed.TryGetValue(key, out map!);
+        return _snapshot.Boxed.TryGetValue(key, out map!) || _compiledMaps.TryGetCompiled(key, out map);
     }
 
     internal bool TryGetOrCompileCtxFreeMap(TypePair key, out Delegate ctxFree)

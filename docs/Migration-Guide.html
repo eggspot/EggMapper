@@ -104,6 +104,7 @@ dotnet add package EggMapper</code></pre>
         <li><code>mapper.Map&lt;TSrc, TDst&gt;(source)</code></li>
         <li><code>mapper.Map&lt;TDst&gt;(objectSource)</code></li>
         <li><code>config.AssertConfigurationIsValid()</code></li>
+        <li><code>config.CompileMappings()</code>: as in AutoMapper, maps compile lazily on first use, and this compiles them all up front. Use it at startup or in a test if you want mapping errors to surface before the first request.</li>
       </ul>
 
       <h3>What is different</h3>

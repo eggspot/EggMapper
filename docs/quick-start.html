@@ -80,7 +80,7 @@ var mapper = config.CreateMapper();
 // 3. Map
 var dto = mapper.Map&lt;ProductDto&gt;(product);</code></pre>
 
-      <div class="note"><p>The <code>MapperConfiguration</code> constructor compiles all registered type maps into cached delegates. Create it once and keep it as a singleton.</p></div>
+      <div class="note"><p><code>MapperConfiguration</code> registers your maps and compiles each one into a cached delegate on its first use. Create it once and keep it as a singleton. Call <code>config.CompileMappings()</code> at startup or in a test to compile everything up front and surface mapping errors early.</p></div>
 
       <h2>Dependency Injection (ASP.NET Core)</h2>
 
