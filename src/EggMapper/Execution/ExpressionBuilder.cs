@@ -181,16 +181,31 @@ internal static class ExpressionBuilder
         else
             newDestExpr = NewWithoutArguments(destType, defaultCtor);
 
-        Expression initDest = destType.IsValueType
-            ? newDestExpr
-            : Expression.Condition(
+        var constructedMembers = !destType.IsValueType && typeMap.CustomConstructor == null && bestCtorCf == null
+            ? ConstructedMemberVariables.For(destDetails)
+            : null;
+
+        if (constructedMembers != null)
+        {
+            stmts.Add(Expression.IfThenElse(
                 Expression.ReferenceNotEqual(
                     Expression.Convert(destParam, typeof(object)),
                     Expression.Constant(null, typeof(object))),
-                destParam,
-                newDestExpr);
-
-        stmts.Add(Expression.Assign(dVar, initDest));
+                Expression.Block(new[] { (Expression)Expression.Assign(dVar, destParam) }.Concat(constructedMembers.Clear())),
+                Expression.Block(new[] { (Expression)Expression.Assign(dVar, newDestExpr) }.Concat(constructedMembers.CaptureFrom(dVar)))));
+        }
+        else
+        {
+            Expression initDest = destType.IsValueType
+                ? newDestExpr
+                : Expression.Condition(
+                    Expression.ReferenceNotEqual(
+                        Expression.Convert(destParam, typeof(object)),
+                        Expression.Constant(null, typeof(object))),
+                    destParam,
+                    newDestExpr);
+            stmts.Add(Expression.Assign(dVar, initDest));
+        }
 
         var processedDestProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -226,7 +241,7 @@ internal static class ExpressionBuilder
                 srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var srcProp);
                 if (srcProp == null) continue;
 
-                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty, allTypeMaps, globalConverters);
+                var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, propMap.DestinationProperty, allTypeMaps, globalConverters, constructedMembers);
                 if (assignExpr == null) return null;
                 stmts.Add(assignExpr);
             }
@@ -259,7 +274,7 @@ internal static class ExpressionBuilder
                 continue;
             }
 
-            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
+            var assignExpr = TryBuildCtxFreeAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters, constructedMembers);
             if (assignExpr == null) return null;
             stmts.Add(assignExpr);
         }
@@ -270,10 +285,14 @@ internal static class ExpressionBuilder
 
         stmts.Add(dVar);
 
-        var body     = Expression.Block(new[] { dVar }, stmts);
+        var bodyVariables = constructedMembers == null
+            ? new[] { dVar }
+            : new[] { dVar }.Concat(constructedMembers.Variables).ToArray();
+        var body     = Expression.Block(bodyVariables, stmts);
         var funcType = typeof(Func<,,>).MakeGenericType(srcType, destType, destType);
         var lambda = Expression.Lambda(funcType, body, srcParam, destParam);
         typeMap.MappingExpression = lambda;
+        constructedMembers?.RecordOn(typeMap);
         return lambda.Compile();
     }
 
@@ -319,6 +338,12 @@ internal static class ExpressionBuilder
             newDestExpr = NewWithoutArguments(destElem, destCtor);
         elemStmts.Add(Expression.Assign(elemDestVar, newDestExpr));
 
+        var elemConstructedMembers = !destElem.IsValueType && elemTypeMap.CustomConstructor == null && bestCtorList == null
+            ? ConstructedMemberVariables.For(destDetails)
+            : null;
+        if (elemConstructedMembers != null)
+            elemStmts.AddRange(elemConstructedMembers.CaptureFrom(elemDestVar));
+
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var propMap in elemTypeMap.PropertyMaps)
@@ -346,7 +371,7 @@ internal static class ExpressionBuilder
             {
                 srcDetails.ReadableByName.TryGetValue(propMap.SourceMemberName, out var sp);
                 if (sp == null) continue;
-                var a = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, sp, propMap.DestinationProperty, allTypeMaps, globalConverters);
+                var a = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, sp, propMap.DestinationProperty, allTypeMaps, globalConverters, elemConstructedMembers);
                 if (a == null) return null;
                 elemStmts.Add(a);
             }
@@ -376,7 +401,7 @@ internal static class ExpressionBuilder
                 continue;
             }
 
-            var assign = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, srcProp, destProp, allTypeMaps, globalConverters);
+            var assign = TryBuildCtxFreeAssign(elemSrcParam, elemDestVar, srcProp, destProp, allTypeMaps, globalConverters, elemConstructedMembers);
             if (assign == null) return null;
             elemStmts.Add(assign);
         }
@@ -427,7 +452,7 @@ internal static class ExpressionBuilder
         loopBodyStmts.Add(Expression.Label(continueLabel));
 
         var fullBody = Expression.Block(
-            new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar },
+            new[] { listVar, iVar, countVar, elemSrcParam, elemDestVar }.Concat(elemConstructedMembers?.Variables ?? Enumerable.Empty<ParameterExpression>()),
             Expression.Assign(countVar, Expression.Property(srcListParam, countProp)),
             Expression.Assign(listVar, Expression.New(listCtor, countVar)),
             Expression.Assign(iVar, Expression.Constant(0)),
@@ -440,7 +465,66 @@ internal static class ExpressionBuilder
             listVar);
 
         var funcType = typeof(Func<,>).MakeGenericType(listSrcType, listDestType);
+        elemConstructedMembers?.RecordOn(elemTypeMap);
         return Expression.Lambda(funcType, fullBody, srcListParam).Compile();
+    }
+
+    private sealed class ConstructedMemberVariables
+    {
+        private readonly Dictionary<PropertyInfo, ParameterExpression> _variables;
+        private readonly HashSet<string> _reused = new(StringComparer.Ordinal);
+
+        private ConstructedMemberVariables(Dictionary<PropertyInfo, ParameterExpression> variables)
+        {
+            _variables = variables;
+        }
+
+        public IEnumerable<ParameterExpression> Variables => _variables.Values;
+
+        public static ConstructedMemberVariables? For(TypeDetails destinationDetails)
+        {
+            var initialized = destinationDetails.PropertiesInitializedWithNewInstance;
+            if (initialized.Count == 0) return null;
+            var variables = new Dictionary<PropertyInfo, ParameterExpression>(initialized.Count);
+            foreach (var entry in initialized)
+                variables[entry.Key] = Expression.Variable(entry.Value, "constructed_" + entry.Key.Name);
+            return new ConstructedMemberVariables(variables);
+        }
+
+        public IEnumerable<Expression> CaptureFrom(ParameterExpression destination)
+        {
+            foreach (var entry in _variables)
+                yield return Expression.Assign(entry.Value,
+                    Expression.Convert(Expression.Property(destination, entry.Key), entry.Value.Type));
+        }
+
+        public IEnumerable<Expression> Clear()
+        {
+            foreach (var variable in _variables.Values)
+                yield return Expression.Assign(variable, Expression.Constant(null, variable.Type));
+        }
+
+        public bool TryUse(PropertyInfo property, Type requiredType, out ParameterExpression variable)
+        {
+            if (_variables.TryGetValue(property, out variable!) && variable.Type == requiredType)
+            {
+                _reused.Add(property.Name);
+                return true;
+            }
+            variable = null!;
+            return false;
+        }
+
+        public void RecordOn(TypeMap typeMap)
+        {
+            if (_reused.Count == 0) return;
+            lock (typeMap)
+            {
+                var merged = new HashSet<string>(typeMap.ReusedConstructorMembers ?? Array.Empty<string>(), StringComparer.Ordinal);
+                merged.UnionWith(_reused);
+                typeMap.ReusedConstructorMembers = merged.ToArray();
+            }
+        }
     }
 
     private static Expression? TryBuildCtxFreeAssign(
@@ -449,7 +533,8 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap>? allTypeMaps = null,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        Dictionary<TypePair, Delegate>? globalConverters = null,
+        ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType    = srcProp.PropertyType;
         var destType   = destProp.PropertyType;
@@ -459,7 +544,7 @@ internal static class ExpressionBuilder
         if (ReflectionHelper.IsCollectionType(srcType) && ReflectionHelper.IsCollectionType(destType))
         {
             if (allTypeMaps == null) return null;
-            return TryBuildCtxFreeCollectionAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
+            return TryBuildCtxFreeCollectionAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters, constructedMembers);
         }
         if (ReflectionHelper.IsCollectionType(srcType) || ReflectionHelper.IsCollectionType(destType))
             return null;
@@ -518,7 +603,7 @@ internal static class ExpressionBuilder
 
         if (!srcType.IsValueType && allTypeMaps != null)
         {
-            var nested = TryBuildCtxFreeNestedAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters);
+            var nested = TryBuildCtxFreeNestedAssign(srcParam, dVar, srcProp, destProp, allTypeMaps, globalConverters, constructedMembers);
             if (nested != null) return nested;
         }
 
@@ -585,7 +670,8 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        Dictionary<TypePair, Delegate>? globalConverters = null,
+        ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -634,7 +720,11 @@ internal static class ExpressionBuilder
             newExpr = Expression.New(bestCtorCfn.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorCfn.Value.Params, childSrcVar, childSrcDetails));
         else
+        {
             newExpr = NewWithoutArguments(destType, childDestCtor);
+            if (constructedMembers != null && constructedMembers.TryUse(destProp, destType, out var constructedChild))
+                newExpr = Expression.Coalesce(constructedChild, newExpr);
+        }
         innerStmts.Add(Expression.Assign(childDestVar, newExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -700,7 +790,8 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        Dictionary<TypePair, Delegate>? globalConverters = null)
+        Dictionary<TypePair, Delegate>? globalConverters = null,
+        ConstructedMemberVariables? constructedMembers = null)
     {
         var srcType = srcProp.PropertyType;
         var destType = destProp.PropertyType;
@@ -832,11 +923,26 @@ internal static class ExpressionBuilder
             addExpr = Expression.Call(listVar, addMethod, elemAccess);
         }
 
+        Expression newListExpr = Expression.New(listCtor, countVar);
+        Expression emptyListExpr = BuildEmptyCollectionExpr(destType, destElem);
+        if (constructedMembers != null && constructedMembers.TryUse(destProp, listDestType, out var constructedList))
+        {
+            var hasConstructedList = Expression.ReferenceNotEqual(constructedList, Expression.Constant(null, listDestType));
+            newListExpr = Expression.Condition(hasConstructedList,
+                Expression.Block(
+                    Expression.Assign(Expression.Property(constructedList, "Capacity"), countVar),
+                    constructedList),
+                newListExpr);
+            emptyListExpr = Expression.Condition(hasConstructedList,
+                Expression.Convert(constructedList, destType),
+                emptyListExpr);
+        }
+
         var loop = Expression.Block(
             new[] { collVar, listVar, iVar, countVar },
             Expression.Assign(collVar, Expression.Convert(srcAccess, ilistSrcType)),
             Expression.Assign(countVar, Expression.Property(Expression.Convert(collVar, icolType), countProp)),
-            Expression.Assign(listVar, Expression.New(listCtor, countVar)),
+            Expression.Assign(listVar, newListExpr),
             Expression.Assign(iVar, Expression.Constant(0)),
             Expression.Loop(
                 Expression.IfThenElse(
@@ -853,8 +959,7 @@ internal static class ExpressionBuilder
                 Expression.Convert(srcAccess, typeof(object)),
                 Expression.Constant(null, typeof(object))),
             loop,
-            Expression.Assign(Expression.Property(dVar, destProp),
-                BuildEmptyCollectionExpr(destType, destElem)));
+            Expression.Assign(Expression.Property(dVar, destProp), emptyListExpr));
     }
 
     private static bool TryBuildTypedDelegate(
