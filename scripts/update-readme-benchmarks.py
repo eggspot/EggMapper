@@ -46,6 +46,8 @@ BENCHMARK_ORDER: list[tuple[str, str]] = [
     ("CollectionBenchmark",       "🟠 Collection (100 items)"),
     ("DeepCollectionBenchmark",   "🔴 Deep Collection (100 items, nested)"),
     ("LargeCollectionBenchmark",  "⚫ Large Collection (1,000 items)"),
+    ("MapIntoExistingBenchmark",  "🔷 Map Into Existing Object"),
+    ("ObjectSourceBenchmark",     "🔶 Map<TDest>(object) (AutoMapper-style call)"),
     ("StartupBenchmark",          "⚪ Startup / Config"),
     ("ColdStartBenchmark",        "⚪ Cold Start (Config + First Map per Type Pair)"),
 ]
