@@ -65,7 +65,9 @@ IMapper<Person, PersonDto> typed = config.CreateMapper<Person, PersonDto>();
 PersonDto fast = typed.Map(person);
 ```
 
-`Map<T, T>` deep-copies without a `CreateMap`. `Patch` copies only non-null source members.
+`Map<T, T>` works without a `CreateMap`: it creates a new object and copies members; nested objects keep the same
+references. `Patch` skips source members whose value is null (reference types and
+`Nullable<T>`); non-nullable value types are always copied.
 
 ## Member options
 

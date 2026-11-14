@@ -25,7 +25,7 @@ DI: `services.AddEggMapper(typeof(OrderProfile).Assembly)` registers `MapperConf
 | `mapper.Map<D>(obj)` | Runtime source type (AutoMapper style) |
 | `mapper.Map(src, existing)` | Map into an existing object |
 | `mapper.MapList<S, D>(items)` | List mapping, one compiled loop |
-| `mapper.Patch(src, existing)` | Copy only non-null members |
+| `mapper.Patch(src, existing)` | Copy members, skipping null source values |
 | `IMapper<S, D>.Map(src)` | Inject on hot paths (no generic virtual call) |
 | `query.ProjectTo<S, D>(config)` | IQueryable/EF projection; BOTH type args |
 | `config.CompileMappings()` | Compile all maps now |
