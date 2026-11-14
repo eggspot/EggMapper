@@ -469,10 +469,10 @@ public void AllMappings_ShouldBeValid()
 
       <h2>Common Pitfalls</h2>
 
-      <div class="warning"><p>Do not register <code>MapperConfiguration</code> as scoped or transient. It compiles expression trees in its constructor. <code>AddEggMapper()</code> handles this correctly (singleton), but be aware if you register manually.</p></div>
+      <div class="warning"><p>Do not register <code>MapperConfiguration</code> as scoped or transient. It holds the compiled expression trees (each map compiles on first use), so a new instance starts over. <code>AddEggMapper()</code> handles this correctly (singleton), but be aware if you register manually.</p></div>
 
       <ul>
-        <li><strong>Manually registering as transient</strong> — If you bypass <code>AddEggMapper()</code> and register <code>MapperConfiguration</code> as transient, you will recompile all maps on every request. Always use singleton.</li>
+        <li><strong>Manually registering as transient</strong> — If you bypass <code>AddEggMapper()</code> and register <code>MapperConfiguration</code> as transient, every request recompiles each map it uses. Always use singleton.</li>
         <li><strong>Forgetting to scan the right assembly</strong> — If your profiles are in a separate class library, pass that assembly: <code>AddEggMapper(typeof(SomeProfile).Assembly)</code>.</li>
         <li><strong>Using <code>IMapper</code> in a static context</strong> — <code>IMapper</code> is designed for DI. In static helpers or extension methods, inject <code>MapperConfiguration</code> and call <code>CreateMapper()</code>.</li>
       </ul>

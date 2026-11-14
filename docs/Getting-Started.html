@@ -99,7 +99,7 @@ var config = new MapperConfiguration(cfg =&gt;
     cfg.CreateMap&lt;Order, OrderDto&gt;();
 });</code></pre>
 
-      <p>The <code>MapperConfiguration</code> constructor <strong>compiles</strong> expression-tree delegates for every registered map. Keep a single long-lived instance (singleton).</p>
+      <p><code>MapperConfiguration</code> <strong>compiles</strong> an expression-tree delegate for each registered map on its first use (call <code>CompileMappings()</code> to compile all of them up front). Keep a single long-lived instance (singleton).</p>
 
       <h3>3 -- Create a mapper and map</h3>
 

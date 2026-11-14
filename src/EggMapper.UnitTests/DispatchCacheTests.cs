@@ -379,6 +379,7 @@ public class DispatchCacheTests
             cfg.CreateMap<DcSource, DcDest>();
             cfg.CreateMap<DcPointSource, DcPointDest>();
         });
+        config.CompileMappings();
 
         config.FrozenCtxFreeMaps.Keys.Should().NotBeEmpty();
         foreach (var key in config.FrozenCtxFreeMaps.Keys)

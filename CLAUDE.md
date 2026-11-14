@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is EggMapper
 
-EggMapper is a high-performance .NET object-to-object mapping library targeting **zero runtime reflection** and **zero extra allocations**. All mapping delegates are compiled as expression trees during `MapperConfiguration` construction. The goal is to be **the fastest runtime mapper** — faster than AutoMapper, Mapster, and AgileMapper on every benchmark scenario.
+EggMapper is a high-performance .NET object-to-object mapping library targeting **zero runtime reflection** and **zero extra allocations**. All mapping delegates are compiled as expression trees, each type pair on its first use (or all at once via `MapperConfiguration.CompileMappings()`). The goal is to be **the fastest runtime mapper** — faster than AutoMapper, Mapster, and AgileMapper on every benchmark scenario.
 
 ## Claude Skills
 
@@ -44,16 +44,27 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 
 ## Architecture
 
-### Compilation Pipeline (Configuration Time)
+### Compilation Pipeline (Lazy, per Type Pair)
 
-1. `MapperConfiguration` constructor receives user-defined maps via `CreateMap<S,D>()`
-2. `TopologicalOrder()` sorts type maps by dependency (child types first)
-3. `ExpressionBuilder.BuildMappingDelegate()` compiles each type map into one of three delegate types:
-   - **Fast typed path** (`TryBuildTypedDelegate`): Single expression tree block with inlined nested maps and flattening — no boxing, no per-property delegates
-   - **Flexible path** (`BuildFlexibleDelegate`): Per-property action arrays for complex features (conditions, hooks, inheritance, MaxDepth)
-   - **Context-free path** (`TryBuildCtxFreeDelegate`): `Func<TSource, TDestination>` with fully inlined nested objects, collections, and flattening — used by both `Map<S,D>()` and `MapList<>()`
-4. `TryBuildCtxFreeListDelegate()` compiles `Func<IList<TSource>, List<TDestination>>` — entire collection loop + element mapping as a single expression tree
-5. Compiled delegates stored in `FrozenMaps`, `FrozenCtxFreeMaps`, and `FrozenCtxFreeListMaps`
+1. `MapperConfiguration` constructor registers user-defined maps (`CreateMap<S,D>()`, profiles) and resolves
+   `IncludeAllDerived` / `IncludeBase` chains. It compiles nothing (startup ~tens of µs).
+2. The first request for a pair (`Map`, `MapList` element fallback, `GetMappingExpressionText`, a nested lookup)
+   calls `MapperConfiguration.TryGetOrCompile(key)`: under one per-configuration lock it compiles the pair into one of
+   three delegate types and publishes it in an immutable `MapSnapshot` (copy-on-write, swapped through one volatile
+   field, so readers keep plain `Dictionary` lookups):
+   - **Context-free path** (`TryBuildCtxFreeDelegate`): `Func<TSource, TDestination, TDestination>` with fully inlined
+     nested objects, collections, and flattening — used by both `Map<S,D>()` and `MapList<>()`
+   - **Fast typed path** (`TryBuildTypedDelegate`): single expression tree block with inlined nested maps and
+     flattening — no boxing, no per-property delegates
+   - **Flexible path** (`BuildFlexibleDelegate`): per-property action arrays for complex features (conditions, hooks,
+     inheritance, MaxDepth)
+3. Child maps needed while building a parent compile depth-first in the same batch (a cycle hits the in-progress set
+   and is resolved at run time). Delegates look children up at run time through `CompiledMapStore`, which compiles a
+   registered pair on demand, so a lookup never silently misses.
+4. A compile failure is cached and rethrown (same exception) on later requests for that pair; other pairs still work.
+5. `CompileMappings()` compiles everything eagerly: context-free builds in parallel, then the rest in topological
+   order; it throws the single failure or an `AggregateException`.
+6. `TryBuildCtxFreeListDelegate()` compiles `Func<IList<TSource>, List<TDestination>>` lazily on first `MapList`.
 
 Path eligibility (`ExpressionBuilder`): a map falls back from the context-free / typed paths to the flexible path
 when it has validation rules (`Validate`), a constructor that needs the `ResolutionContext`, member conditions

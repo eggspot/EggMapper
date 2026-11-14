@@ -61,7 +61,7 @@
       <p>EggMapper is the <strong>fastest .NET runtime object-to-object mapper</strong>, achieving near-manual mapping speed through these techniques:</p>
 
       <ol>
-        <li><strong>Compile once, run many times</strong> — <code>MapperConfiguration</code> compiles expression-tree delegates at construction time. Every subsequent <code>Map()</code> call is a direct delegate invocation with no reflection.</li>
+        <li><strong>Compile once, run many times</strong> — <code>MapperConfiguration</code> compiles each type pair's expression-tree delegate on its first use (or all of them via <code>CompileMappings()</code>), so startup costs only the maps you actually use. Every subsequent <code>Map()</code> call is a direct delegate invocation with no reflection.</li>
         <li><strong>Context-free typed delegates</strong> — For flat and nested maps, EggMapper compiles <code>Func&lt;TSource, TDestination&gt;</code> delegates with zero boxing. Nested object mappings are <strong>inlined directly</strong> into the parent expression tree.</li>
         <li><strong>Static generic caching</strong> — <code>FastCache&lt;TSource, TDestination&gt;</code> eliminates dictionary lookups after the first call for each type pair.</li>
         <li><strong>Inlined collection loops</strong> — <code>MapList&lt;&gt;()</code> uses compiled <code>Func&lt;IList&lt;TSource&gt;, List&lt;TDestination&gt;&gt;</code> delegates where the entire loop + element mapping is a single expression tree.</li>
@@ -234,7 +234,7 @@ dotnet run -c Release -f net10.0 -- --filter '*' --job short</code></pre>
 
       <h3>Use a Singleton <code>MapperConfiguration</code></h3>
 
-      <div class="warning"><p>Never construct <code>MapperConfiguration</code> per-request. The constructor compiles expression trees for every registered map. In DI, <code>AddEggMapper()</code> registers it as a singleton automatically.</p></div>
+      <div class="warning"><p>Never construct <code>MapperConfiguration</code> per-request. Each instance compiles its own expression trees (each map on first use), so a new instance per request recompiles every map it touches. In DI, <code>AddEggMapper()</code> registers it as a singleton automatically.</p></div>
 
       <h3>Prefer Generic <code>Map&lt;TSrc, TDst&gt;()</code> Over <code>Map&lt;TDst&gt;(object)</code></h3>
 
@@ -275,9 +275,9 @@ var dtos = mapper.MapList&lt;Order, OrderDto&gt;(entities);</code></pre>
 
       <p><code>ProjectTo</code> pushes the mapping into the SQL query. Only the columns needed for the DTO are selected. No entity tracking overhead.</p>
 
-      <h3>Register All Maps Upfront</h3>
+      <h3>Compile Up Front When First-Request Latency Matters</h3>
 
-      <p>Discovered maps compiled lazily still pay a one-time cost on first use. Register everything in profiles or the configuration callback to front-load compilation at startup.</p>
+      <p>Maps compile lazily: each pair pays a one-time compile on its first use, which keeps startup fast. If you would rather pay that cost at startup (and fail fast on mapping errors), call <code>config.CompileMappings()</code> once after building the configuration; it compiles every registered map in parallel where possible.</p>
 
       <h3>Validate in Tests</h3>
 

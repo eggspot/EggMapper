@@ -119,7 +119,7 @@ internal static class ExpressionBuilder
     public static Func<object, object?, ResolutionContext, object> BuildMappingDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         int defaultMaxDepth = 32,
         Dictionary<TypePair, Delegate>? globalConverters = null)
     {
@@ -860,7 +860,7 @@ internal static class ExpressionBuilder
     private static bool TryBuildTypedDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         out Func<object, object?, ResolutionContext, object>? result,
         Dictionary<TypePair, Delegate>? globalConverters = null)
     {
@@ -1008,7 +1008,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         ParameterExpression ctxParam,
         Dictionary<TypePair, Delegate>? globalConverters = null)
     {
@@ -1036,7 +1036,7 @@ internal static class ExpressionBuilder
             var listDestType = typeof(List<>).MakeGenericType(destElem);
             if (ilistSrcType.IsAssignableFrom(srcType)
                 && destType.IsAssignableFrom(listDestType)
-                && compiledMaps.TryGetValue(elemPair, out var elemDel))
+                && compiledMaps.TryGetOrCompileForBuild(elemPair, out var elemDel))
             {
                 var typedMethod = _mapListTypedMethod.MakeGenericMethod(srcElem, destElem);
                 var callExpr = Expression.Call(
@@ -1119,7 +1119,7 @@ internal static class ExpressionBuilder
 
             Expression callExpr;
 
-            if (compiledMaps.TryGetValue(typePair, out var childDel))
+            if (compiledMaps.TryGetOrCompileForBuild(typePair, out var childDel))
             {
                 callExpr = Expression.Invoke(
                     Expression.Constant(childDel),
@@ -1159,7 +1159,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         ParameterExpression ctxParam,
         Dictionary<TypePair, Delegate>? globalConverters = null)
     {
@@ -1559,18 +1559,18 @@ internal static class ExpressionBuilder
 
     private static object MapNestedHelper(
         object srcVal,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> maps,
+        CompiledMapStore maps,
         TypePair pair,
         ResolutionContext ctx)
     {
-        if (maps.TryGetValue(pair, out var del))
+        if (maps.TryGetOrCompile(pair, out var del))
             return del(srcVal, null, ctx);
         return MapOrConvert(srcVal, pair.DestinationType, ctx)!;
     }
 
     private static object? MapCollectionPropHelper(
         object? srcColl,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> maps,
+        CompiledMapStore maps,
         TypePair elemPair,
         Type destCollType,
         Type srcElemType,
@@ -1622,7 +1622,7 @@ internal static class ExpressionBuilder
     private static Func<object, object?, ResolutionContext, object> BuildFlexibleDelegate(
         TypeMap typeMap,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         int defaultMaxDepth = 32)
     {
         var factory = BuildFactory(typeMap);
@@ -1741,7 +1741,7 @@ internal static class ExpressionBuilder
     private static Action<object, object, ResolutionContext>? BuildPropertyAction(
         PropertyMap propMap,
         TypeDetails srcDetails,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        CompiledMapStore compiledMaps)
     {
         if (propMap.Ignored) return null;
         if (propMap.UseDestinationValue) return null;
@@ -1839,7 +1839,7 @@ internal static class ExpressionBuilder
         PropertyInfo destProp,
         TypeDetails srcDetails,
         Dictionary<TypePair, TypeMap> allTypeMaps,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        CompiledMapStore compiledMaps)
     {
         srcDetails.ReadableByName.TryGetValue(destProp.Name, out var srcProp);
 
@@ -1873,7 +1873,7 @@ internal static class ExpressionBuilder
         PropertyInfo srcProp,
         PropertyInfo destProp,
         PropertyMap? propMap,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        CompiledMapStore compiledMaps)
     {
         var getter = GetOrBuildGetter(srcProp);
         var setter = GetOrBuildSetter(destProp);
@@ -1951,7 +1951,7 @@ internal static class ExpressionBuilder
                         var srcVal = getter(src);
                         if (srcVal == null) return;
 
-                        if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                        if (capturedMaps.TryGetOrCompile(typePair, out var nestedDel))
                         {
                             setter(dest, nestedDel(srcVal, null, ctx));
                             return;
@@ -1970,7 +1970,7 @@ internal static class ExpressionBuilder
                     var srcVal = getter(src);
                     if (srcVal == null) { if (hasNullSub) setter(dest, nullSub); return; }
 
-                    if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                    if (capturedMaps.TryGetOrCompile(typePair, out var nestedDel))
                     {
                         setter(dest, nestedDel(srcVal, null, ctx));
                         return;
@@ -2007,7 +2007,7 @@ internal static class ExpressionBuilder
                     var srcVal = getter(src);
                     if (srcVal == null) return;
 
-                    if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                    if (capturedMaps.TryGetOrCompile(typePair, out var nestedDel))
                     {
                         setter(dest, nestedDel(srcVal, null, ctx));
                         return;
@@ -2030,7 +2030,7 @@ internal static class ExpressionBuilder
                     return;
                 }
 
-                if (capturedMaps.TryGetValue(typePair, out var nestedDel))
+                if (capturedMaps.TryGetOrCompile(typePair, out var nestedDel))
                 {
                     setter(dest, nestedDel(srcVal, null, ctx));
                     return;
@@ -2062,7 +2062,7 @@ internal static class ExpressionBuilder
     private static Action<object, object, ResolutionContext>? TryBuildFlattenedAction(
         PropertyInfo destProp,
         TypeDetails srcDetails,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps)
+        CompiledMapStore compiledMaps)
     {
         var chain = TryGetFlattenedPropertyChain(destProp.Name, destProp.PropertyType, srcDetails);
         if (chain == null || chain.Count < 2) return null;
@@ -2094,7 +2094,7 @@ internal static class ExpressionBuilder
             {
                 setter(dest, current);
             }
-            else if (capturedMaps.TryGetValue(new TypePair(leafType, destType), out var nestedDel))
+            else if (capturedMaps.TryGetOrCompile(new TypePair(leafType, destType), out var nestedDel))
             {
                 setter(dest, nestedDel(current!, null, ctx));
             }
@@ -2147,7 +2147,7 @@ internal static class ExpressionBuilder
         Type srcType,
         Type destType,
         bool noGuards,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         Func<object, bool>? condition,
         Func<object, object, bool>? fullCondition,
         Func<object, bool>? preCondition,
@@ -2195,10 +2195,10 @@ internal static class ExpressionBuilder
         Type destValType,
         Type destDictType,
         TypePair valPair,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         ResolutionContext ctx)
     {
-        compiledMaps.TryGetValue(valPair, out var valMapper);
+        compiledMaps.TryGetOrCompile(valPair, out var valMapper);
         var dest = (IDictionary)Activator.CreateInstance(destDictType)!;
         foreach (DictionaryEntry entry in (IDictionary)srcDict)
         {
@@ -2221,10 +2221,10 @@ internal static class ExpressionBuilder
         Type srcElemType,
         Type destElemType,
         TypePair elementTypePair,
-        ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> compiledMaps,
+        CompiledMapStore compiledMaps,
         ResolutionContext ctx)
     {
-        compiledMaps.TryGetValue(elementTypePair, out var elemMapper);
+        compiledMaps.TryGetOrCompile(elementTypePair, out var elemMapper);
 
         int count = source is ICollection col ? col.Count : -1;
 

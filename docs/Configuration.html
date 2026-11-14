@@ -236,14 +236,14 @@ builder.Services.AddEggMapper(
         </tbody>
       </table></div>
 
-      <p>All mapping operations are thread-safe after construction. The compiled delegate cache is immutable and shared across all mapper instances.</p>
+      <p>All mapping operations are thread-safe after construction. Type maps compile on first use under a lock and are published as an immutable snapshot shared across all mapper instances; call <code>CompileMappings()</code> to compile them all up front.</p>
 
       <hr>
 
       <h2>Common Pitfalls</h2>
 
       <ul>
-        <li><strong>Constructing <code>MapperConfiguration</code> per request</strong> — This recompiles all expression trees every time. Always keep it as a singleton.</li>
+        <li><strong>Constructing <code>MapperConfiguration</code> per request</strong> — Every new instance recompiles each map it uses. Always keep it as a singleton.</li>
         <li><strong>Adding maps after construction</strong> — Not supported. All maps must be registered in the constructor callback or in profiles.</li>
         <li><strong>Not calling <code>AssertConfigurationIsValid()</code></strong> — Missing maps or typos in property names silently leave destination properties at their default values. Always validate in tests.</li>
         <li><strong>Registering the same type pair twice</strong> — The second <code>CreateMap&lt;S,D&gt;()</code> overwrites the first. This is usually a mistake. Keep each type pair in a single profile.</li>

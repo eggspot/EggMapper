@@ -80,7 +80,7 @@ var mapper = config.CreateMapper();
 // 3. Map
 var dto = mapper.Map&lt;ProductDto&gt;(product);</code></pre>
 
-      <div class="note"><p>The <code>MapperConfiguration</code> constructor compiles all registered type maps into cached delegates. Create it once and keep it as a singleton.</p></div>
+      <div class="note"><p><code>MapperConfiguration</code> registers your maps and compiles each one into a cached delegate on its first use. Create it once and keep it as a singleton. Call <code>config.CompileMappings()</code> at startup or in a test to compile everything up front and surface mapping errors early.</p></div>
 
       <h2>Dependency Injection (ASP.NET Core)</h2>
 
@@ -201,7 +201,7 @@ await db.SaveChangesAsync();</code></pre>
 
       <h2>Common Pitfalls</h2>
 
-      <div class="warning"><p>Do not create <code>MapperConfiguration</code> per-request. It compiles expression trees during construction, which is expensive. Always keep it as a singleton.</p></div>
+      <div class="warning"><p>Do not create <code>MapperConfiguration</code> per-request. Each instance compiles its own expression trees (on first use of each type pair), which is expensive to repeat. Always keep it as a singleton.</p></div>
 
       <ul>
         <li><strong>Forgetting nested type maps</strong> — If <code>CustomerDto</code> has an <code>AddressDto</code> property, you need both <code>CreateMap&lt;Customer, CustomerDto&gt;()</code> and <code>CreateMap&lt;Address, AddressDto&gt;()</code>.</li>
