@@ -61,7 +61,7 @@
       <p>EggMapper is the <strong>fastest .NET runtime object-to-object mapper</strong>, achieving near-manual mapping speed through these techniques:</p>
 
       <ol>
-        <li><strong>Compile once, run many times</strong> — <code>MapperConfiguration</code> compiles expression-tree delegates at construction time. Every subsequent <code>Map()</code> call is a direct delegate invocation with no reflection.</li>
+        <li><strong>Compile once, run many times</strong> — <code>MapperConfiguration</code> compiles each type pair's expression-tree delegate on its first use (or all of them via <code>CompileMappings()</code>), so startup costs only the maps you actually use. Every subsequent <code>Map()</code> call is a direct delegate invocation with no reflection.</li>
         <li><strong>Context-free typed delegates</strong> — For flat and nested maps, EggMapper compiles <code>Func&lt;TSource, TDestination&gt;</code> delegates with zero boxing. Nested object mappings are <strong>inlined directly</strong> into the parent expression tree.</li>
         <li><strong>Static generic caching</strong> — <code>FastCache&lt;TSource, TDestination&gt;</code> eliminates dictionary lookups after the first call for each type pair.</li>
         <li><strong>Inlined collection loops</strong> — <code>MapList&lt;&gt;()</code> uses compiled <code>Func&lt;IList&lt;TSource&gt;, List&lt;TDestination&gt;&gt;</code> delegates where the entire loop + element mapping is a single expression tree.</li>

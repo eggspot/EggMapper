@@ -498,7 +498,7 @@ var existing = db.Orders.Find(id)!;
 mapper.Patch(request, existing);   // only non-null fields overwrite existing
 db.SaveChanges();</code></pre>
 
-      <p>No extra configuration needed — every type map automatically gets a patch delegate compiled at startup.</p>
+      <p>No extra configuration needed — every type map automatically gets a patch delegate, compiled on its first <code>Patch</code> call.</p>
 
       <h3>Real-world example: PATCH endpoint</h3>
 

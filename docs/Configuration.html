@@ -236,7 +236,7 @@ builder.Services.AddEggMapper(
         </tbody>
       </table></div>
 
-      <p>All mapping operations are thread-safe after construction. The compiled delegate cache is immutable and shared across all mapper instances.</p>
+      <p>All mapping operations are thread-safe after construction. Type maps compile on first use under a lock and are published as an immutable snapshot shared across all mapper instances; call <code>CompileMappings()</code> to compile them all up front.</p>
 
       <hr>
 
