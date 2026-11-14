@@ -5,7 +5,7 @@ namespace EggMapper.ClassMapper
     internal static class Diagnostics
     {
         private const string Category = "EggMapper";
-        private const string HelpBase = "https://github.com/eggspot/EggMapper/blob/main/docs/diagnostics/";
+        private const string HelpBase = "https://eggspot.github.io/EggMapper/diagnostics/";
 
         public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new DiagnosticDescriptor(
             id: "EGG3001",
@@ -15,7 +15,7 @@ namespace EggMapper.ClassMapper
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
             description: "Add a matching source property, a custom converter method, or annotate with [MapIgnore] to silence this warning.",
-            helpLinkUri: HelpBase + "EGG3001.md");
+            helpLinkUri: HelpBase + "EGG3001.html");
 
         public static readonly DiagnosticDescriptor NoMappingMethodsDeclared = new DiagnosticDescriptor(
             id: "EGG3002",
@@ -25,7 +25,7 @@ namespace EggMapper.ClassMapper
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
             description: "Declare one or more partial methods, for example: public partial OrderDto Map(Order source).",
-            helpLinkUri: HelpBase + "EGG3002.md");
+            helpLinkUri: HelpBase + "EGG3002.html");
 
         public static readonly DiagnosticDescriptor EnumUnderlyingTypeMismatch = new DiagnosticDescriptor(
             id: "EGG3003",
@@ -34,6 +34,6 @@ namespace EggMapper.ClassMapper
             category: Category,
             defaultSeverity: DiagnosticSeverity.Info,
             isEnabledByDefault: true,
-            helpLinkUri: HelpBase + "EGG3003.md");
+            helpLinkUri: HelpBase + "EGG3003.html");
     }
 }

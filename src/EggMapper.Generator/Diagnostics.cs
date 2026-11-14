@@ -5,6 +5,7 @@ namespace EggMapper.Generator
     internal static class Diagnostics
     {
         private const string Category = "EggMapper";
+        private const string HelpBase = "https://eggspot.github.io/EggMapper/diagnostics/";
 
         public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new DiagnosticDescriptor(
             id: "EGG2001",
@@ -15,7 +16,8 @@ namespace EggMapper.Generator
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true,
             description: "Every writable destination property must have a corresponding source property, " +
-                         "a [MapProperty] redirect, or must be silenced with [MapIgnore] on the source side.");
+                         "a [MapProperty] redirect, or must be silenced with [MapIgnore] on the source side.",
+            helpLinkUri: HelpBase + "EGG2001.html");
 
         public static readonly DiagnosticDescriptor TypeMismatch = new DiagnosticDescriptor(
             id: "EGG2002",
@@ -26,6 +28,7 @@ namespace EggMapper.Generator
             defaultSeverity: DiagnosticSeverity.Warning,
             isEnabledByDefault: true,
             description: "The source and destination property types differ. EggMapper.Generator emits an explicit " +
-                         "cast, which may fail at runtime if the types are incompatible.");
+                         "cast, which may fail at runtime if the types are incompatible.",
+            helpLinkUri: HelpBase + "EGG2002.html");
     }
 }
