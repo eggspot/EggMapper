@@ -51,6 +51,23 @@ public class GuidanceBehaviorTests
         person.Nickname.Should().Be("Ace");
     }
 
+    public class AddressPatch { public Address? Address { get; set; } }
+
+    [Fact]
+    public void Patch_NestedObjectOfSameType_AssignsSourceInstance()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<AddressPatch, Person>()
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.FirstName, o => o.Ignore())
+            .ForMember(d => d.Nickname, o => o.Ignore())).CreateMapper();
+        var person = new Person();
+        var patch = new AddressPatch { Address = new Address { City = "Hanoi" } };
+
+        mapper.Patch(patch, person);
+
+        person.Address.Should().BeSameAs(patch.Address);
+    }
+
     [Fact]
     public void ForPath_NestedDestinationPath_Throws()
     {

@@ -76,18 +76,20 @@ PersonDto fast = typed.Map(person);
 
 `Patch` needs a `CreateMap` and copies same-name members (and `MapFrom("Name")`) whose source value is not null; give
 the patch type nullable members, because non-nullable value types are always copied. It skips expression `MapFrom`,
-`Condition`, `NullSubstitute`, resolvers, flattened members, nested objects and collections.
+`Condition`, `NullSubstitute`, resolvers, flattened members, collections and nested objects of a different type.
+A non-null nested object of the same type is assigned as is (the destination then holds the patch's instance).
 
 `Map<T, T>` works without a `CreateMap` for classes with a parameterless constructor (records and other
 constructor-only types need `CreateMap<T, T>()`). The copy is shallow: nested objects keep their references, and
-collections become new lists holding the same elements.
+collections become new collections holding the same elements.
 
 ## Member options
 
 `ForMember(d => d.X, o => ...)`: `MapFrom(s => expr)`, `MapFrom("SourceName")`, `Ignore()`, `Condition(s => bool)`,
 `PreCondition(s => bool)`, `NullSubstitute(value)`, `UseValue(value)`, `UseDestinationValue()`,
 `MapFrom<TResolver, TSourceMember>(s => s.Member)` (resolver below). `ForPath(d => d.X, ...)` accepts only a top-level
-destination member; nested paths (`d => d.A.B`) throw. `ForAllOtherMembers(o => o.Ignore())` ignores everything not
+destination member; nested paths (`d => d.A.B`) are not supported (they throw, or set a
+top-level member with the same name). `ForAllOtherMembers(o => o.Ignore())` ignores everything not
 configured.
 
 ```csharp compile
@@ -202,7 +204,7 @@ public partial class OrderMapper
 | `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
 | `Circular IncludeBase() reference` | remove the cycle between `IncludeBase` calls |
 | `IMemberValueResolver requires DI` | map with the `IMapper` from `services.AddEggMapper(...)`, not `config.CreateMapper()` |
-| `Property 'X' not found or not writable on 'D'` | `ForPath` got a nested path; configure the nested map instead |
+| `Property 'X' not found or not writable on 'D'` | `ForPath` got a nested path (configure the nested map instead) or a read-only member |
 
 ## Performance
 

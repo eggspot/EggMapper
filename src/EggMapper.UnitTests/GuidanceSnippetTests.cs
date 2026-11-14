@@ -106,11 +106,10 @@ public class GuidanceSnippetTests
     public void GuidanceCSharpFences_AreTaggedCompileOrNeedsGenerator(string file)
     {
         var text = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Guidance", file));
-        var untagged = Regex.Matches(text, @"^```(csharp|cs|c#)([^\r\n]*)", RegexOptions.Multiline | RegexOptions.IgnoreCase)
+        var untagged = Regex.Matches(text, @"^```(csharp|cs|c#)(?![\w#])[^\r\n]*", RegexOptions.Multiline | RegexOptions.IgnoreCase)
             .Cast<Match>()
-            .Select(m => m.Value)
-            .Where(fence => !fence.EndsWith(" compile", StringComparison.Ordinal)
-                            && !fence.EndsWith(" needs-generator", StringComparison.Ordinal))
+            .Select(m => m.Value.TrimEnd())
+            .Where(fence => fence != "```csharp compile" && fence != "```csharp needs-generator")
             .ToList();
 
         untagged.Should().BeEmpty($"every C# fence in {file} is either compiled (```csharp compile) or marked ```csharp needs-generator");
