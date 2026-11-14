@@ -52,7 +52,8 @@ internal static class ProjectionBuilder
                     var nestedKey = new TypePair(srcProp.PropertyType, destProp.PropertyType);
 
                     if (srcProp.PropertyType != destProp.PropertyType &&
-                        config.TypeMaps.ContainsKey(nestedKey))
+                        config.TypeMaps.ContainsKey(nestedKey) &&
+                        !EnumConversion.IsEnumPair(srcProp.PropertyType, destProp.PropertyType))
                     {
                         valueExpr = BuildExpression(srcProp.PropertyType, destProp.PropertyType,
                             srcAccess, config);

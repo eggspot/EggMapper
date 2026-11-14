@@ -64,15 +64,26 @@ public sealed class MapperConfiguration
     private readonly ConcurrentDictionary<TypePair, OpenGenericEntry?> _runtimeEnumPairMaps = new();
 
     internal bool TryGetOrCompileEnumPairMap(TypePair key,
-        out Func<object, object?, ResolutionContext, object> boxedMap, out Delegate ctxFreeMap)
+        out Func<object, object?, ResolutionContext, object> boxedMap, out Delegate? ctxFreeMap)
     {
         var entry = _runtimeEnumPairMaps.GetOrAdd(key, k =>
             TryBuildEnumPairMap(k.SourceType, k.DestinationType, out var boxed, out var ctxFree)
                 ? new OpenGenericEntry(boxed, ctxFree)
-                : null);
+                : TryUseRegisteredEnumPairMap(k));
         boxedMap = entry?.Boxed!;
-        ctxFreeMap = entry?.CtxFree!;
+        ctxFreeMap = entry?.CtxFree;
         return entry != null;
+    }
+
+    private OpenGenericEntry? TryUseRegisteredEnumPairMap(TypePair key)
+    {
+        if (!Execution.EnumConversion.RequiresRegisteredMap(key.SourceType, key.DestinationType, _globalConverters))
+            return null;
+        var sourceEnum = Nullable.GetUnderlyingType(key.SourceType) ?? key.SourceType;
+        var destinationEnum = Nullable.GetUnderlyingType(key.DestinationType) ?? key.DestinationType;
+        return TryGetOrCompileMap(new TypePair(sourceEnum, destinationEnum), out var registered)
+            ? new OpenGenericEntry(registered, null)
+            : null;
     }
 
     private bool TryBuildEnumPairMap(Type sourceType, Type destinationType,
@@ -423,7 +434,7 @@ public sealed class MapperConfiguration
     {
         if (_runtimePatchMaps.TryGetValue(key, out var cached)) return cached;
         if (!_typeMaps.TryGetValue(key, out var typeMap)) return null;
-        var del = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap);
+        var del = Execution.ExpressionBuilder.TryBuildPatchDelegate(typeMap, _globalConverters);
         if (del == null) return null;
         return _runtimePatchMaps.GetOrAdd(key, del);
     }

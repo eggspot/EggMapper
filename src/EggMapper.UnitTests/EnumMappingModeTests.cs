@@ -56,6 +56,39 @@ public class EnumMappingModeTests
         public EmSource Status { get; set; }
     }
 
+    public enum EmSignedSource : sbyte { Negative = -5, Zero = 0 }
+    public enum EmSignedDest : sbyte { Zero = 1, Negative = 2 }
+
+    public class EmInner
+    {
+        public EmSource Status { get; set; }
+    }
+
+    public class EmOuter
+    {
+        public EmInner Inner { get; set; } = new();
+    }
+
+    public class EmFlatDto
+    {
+        public EmDest InnerStatus { get; set; }
+    }
+
+    public class EmMaybeDto
+    {
+        public EmDest? Status { get; set; }
+    }
+
+    public class EmDictionaryHolder
+    {
+        public Dictionary<string, EmSource> Values { get; set; } = new();
+    }
+
+    public class EmDictionaryHolderDto
+    {
+        public Dictionary<string, EmDest> Values { get; set; } = new();
+    }
+
     private static IMapper Mapper(Action<IMapperConfigurationExpression> configure) =>
         new MapperConfiguration(configure).CreateMapper();
 
@@ -276,6 +309,124 @@ public class EnumMappingModeTests
         });
 
         mapper.Map<EmRecordSource, EmRecordDto>(new EmRecordSource { Status = EmSource.Active }).Status.Should().Be(EmDest.Active);
+    }
+
+    [Fact]
+    public void Map_ListMemberWithPerPairCreateMap_MapsEveryElementByName()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.CreateMap<EmSource, EmDest>().ConvertUsingEnumMapping(o => o.MapByName());
+            cfg.CreateMap<EmHolder, EmHolderDto>();
+        });
+
+        mapper.Map<EmHolder, EmHolderDto>(new EmHolder { History = { EmSource.Pending, EmSource.Closed } })
+            .History.Should().Equal(EmDest.Pending, EmDest.Closed);
+    }
+
+    [Fact]
+    public void MapList_EnumPairWithPerPairOptions_MapsEachValue()
+    {
+        var mapper = Mapper(cfg => cfg.CreateMap<EmSource, EmDest>().ConvertUsingEnumMapping(o => o.MapByName()));
+
+        mapper.MapList<EmSource, EmDest>(new[] { EmSource.Pending, EmSource.Active }).Should().Equal(EmDest.Pending, EmDest.Active);
+    }
+
+    [Fact]
+    public void Map_FlattenedEnumMember_UsesByName()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.EnumMapping = EnumMappingMode.ByName;
+            cfg.CreateMap<EmOuter, EmFlatDto>();
+        });
+
+        mapper.Map<EmOuter, EmFlatDto>(new EmOuter { Inner = { Status = EmSource.Closed } }).InnerStatus.Should().Be(EmDest.Closed);
+    }
+
+    [Fact]
+    public void Patch_EnumMember_UsesByName()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.EnumMapping = EnumMappingMode.ByName;
+            cfg.CreateMap<EmHolder, EmHolderDto>();
+        });
+        var destination = new EmHolderDto();
+
+        mapper.Patch(new EmHolder { Status = EmSource.Closed }, destination);
+
+        destination.Status.Should().Be(EmDest.Closed);
+    }
+
+    [Fact]
+    public void Map_GlobalTypeConverter_AppliesToNullableListDictionaryAndTopLevel()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.EnumMapping = EnumMappingMode.ByName;
+            cfg.AddTypeConverter<EmSource, EmDest>(s => EmDest.Deleted);
+            cfg.CreateMap<EmHolder, EmHolderDto>();
+            cfg.CreateMap<EmDictionaryHolder, EmDictionaryHolderDto>();
+        });
+
+        var holder = mapper.Map<EmHolder, EmHolderDto>(new EmHolder { Maybe = EmSource.Active, History = { EmSource.Active } });
+        holder.Maybe.Should().Be(EmDest.Deleted);
+        holder.History.Should().Equal(EmDest.Deleted);
+        mapper.Map<EmDictionaryHolder, EmDictionaryHolderDto>(new EmDictionaryHolder { Values = { ["a"] = EmSource.Active } })
+            .Values["a"].Should().Be(EmDest.Deleted);
+        mapper.Map<EmSource, EmDest>(EmSource.Active).Should().Be(EmDest.Deleted);
+    }
+
+    [Fact]
+    public void Map_ConvertUsingOnPair_NullableDestinationMember_UsesConverter()
+    {
+        var mapper = Mapper(cfg =>
+        {
+            cfg.CreateMap<EmSource, EmDest>().ConvertUsing(s => EmDest.Deleted);
+            cfg.CreateMap<EmRecordSource, EmMaybeDto>();
+        });
+
+        mapper.Map<EmRecordSource, EmMaybeDto>(new EmRecordSource { Status = EmSource.Active }).Status.Should().Be(EmDest.Deleted);
+    }
+
+    [Fact]
+    public void Map_NegativeSignedUnderlying_ByName()
+    {
+        var mapper = Mapper(cfg => cfg.EnumMapping = EnumMappingMode.ByName);
+
+        mapper.Map<EmSignedSource, EmSignedDest>(EmSignedSource.Negative).Should().Be(EmSignedDest.Negative);
+    }
+
+    [Fact]
+    public void Map_MapValueForUndefinedSourceValue_UsesOverride()
+    {
+        var mapper = Mapper(cfg => cfg.CreateMap<EmSource, EmDest>()
+            .ConvertUsingEnumMapping(o => o.MapValue((EmSource)99, EmDest.Deleted)));
+
+        mapper.Map<EmSource, EmDest>((EmSource)99).Should().Be(EmDest.Deleted);
+    }
+
+    [Fact]
+    public void ProjectTo_EnumPairWithCreateMap_MapsByValue()
+    {
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<EmSource, EmDest>().ConvertUsingEnumMapping(o => o.MapByName());
+            cfg.CreateMap<EmHolder, EmHolderDto>();
+        });
+
+        var projection = config.BuildProjection<EmHolder, EmHolderDto>().Compile();
+
+        projection(new EmHolder { Status = EmSource.Closed }).Status.Should().Be((EmDest)2);
+    }
+
+    [Fact]
+    public void Map_ListOfEnumsToListWithoutCreateMap_Maps()
+    {
+        var mapper = Mapper(cfg => cfg.EnumMapping = EnumMappingMode.ByName);
+
+        mapper.Map<List<EmDest>>(new List<EmSource> { EmSource.Closed, EmSource.Pending }).Should().Equal(EmDest.Closed, EmDest.Pending);
     }
 
     [Fact]

@@ -23,18 +23,32 @@ internal static class EnumConversion
             return null;
 
         var mapping = registry?.GetEnumPairMapping(pair) ?? EnumPairMapping.For(EnumMappingMode.ByValue);
+        Delegate? converter = null;
+        registry?.TryGetValue(pair, out converter);
+
+        Expression Convert(Expression value) => converter != null
+            ? Expression.Invoke(Expression.Constant(converter, typeof(Func<,>).MakeGenericType(sourceEnum, destinationEnum)), value)
+            : BuildCore(value, sourceEnum, destinationEnum, mapping);
 
         if (sourceType != sourceEnum)
         {
-            var converted = BuildCore(Expression.Property(source, "Value"), sourceEnum, destinationEnum, mapping);
+            var converted = Convert(Expression.Property(source, "Value"));
             var hasValue = Expression.Property(source, "HasValue");
             return destinationType == destinationEnum
                 ? Expression.Condition(hasValue, converted, Expression.Default(destinationType))
                 : Expression.Condition(hasValue, Expression.Convert(converted, destinationType), Expression.Constant(null, destinationType));
         }
 
-        var core = BuildCore(source, sourceEnum, destinationEnum, mapping);
+        var core = Convert(source);
         return destinationType == destinationEnum ? core : Expression.Convert(core, destinationType);
+    }
+
+    public static bool RequiresRegisteredMap(Type sourceType, Type destinationType, TypeConversionRegistry? registry)
+    {
+        if (registry == null || !IsEnumPair(sourceType, destinationType)) return false;
+        var sourceEnum = Nullable.GetUnderlyingType(sourceType) ?? sourceType;
+        var destinationEnum = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
+        return registry.HasConvertUsing(new TypePair(sourceEnum, destinationEnum));
     }
 
     private static Expression BuildCore(Expression value, Type sourceEnum, Type destinationEnum, EnumPairMapping mapping)
@@ -82,6 +96,12 @@ internal static class EnumConversion
             targets[sourceValue] = target;
             if (Widen(sourceValue, typeof(decimal)) is var a && Widen(target, typeof(decimal)) is var b && !Equals(a, b))
                 identity = false;
+        }
+        foreach (var explicitValue in mapping.Values)
+        {
+            var underlying = System.Convert.ChangeType(explicitValue.Key, Enum.GetUnderlyingType(sourceEnum));
+            if (seenValues.Add(underlying))
+                targets[explicitValue.Key] = explicitValue.Value;
         }
         return identity && mapping.Values.Count == 0 ? null : targets;
     }
