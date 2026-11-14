@@ -36,7 +36,7 @@ public interface IMappingExpression<TSource, TDestination>
     IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, TDestination> ctor);
     IMappingExpression<TSource, TDestination> ConstructUsing(Func<TSource, ResolutionContext, TDestination> ctor);
 
-    /// <summary>Runs <paramref name="beforeFunction"/> on the source and the new destination before members are mapped.</summary>
+    /// <summary>Runs <paramref name="beforeFunction"/> on the source and the destination before members are mapped.</summary>
     IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination> beforeFunction);
     IMappingExpression<TSource, TDestination> BeforeMap(Action<TSource, TDestination, ResolutionContext> beforeFunction);
 

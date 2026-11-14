@@ -15,7 +15,10 @@ public interface IMapper
     /// </summary>
     TDestination Map<TDestination>(object? source);
 
-    /// <summary>Maps <paramref name="source"/> to a new <typeparamref name="TDestination"/>. The fastest overload.</summary>
+    /// <summary>
+    /// Maps <paramref name="source"/> to a new <typeparamref name="TDestination"/>. The preferred overload; on hot paths
+    /// inject <c>IMapper&lt;TSource, TDestination&gt;</c> instead.
+    /// </summary>
     TDestination Map<TSource, TDestination>(TSource source);
 
     /// <summary>Maps <paramref name="source"/> onto the existing <paramref name="destination"/> and returns it.</summary>
