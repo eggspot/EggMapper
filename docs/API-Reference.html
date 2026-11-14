@@ -96,6 +96,7 @@ var config = new MapperConfiguration(cfg =&gt;
         </thead>
         <tbody>
           <tr><td><code>CreateMapper()</code></td><td><code>IMapper</code></td><td>Returns a mapper backed by the compiled cache</td></tr>
+          <tr><td><code>CreateMapper&lt;TSource, TDestination&gt;()</code></td><td><code>IMapper&lt;TSource, TDestination&gt;</code></td><td>Returns a typed mapper for one pair (fastest way to call a single map repeatedly)</td></tr>
           <tr><td><code>AssertConfigurationIsValid()</code></td><td><code>void</code></td><td>Throws if any destination property is unmapped</td></tr>
           <tr><td><code>CompileMappings()</code></td><td><code>void</code></td><td>Compiles every type map now instead of on first use; throws the compile error (or an <code>AggregateException</code> for several). Same name and meaning as AutoMapper's.</td></tr>
           <tr><td><code>BuildProjection&lt;TSrc, TDst&gt;()</code></td><td><code>Expression&lt;Func&lt;TSrc, TDst&gt;&gt;</code></td><td>Returns the raw projection expression for EF Core / LINQ</td></tr>
@@ -194,6 +195,25 @@ app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbCon
     await db.SaveChangesAsync();
     return Results.NoContent();
 });</code></pre>
+
+      <hr>
+
+      <h3><code>IMapper&lt;TSource, TDestination&gt;</code></h3>
+      <p>Maps one source type to one destination type. Registered as an open generic by <code>AddEggMapper</code> (transient) and created by <code>MapperConfiguration.CreateMapper&lt;TSource, TDestination&gt;()</code>. Its calls are ordinary interface calls, so they avoid the generic virtual dispatch of <code>IMapper</code>'s generic methods.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>Map(TSource source)</code></td><td><code>TDestination</code></td><td>Maps to a new destination</td></tr>
+          <tr><td><code>Map(TSource source, TDestination destination)</code></td><td><code>TDestination</code></td><td>Maps into an existing destination</td></tr>
+          <tr><td><code>MapList(IEnumerable&lt;TSource&gt; source)</code></td><td><code>List&lt;TDestination&gt;</code></td><td>Maps every element</td></tr>
+          <tr><td><code>Patch(TSource source, TDestination destination)</code></td><td><code>TDestination</code></td><td>Copies only non-null members</td></tr>
+        </tbody>
+      </table></div>
+<pre><code class="language-csharp">public class OrderService(IMapper&lt;Order, OrderDto&gt; orderMapper)
+{
+    public OrderDto Get(Order order) =&gt; orderMapper.Map(order);
+}</code></pre>
+      <p>If your code also defines its own <code>IMapper&lt;,&gt;</code> type, refer to this one as <code>EggMapper.IMapper&lt;,&gt;</code> where both namespaces are imported.</p>
 
       <hr>
 
@@ -504,7 +524,7 @@ var page = await dbContext.Orders
           <tr><th>Extension method</th><th>Description</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>AddEggMapper(params Assembly[])</code></td><td>Scan assemblies for <code>Profile</code> subclasses and register <code>IMapper</code> as singleton</td></tr>
+          <tr><td><code>AddEggMapper(params Assembly[])</code></td><td>Scan assemblies for <code>Profile</code> subclasses; registers <code>MapperConfiguration</code> as a singleton and <code>IMapper</code> / <code>IMapper&lt;TSource, TDestination&gt;</code> as transient</td></tr>
           <tr><td><code>AddEggMapper(Action&lt;IMapperConfigurationExpression&gt;)</code></td><td>Inline configuration without profiles</td></tr>
         </tbody>
       </table></div>

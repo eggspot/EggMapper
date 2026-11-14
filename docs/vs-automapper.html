@@ -171,7 +171,7 @@
         <tbody>
           <tr><td><code>ProjectTo&lt;TDest&gt;(config)</code></td><td><code>ProjectTo&lt;TSrc, TDest&gt;(config)</code></td><td>Explicit source type</td></tr>
           <tr><td><code>AddAutoMapper(assemblies)</code></td><td><code>AddEggMapper(assemblies)</code></td><td>Same behavior</td></tr>
-          <tr><td><code>IMapper</code> is scoped</td><td><code>IMapper</code> is singleton</td><td>Safe because config is immutable</td></tr>
+          <tr><td><code>IMapper</code> is scoped</td><td><code>IMapper</code> is transient (configuration is a singleton)</td><td>Each injection carries the current scope's <code>IServiceProvider</code>; the compiled configuration is shared</td></tr>
           <tr><td><code>CreateMap&lt;T,T&gt;()</code> required for clone</td><td>Auto-compiles without CreateMap</td><td>Just call <code>Map&lt;T,T&gt;(obj)</code></td></tr>
           <tr><td>No built-in Patch</td><td><code>mapper.Patch(source, dest)</code></td><td>Partial update</td></tr>
           <tr><td>No built-in MapList</td><td><code>mapper.MapList&lt;S,D&gt;(list)</code></td><td>Batch collection</td></tr>

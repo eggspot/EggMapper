@@ -80,7 +80,16 @@ builder.Services.AddEggMapper(typeof(MyProfile).Assembly);
 
 // In your service
 public class MyService(IMapper mapper) { ... }
+
+// Hot path mapping one pair: inject the typed mapper (plain interface call, no generic virtual dispatch)
+public class OrderService(IMapper<Order, OrderDto> orderMapper)
+{
+    public OrderDto Get(Order order) => orderMapper.Map(order);
+}
 ```
+
+Maps compile on first use. Call `config.CompileMappings()` (or `AssertConfigurationIsValid()`) at startup or in a
+test to catch mapping errors before the first request.
 
 ## Performance
 

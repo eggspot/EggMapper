@@ -58,6 +58,10 @@ public class MyController(IMapper mapper)
 }
 ```
 
+Hot paths can inject a typed mapper for one pair, `IMapper<TSource, TDestination>` (registered by `AddEggMapper`),
+and call `Map(source)`. Maps compile lazily on first use; call `config.CompileMappings()` to compile them all up front
+(same as AutoMapper).
+
 ## Migrating from AutoMapper
 
 1. Replace NuGet package: `AutoMapper` -> `EggMapper`
