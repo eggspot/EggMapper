@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using EggMapper.Internal;
 
 namespace EggMapper;
@@ -8,16 +9,34 @@ public sealed class MapperConfiguration
     private static int _globalGeneration;
     internal int Generation { get; }
 
-    private readonly ConcurrentDictionary<TypePair, Func<object, object?, ResolutionContext, object>> _compiledMaps = new();
+    private readonly Execution.CompiledMapStore _compiledMaps;
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
 
-    internal Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> FrozenMaps = null!;
+    private sealed class MapSnapshot(
+        Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> boxed,
+        Dictionary<TypePair, Delegate> ctxFree)
+    {
+        public readonly Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> Boxed = boxed;
+        public readonly Dictionary<TypePair, Delegate> CtxFree = ctxFree;
+    }
 
-    internal Dictionary<TypePair, Delegate> FrozenCtxFreeMaps = null!;
+    private volatile MapSnapshot _snapshot = new(
+        new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(),
+        new Dictionary<TypePair, Delegate>());
 
-    internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = null!;
+    private readonly object _compileLock = new();
+    private readonly HashSet<TypePair> _compiling = new();
+    private readonly Dictionary<TypePair, ExceptionDispatchInfo> _compileFailures = new();
+    private Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>? _pendingBoxed;
+    private Dictionary<TypePair, Delegate>? _pendingCtxFree;
 
-    internal Dictionary<TypePair, Delegate> FrozenPatchMaps = null!;
+    internal Dictionary<TypePair, Func<object, object?, ResolutionContext, object>> FrozenMaps => _snapshot.Boxed;
+
+    internal Dictionary<TypePair, Delegate> FrozenCtxFreeMaps => _snapshot.CtxFree;
+
+    internal Dictionary<TypePair, Delegate> FrozenCtxFreeListMaps = new(0);
+
+    internal Dictionary<TypePair, Delegate> FrozenPatchMaps = new(0);
 
     internal Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; private set; }
 
@@ -45,6 +64,7 @@ public sealed class MapperConfiguration
     public MapperConfiguration(Action<IMapperConfigurationExpression> configure)
     {
         Generation = System.Threading.Interlocked.Increment(ref _globalGeneration);
+        _compiledMaps = new Execution.CompiledMapStore(this);
         var expr = new MapperConfigurationExpression();
         configure(expr);
         ShouldMapProperty = expr.GetShouldMapProperty();
@@ -62,55 +82,182 @@ public sealed class MapperConfiguration
         ResolveIncludeAllDerived();
 
         ResolveIncludeBaseChains();
+    }
 
-        var orderedMaps = TopologicalOrder(_typeMaps).ToList();
-        var ctxFree = new Dictionary<TypePair, Delegate>(orderedMaps.Count);
+    /// <summary>
+    /// Compiles every registered type map now instead of on its first use. Type maps compile lazily by default;
+    /// call this at startup or in a test to surface mapping errors before the first <c>Map</c> call.
+    /// </summary>
+    /// <exception cref="AggregateException">More than one type map failed to compile.</exception>
+    public void CompileMappings()
+    {
+        var pending = new List<TypeMap>();
+        foreach (var typeMap in TopologicalOrder(_typeMaps))
+        {
+            if (!_snapshot.Boxed.ContainsKey(new TypePair(typeMap.SourceType, typeMap.DestinationType)))
+                pending.Add(typeMap);
+        }
 
-        var parallelResults =
-            new ConcurrentDictionary<TypePair, (Delegate CtxFree, Func<object, object?, ResolutionContext, object> Boxed)>();
-
-        Parallel.ForEach(orderedMaps, typeMap =>
+        var ctxFreeBuilds = new ConcurrentDictionary<TypePair, Delegate>();
+        Parallel.ForEach(pending, typeMap =>
         {
             if (typeMap.ConvertUsingFunc != null) return;
-            var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-            var ctxFreeWithDest = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(
-                typeMap, _typeMaps, _globalConverters);
-            if (ctxFreeWithDest != null)
+            try
             {
-                var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(
-                    typeMap.SourceType, typeMap.DestinationType, ctxFreeWithDest);
-                parallelResults[key] = (ctxFreeWithDest, boxed);
+                var ctxFree = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps, _globalConverters);
+                if (ctxFree != null)
+                    ctxFreeBuilds[new TypePair(typeMap.SourceType, typeMap.DestinationType)] = ctxFree;
+            }
+            catch (Exception ex) when (!ex.IsFatal())
+            {
             }
         });
 
-        foreach (var typeMap in orderedMaps)
+        lock (_compileLock)
         {
-            var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-
-            if (typeMap.ConvertUsingFunc != null)
+            var outermost = BeginCompileBatch();
+            try
             {
-                _compiledMaps[key] = typeMap.ConvertUsingFunc;
-                typeMap.MappingDelegate = typeMap.ConvertUsingFunc;
+                foreach (var built in ctxFreeBuilds)
+                {
+                    if (IsCompiledOrPending(built.Key)) continue;
+                    var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(
+                        built.Key.SourceType, built.Key.DestinationType, built.Value);
+                    AddCompiled(built.Key, boxed, built.Value);
+                }
             }
-            else if (parallelResults.TryGetValue(key, out var r))
+            finally
             {
-                ctxFree[key] = r.CtxFree;
-                _compiledMaps[key] = r.Boxed;
-                typeMap.MappingDelegate = r.Boxed;
-            }
-            else
-            {
-                var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
-                    typeMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
-                _compiledMaps[key] = compiled;
-                typeMap.MappingDelegate = compiled;
+                if (outermost) PublishCompileBatch();
             }
         }
 
-        FrozenMaps = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(_compiledMaps);
-        FrozenCtxFreeMaps = ctxFree;
-        FrozenCtxFreeListMaps = new Dictionary<TypePair, Delegate>(0);
-        FrozenPatchMaps       = new Dictionary<TypePair, Delegate>(0);
+        var failures = new List<Exception>();
+        foreach (var typeMap in pending)
+        {
+            try
+            {
+                TryGetOrCompile(new TypePair(typeMap.SourceType, typeMap.DestinationType));
+            }
+            catch (Exception ex) when (!ex.IsFatal())
+            {
+                failures.Add(ex);
+            }
+        }
+
+        if (failures.Count == 1)
+            ExceptionDispatchInfo.Capture(failures[0]).Throw();
+        if (failures.Count > 1)
+            throw new AggregateException(failures);
+    }
+
+    internal bool TryGetOrCompileMap(TypePair key, out Func<object, object?, ResolutionContext, object> map)
+    {
+        if (_snapshot.Boxed.TryGetValue(key, out map!))
+            return true;
+        if (!TryGetOrCompile(key))
+            return false;
+        return _snapshot.Boxed.TryGetValue(key, out map!);
+    }
+
+    internal bool TryGetOrCompileCtxFreeMap(TypePair key, out Delegate ctxFree)
+    {
+        var snapshot = _snapshot;
+        if (snapshot.CtxFree.TryGetValue(key, out ctxFree!))
+            return true;
+        if (snapshot.Boxed.ContainsKey(key) || !TryGetOrCompile(key))
+            return false;
+        return _snapshot.CtxFree.TryGetValue(key, out ctxFree!);
+    }
+
+    internal bool TryGetOrCompile(TypePair key)
+    {
+        if (_snapshot.Boxed.ContainsKey(key))
+            return true;
+        if (!_typeMaps.TryGetValue(key, out var typeMap))
+            return false;
+
+        lock (_compileLock)
+        {
+            if (IsCompiledOrPending(key))
+                return true;
+            if (_compileFailures.TryGetValue(key, out var failure))
+                failure.Throw();
+            if (!_compiling.Add(key))
+                return false;
+
+            var outermost = BeginCompileBatch();
+            try
+            {
+                CompileTypeMap(key, typeMap);
+            }
+            catch (Exception ex) when (!ex.IsFatal())
+            {
+                _compileFailures[key] = ExceptionDispatchInfo.Capture(ex);
+                throw;
+            }
+            finally
+            {
+                _compiling.Remove(key);
+                if (outermost) PublishCompileBatch();
+            }
+            return true;
+        }
+    }
+
+    private bool IsCompiledOrPending(TypePair key) =>
+        _snapshot.Boxed.ContainsKey(key) || (_pendingBoxed != null && _pendingBoxed.ContainsKey(key));
+
+    private bool BeginCompileBatch()
+    {
+        if (_pendingBoxed != null) return false;
+        _pendingBoxed = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>();
+        _pendingCtxFree = new Dictionary<TypePair, Delegate>();
+        return true;
+    }
+
+    private void PublishCompileBatch()
+    {
+        var pendingBoxed = _pendingBoxed!;
+        var pendingCtxFree = _pendingCtxFree!;
+        _pendingBoxed = null;
+        _pendingCtxFree = null;
+        if (pendingBoxed.Count == 0) return;
+
+        var current = _snapshot;
+        var boxed = new Dictionary<TypePair, Func<object, object?, ResolutionContext, object>>(current.Boxed);
+        foreach (var entry in pendingBoxed) boxed[entry.Key] = entry.Value;
+        var ctxFree = new Dictionary<TypePair, Delegate>(current.CtxFree);
+        foreach (var entry in pendingCtxFree) ctxFree[entry.Key] = entry.Value;
+        _snapshot = new MapSnapshot(boxed, ctxFree);
+    }
+
+    private void CompileTypeMap(TypePair key, TypeMap typeMap)
+    {
+        if (typeMap.ConvertUsingFunc != null)
+        {
+            AddCompiled(key, typeMap.ConvertUsingFunc, null);
+            return;
+        }
+
+        var ctxFree = Execution.ExpressionBuilder.TryBuildCtxFreeDelegate(typeMap, _typeMaps, _globalConverters);
+        if (ctxFree != null)
+        {
+            var boxed = Execution.ExpressionBuilder.CreateBoxedWrapper(typeMap.SourceType, typeMap.DestinationType, ctxFree);
+            AddCompiled(key, boxed, ctxFree);
+            return;
+        }
+
+        var compiled = Execution.ExpressionBuilder.BuildMappingDelegate(
+            typeMap, _typeMaps, _compiledMaps, DefaultMaxDepth, _globalConverters);
+        AddCompiled(key, compiled, null);
+    }
+
+    private void AddCompiled(TypePair key, Func<object, object?, ResolutionContext, object> boxed, Delegate? ctxFree)
+    {
+        _compiledMaps.Add(key, boxed);
+        _pendingBoxed![key] = boxed;
+        if (ctxFree != null) _pendingCtxFree![key] = ctxFree;
     }
 
     private static IEnumerable<TypeMap> TopologicalOrder(Dictionary<TypePair, TypeMap> typeMaps)
@@ -447,12 +594,6 @@ public sealed class MapperConfiguration
         return closedMap;
     }
 
-    internal Func<object, object?, ResolutionContext, object>? GetMapDelegate(TypePair typePair)
-    {
-        FrozenMaps.TryGetValue(typePair, out var del);
-        return del;
-    }
-
     internal Dictionary<TypePair, TypeMap> TypeMaps => _typeMaps;
 
     /// <summary>
@@ -477,6 +618,7 @@ public sealed class MapperConfiguration
         var key = new TypePair(typeof(TSource), typeof(TDestination));
         if (!_typeMaps.TryGetValue(key, out var typeMap))
             return null;
+        TryGetOrCompile(key);
         return typeMap.MappingExpression?.ToString();
     }
 

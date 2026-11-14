@@ -21,7 +21,6 @@ internal sealed class TypeMap
     public bool IncludeAllDerivedFlag { get; set; }
     public Func<object, object?, ResolutionContext, object>? ConvertUsingFunc { get; set; }
     public Type? OpenGenericConverterType { get; set; }
-    public Func<object, object?, ResolutionContext, object>? MappingDelegate { get; set; }
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
     public LambdaExpression? MappingExpression { get; set; }
 

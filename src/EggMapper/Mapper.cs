@@ -77,7 +77,7 @@ public sealed class Mapper : IMapper
         if (typeof(TSource).IsValueType)
         {
             var key = new TypePair(typeof(TSource), typeof(TDestination));
-            if (_config.FrozenMaps.TryGetValue(key, out var del))
+            if (_config.TryGetOrCompileMap(key, out var del))
             {
                 var ctx = GetContext();
                 return (TDestination)del(source!, null, ctx);
@@ -93,14 +93,14 @@ public sealed class Mapper : IMapper
 
         try
         {
-            if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+            if (_config.TryGetOrCompileCtxFreeMap(key, out var ctxFreeDel))
             {
                 var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
                 FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
                 return typed(source, default!);
             }
 
-            if (_config.FrozenMaps.TryGetValue(key, out var del))
+            if (_config.TryGetOrCompileMap(key, out var del))
             {
                 var ctx = GetContext();
                 return (TDestination)del(source!, null, ctx);
@@ -128,7 +128,7 @@ public sealed class Mapper : IMapper
             if (typeof(TSource).IsValueType && Nullable.GetUnderlyingType(typeof(TSource)) == null)
             {
                 var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(typeof(TSource)), typeof(TDestination));
-                if (_config.FrozenMaps.TryGetValue(nullableKey, out var nullableDel))
+                if (_config.TryGetOrCompileMap(nullableKey, out var nullableDel))
                 {
                     var ctx = GetContext();
                     return (TDestination)nullableDel(source!, null, ctx);
@@ -174,14 +174,14 @@ public sealed class Mapper : IMapper
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+        if (_config.TryGetOrCompileCtxFreeMap(key, out var ctxFreeDel))
         {
             var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
             FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typed, _generation);
             return typed(source, destination);
         }
 
-        if (_config.FrozenMaps.TryGetValue(key, out var del))
+        if (_config.TryGetOrCompileMap(key, out var del))
         {
             var ctx = GetContext();
             return (TDestination)del(source!, destination, ctx);
@@ -260,7 +260,7 @@ public sealed class Mapper : IMapper
     {
         if (source == null) return default!;
         var key = new TypePair(typeof(TSource), typeof(TDestination));
-        if (_config.FrozenMaps.TryGetValue(key, out var del))
+        if (_config.TryGetOrCompileMap(key, out var del))
         {
             var ctx = GetContext(items);
             return (TDestination)del(source, null, ctx);
@@ -374,14 +374,14 @@ public sealed class Mapper : IMapper
             }
         }
 
-        if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
+        if (_config.TryGetOrCompileCtxFreeMap(key, out var ctxFreeDel))
         {
             var typedDel = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
             FastCache<TSource, TDestination>.Entry = new FastCache<TSource, TDestination>.CacheEntry(typedDel, _generation);
             return MapListWithCtxFreeDelegate(typedDel, source);
         }
 
-        if (!_config.FrozenMaps.TryGetValue(key, out var del))
+        if (!_config.TryGetOrCompileMap(key, out var del))
         {
             if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out var openCtxFree))
             {
@@ -605,7 +605,7 @@ public sealed class Mapper : IMapper
     private bool TryGetConfiguredMap(TypePair key,
         out Func<object, object?, ResolutionContext, object> map, out bool needsContext)
     {
-        if (_config.FrozenMaps.TryGetValue(key, out var found))
+        if (_config.TryGetOrCompileMap(key, out var found))
         {
             map = found;
             needsContext = !_config.FrozenCtxFreeMaps.ContainsKey(key);
@@ -634,7 +634,7 @@ public sealed class Mapper : IMapper
     {
         var elemKey = new TypePair(srcElemType, destElemType);
 
-        if (_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
+        if (_config.TryGetOrCompileMap(elemKey, out var elemDel))
             return elemDel;
 
         if (_config.TryGetOrCompileOpenGenericMap(elemKey, out var openDel, out _))
@@ -643,7 +643,7 @@ public sealed class Mapper : IMapper
         for (var bt = srcElemType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
         {
             var bk = new TypePair(bt, destElemType);
-            if (_config.FrozenMaps.TryGetValue(bk, out elemDel))
+            if (_config.TryGetOrCompileMap(bk, out elemDel))
                 return elemDel;
             if (_config.TryGetOrCompileOpenGenericMap(bk, out openDel, out _))
                 return openDel;
@@ -652,7 +652,7 @@ public sealed class Mapper : IMapper
         foreach (var iface in srcElemType.GetInterfaces())
         {
             var ik = new TypePair(iface, destElemType);
-            if (_config.FrozenMaps.TryGetValue(ik, out elemDel))
+            if (_config.TryGetOrCompileMap(ik, out elemDel))
                 return elemDel;
             if (_config.TryGetOrCompileOpenGenericMap(ik, out openDel, out _))
                 return openDel;
@@ -661,7 +661,7 @@ public sealed class Mapper : IMapper
         if (srcElemType.IsValueType && Nullable.GetUnderlyingType(srcElemType) == null)
         {
             var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(srcElemType), destElemType);
-            if (_config.FrozenMaps.TryGetValue(nullableKey, out elemDel))
+            if (_config.TryGetOrCompileMap(nullableKey, out elemDel))
                 return elemDel;
             if (_config.TryGetOrCompileOpenGenericMap(nullableKey, out openDel, out _))
                 return openDel;
