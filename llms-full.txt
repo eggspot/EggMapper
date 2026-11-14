@@ -198,8 +198,8 @@ public partial class OrderMapper
 
 | Message | Fix |
 |---|---|
-| `No mapping configured for S -> D` | `cfg.CreateMap<S, D>()`; for a list, the element map |
-| `Unmapped destination member 'D.X' in map S -> D` | `.ForMember(d => d.X, o => o.MapFrom(s => ...))` or `o.Ignore()` |
+| `No mapping configured for S -> D` | `cfg.CreateMap<S, D>()`; for a list, the element map; the message names `.ReverseMap()` when `CreateMap<D, S>()` exists |
+| `Unmapped destination member 'D.X' in map S -> D` | paste the message's `Fix:` line (given for a confident match); else pick a source member from `Options:` or `o.Ignore()` |
 | `MappingValidationException` | a `Validate` rule failed; the message lists every failed rule |
 | `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
 | `Circular IncludeBase() reference` | remove the cycle between `IncludeBase` calls |

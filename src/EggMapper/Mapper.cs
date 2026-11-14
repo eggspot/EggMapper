@@ -164,9 +164,7 @@ public sealed class Mapper : IMapper
             throw new MappingException(typeof(TSource), typeof(TDestination), ex);
         }
 
-        throw new InvalidOperationException(
-            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
-            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
+        throw new InvalidOperationException(_config.DescribeMissingMap(typeof(TSource), typeof(TDestination)));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -235,9 +233,7 @@ public sealed class Mapper : IMapper
             return typed(source, destination);
         }
 
-        throw new InvalidOperationException(
-            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
-            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
+        throw new InvalidOperationException(_config.DescribeMissingMap(typeof(TSource), typeof(TDestination)));
     }
 
     public object Map(object source, Type sourceType, Type destinationType)
@@ -338,9 +334,7 @@ public sealed class Mapper : IMapper
             }
         }
 
-        throw new InvalidOperationException(
-            $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}. " +
-            $"Call CreateMap<{TypeNameHelper.Readable(typeof(TSource))}, {TypeNameHelper.Readable(typeof(TDestination))}>() in your mapper configuration.");
+        throw new InvalidOperationException(_config.DescribeMissingMap(typeof(TSource), typeof(TDestination)));
     }
 
     public List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source)
@@ -415,8 +409,7 @@ public sealed class Mapper : IMapper
             }
             else
             {
-                throw new InvalidOperationException(
-                    $"No mapping configured for {TypeNameHelper.Pair(typeof(TSource), typeof(TDestination))}.");
+                throw new InvalidOperationException(_config.DescribeMissingMap(typeof(TSource), typeof(TDestination)));
             }
         }
         var ctx = GetContext();
@@ -583,9 +576,7 @@ public sealed class Mapper : IMapper
         if (_config.TryGetOrCompileEnumPairMap(sameKey, out var enumBoxed, out _))
             return enumBoxed(source, destination, GetContext(items));
 
-        throw new InvalidOperationException(
-            $"No mapping configured for {TypeNameHelper.Pair(sourceType, destinationType)}. " +
-            $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
+        throw new InvalidOperationException(_config.DescribeMissingMap(sourceType, destinationType));
     }
 
     internal Func<TSource, TDestination, TDestination>? GetCachedCtxFreeMap<TSource, TDestination>()
