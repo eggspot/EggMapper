@@ -54,7 +54,7 @@ public sealed class Mapper : IMapper
                 new ObjectSourceCache<TDestination>.CacheEntry(sourceType, map, needsContext, _generation);
             return (TDestination)map(source, null, needsContext ? GetContext() : null!);
         }
-        return (TDestination)MapInternal(source, sourceType, destinationType, null);
+        return (TDestination)MapUnregisteredPair(source, sourceType, destinationType, null, null);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -455,6 +455,12 @@ public sealed class Mapper : IMapper
         if (TryFindMapDelegate(sourceType, destinationType, out var map, out _))
             return map(source, destination, GetContext(items));
 
+        return MapUnregisteredPair(source, sourceType, destinationType, destination, items);
+    }
+
+    private object MapUnregisteredPair(object source, Type sourceType, Type destinationType, object? destination,
+        IDictionary<string, object>? items)
+    {
         if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
         {
             var destElemType = ReflectionHelper.GetCollectionElementType(destinationType);
