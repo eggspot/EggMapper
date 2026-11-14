@@ -7,9 +7,6 @@ namespace EggMapper.ClassMapper
         private const string Category = "EggMapper";
         private const string HelpBase = "https://github.com/eggspot/EggMapper/blob/main/docs/diagnostics/";
 
-        /// <summary>
-        /// EGG3001: A writable destination property has no matching source member.
-        /// </summary>
         public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new DiagnosticDescriptor(
             id: "EGG3001",
             title: "Unmapped destination property",
@@ -20,9 +17,6 @@ namespace EggMapper.ClassMapper
             description: "Add a matching source property, a custom converter method, or annotate with [MapIgnore] to silence this warning.",
             helpLinkUri: HelpBase + "EGG3001.md");
 
-        /// <summary>
-        /// EGG3002: [EggMapper] class declares no partial mapping methods.
-        /// </summary>
         public static readonly DiagnosticDescriptor NoMappingMethodsDeclared = new DiagnosticDescriptor(
             id: "EGG3002",
             title: "No mapping methods declared",
@@ -33,9 +27,6 @@ namespace EggMapper.ClassMapper
             description: "Declare one or more partial methods, for example: public partial OrderDto Map(Order source).",
             helpLinkUri: HelpBase + "EGG3002.md");
 
-        /// <summary>
-        /// EGG3003: Enum-to-enum mapping where underlying types differ.
-        /// </summary>
         public static readonly DiagnosticDescriptor EnumUnderlyingTypeMismatch = new DiagnosticDescriptor(
             id: "EGG3003",
             title: "Enum underlying type mismatch",

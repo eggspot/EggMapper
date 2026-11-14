@@ -6,7 +6,6 @@ namespace EggMapper.Generator
     {
         private const string Category = "EggMapper";
 
-        /// <summary>EGG2001: A destination property has no matching source property and is not ignored.</summary>
         public static readonly DiagnosticDescriptor UnmappedDestinationProperty = new DiagnosticDescriptor(
             id: "EGG2001",
             title: "Unmapped destination property",
@@ -18,7 +17,6 @@ namespace EggMapper.Generator
             description: "Every writable destination property must have a corresponding source property, " +
                          "a [MapProperty] redirect, or must be silenced with [MapIgnore] on the source side.");
 
-        /// <summary>EGG2002: Source and destination property types are not directly assignable — a cast is emitted.</summary>
         public static readonly DiagnosticDescriptor TypeMismatch = new DiagnosticDescriptor(
             id: "EGG2002",
             title: "Implicit type conversion in mapping",

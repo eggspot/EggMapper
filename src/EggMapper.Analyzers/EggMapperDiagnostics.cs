@@ -7,9 +7,6 @@ namespace EggMapper.Analyzers
         private const string Category = "EggMapper";
         private const string HelpLinkBase = "https://github.com/eggspot/EggMapper/blob/main/docs/diagnostics/";
 
-        /// <summary>
-        /// EGG1002: MapperConfiguration constructed without a subsequent AssertConfigurationIsValid() call.
-        /// </summary>
         public static readonly DiagnosticDescriptor MissingAssertConfigurationIsValid = new DiagnosticDescriptor(
             id: "EGG1002",
             title: "MapperConfiguration missing AssertConfigurationIsValid",
@@ -24,9 +21,6 @@ namespace EggMapper.Analyzers
             helpLinkUri: HelpLinkBase + "EGG1002.md",
             customTags: new[] { WellKnownDiagnosticTags.CompilationEnd });
 
-        /// <summary>
-        /// EGG1003: Simple CreateMap with no customizations — suggest compile-time [MapTo].
-        /// </summary>
         public static readonly DiagnosticDescriptor SuggestCompileTimeMapping = new DiagnosticDescriptor(
             id: "EGG1003",
             title: "Consider compile-time mapping with [MapTo]",
