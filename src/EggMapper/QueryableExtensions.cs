@@ -12,6 +12,9 @@ public static class QueryableExtensions
     /// <paramref name="config"/>. The projection is built as a pure expression tree
     /// and passed directly to the LINQ provider — no runtime reflection in the query
     /// pipeline, and <c>.Compile()</c> is never called by EggMapper.
+    /// Both type arguments are required: <c>query.ProjectTo&lt;Product, ProductDto&gt;(config)</c>.
+    /// Translated: same-name and flattened members, nested registered maps, <c>MapFrom</c> expressions, enums by value.
+    /// Ignored: child collections, resolvers, <c>Condition</c>, <c>NullSubstitute</c> and nested <c>ConvertUsing</c>.
     /// </summary>
     public static IQueryable<TDestination> ProjectTo<TSource, TDestination>(
         this IQueryable<TSource> source, MapperConfiguration config)

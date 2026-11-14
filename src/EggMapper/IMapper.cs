@@ -2,10 +2,23 @@ using System.Collections.Generic;
 
 namespace EggMapper;
 
+/// <summary>
+/// Maps objects with the maps of one <c>MapperConfiguration</c>. Create it with <c>config.CreateMapper()</c> or
+/// inject it after <c>services.AddEggMapper(...)</c>. Throws <see cref="InvalidOperationException"/> naming the
+/// <c>CreateMap</c> to add when a pair has no map.
+/// </summary>
 public interface IMapper
 {
+    /// <summary>
+    /// Maps <paramref name="source"/> using its runtime type (AutoMapper style). Prefer
+    /// <c>Map&lt;TSource, TDestination&gt;</c> when the source type is known: it skips the type lookup.
+    /// </summary>
     TDestination Map<TDestination>(object? source);
+
+    /// <summary>Maps <paramref name="source"/> to a new <typeparamref name="TDestination"/>. The fastest overload.</summary>
     TDestination Map<TSource, TDestination>(TSource source);
+
+    /// <summary>Maps <paramref name="source"/> onto the existing <paramref name="destination"/> and returns it.</summary>
     TDestination Map<TSource, TDestination>(TSource source, TDestination destination);
 
     /// <summary>
@@ -33,9 +46,11 @@ public interface IMapper
     List<TDestination> MapList<TSource, TDestination>(IEnumerable<TSource> source);
 
     /// <summary>
-    /// Partial / patch mapping: copies only non-null (reference types) or HasValue
-    /// (Nullable&lt;T&gt;) source properties onto <paramref name="destination"/>.
-    /// Non-nullable value-type source properties are always assigned.
+    /// Copies the same-name members of <paramref name="source"/> whose value is not null onto
+    /// <paramref name="destination"/>; non-nullable value types are always copied, so give the patch type nullable
+    /// members. Needs a <c>CreateMap&lt;TSource, TDestination&gt;()</c>. Skips expression <c>MapFrom</c>,
+    /// <c>Condition</c>, <c>NullSubstitute</c>, resolvers, flattened members, collections and nested objects of a
+    /// different type.
     /// </summary>
     TDestination Patch<TSource, TDestination>(TSource source, TDestination destination);
 }
