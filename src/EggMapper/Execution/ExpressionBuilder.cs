@@ -310,8 +310,7 @@ internal static class ExpressionBuilder
         var srcElem = elemTypeMap.SourceType;
         var destElem = elemTypeMap.DestinationType;
 
-        if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
-        if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
+        if (!CanInlineChildMap(elemTypeMap)) return null;
         if (ReflectionHelper.IsCollectionType(srcElem) || ReflectionHelper.IsCollectionType(destElem)) return null;
         if (EnumConversion.IsEnumPair(srcElem, destElem)) return null;
 
@@ -683,6 +682,26 @@ internal static class ExpressionBuilder
             Expression.Condition(nullOrEmpty, Expression.Default(destType), parseExpr));
     }
 
+    private static bool CanInlineChildMap(TypeMap child)
+    {
+        if (child.ConvertUsingFunc != null) return false;
+        if (child.BeforeMapAction != null || child.BeforeMapCtxAction != null) return false;
+        if (child.AfterMapAction != null || child.AfterMapCtxAction != null) return false;
+        if (child.MaxDepth > 0 || child.BaseMapTypePair.HasValue) return false;
+        if (child.ValidationRules?.Count > 0) return false;
+        if (child.CustomConstructorWithCtx != null) return false;
+        if (child.ShouldMapProperty != null) return false;
+        for (int i = 0; i < child.PropertyMaps.Count; i++)
+        {
+            var pm = child.PropertyMaps[i];
+            if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
+                || pm.HasNullSubstitute || pm.UseDestinationValue
+                || pm.CustomResolver != null || pm.ContextResolver != null || pm.ValueResolverFactory != null)
+                return false;
+        }
+        return true;
+    }
+
     private static Expression? TryBuildCtxFreeNestedAssign(
         ParameterExpression srcParam,
         ParameterExpression dVar,
@@ -699,15 +718,7 @@ internal static class ExpressionBuilder
         if (!allTypeMaps.TryGetValue(typePair, out var childTypeMap))
             return null;
 
-        if (childTypeMap.BeforeMapAction != null || childTypeMap.AfterMapAction != null) return null;
-        if (childTypeMap.MaxDepth > 0 || childTypeMap.BaseMapTypePair.HasValue) return null;
-        for (int i = 0; i < childTypeMap.PropertyMaps.Count; i++)
-        {
-            var pm = childTypeMap.PropertyMaps[i];
-            if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-                || pm.HasNullSubstitute || pm.CustomResolver != null)
-                return null;
-        }
+        if (!CanInlineChildMap(childTypeMap)) return null;
 
         if (srcType == destType) return null;
 
@@ -839,15 +850,7 @@ internal static class ExpressionBuilder
         else if (allTypeMaps.TryGetValue(elemTypePair, out var elemTypeMap))
         {
             var elemCtor = TypeDetails.Get(destElem).ParameterlessCtor;
-            if (elemTypeMap.BeforeMapAction != null || elemTypeMap.AfterMapAction != null) return null;
-            if (elemTypeMap.MaxDepth > 0 || elemTypeMap.BaseMapTypePair.HasValue) return null;
-            for (int i = 0; i < elemTypeMap.PropertyMaps.Count; i++)
-            {
-                var pm = elemTypeMap.PropertyMaps[i];
-                if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-                    || pm.HasNullSubstitute || pm.CustomResolver != null)
-                    return null;
-            }
+            if (!CanInlineChildMap(elemTypeMap)) return null;
 
             var elemSrcParam = Expression.Parameter(srcElem, "es");
             var elemDestVar = Expression.Variable(destElem, "ed");
@@ -1307,17 +1310,7 @@ internal static class ExpressionBuilder
         if (!allTypeMaps.TryGetValue(typePair, out var childTypeMap))
             return null;
 
-        if (childTypeMap.BeforeMapAction != null) return null;
-        if (childTypeMap.AfterMapAction != null) return null;
-        if (childTypeMap.MaxDepth > 0) return null;
-        if (childTypeMap.BaseMapTypePair.HasValue) return null;
-        for (int i = 0; i < childTypeMap.PropertyMaps.Count; i++)
-        {
-            var pm = childTypeMap.PropertyMaps[i];
-            if (pm.Condition != null || pm.FullCondition != null || pm.PreCondition != null
-                || pm.HasNullSubstitute || pm.CustomResolver != null)
-                return null;
-        }
+        if (!CanInlineChildMap(childTypeMap)) return null;
 
         var childDestDetailsTn = TypeDetails.Get(destType);
         var childDestCtor = childDestDetailsTn.ParameterlessCtor;
