@@ -30,7 +30,7 @@ namespace EggMapper.Analyzers
             category: Category,
             defaultSeverity: DiagnosticSeverity.Info,
             isEnabledByDefault: true,
-            description: "EggMapper.Generator generates extension methods at build time, without reflection, " +
+            description: "EggMapper.Generator generates reflection-free extension methods " +
                          "from simple [MapTo] attribute declarations, catching mapping errors at build time.",
             helpLinkUri: HelpLinkBase + "EGG1003.html");
     }
