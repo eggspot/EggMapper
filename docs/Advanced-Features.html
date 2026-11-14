@@ -439,6 +439,25 @@ cfg.CreateMap&lt;Order, OrderDto&gt;();
       <pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;()
     .ForMember(d =&gt; d.StatusText, o =&gt; o.MapFrom(s =&gt; s.Status.ToString()));</code></pre>
 
+      <h3>Map enums by name</h3>
+
+      <p>When the two enum types declare the same names in a different order (or with different numbers), map them by name. <code>ByName</code> matches the exact name first, then the name ignoring case; a value whose name has no destination member falls back to its number. This is AutoMapper's default behavior.</p>
+
+      <pre><code class="language-csharp">// Every enum pair in this configuration
+var config = new MapperConfiguration(cfg =&gt;
+{
+    cfg.EnumMapping = EnumMappingMode.ByName;
+    cfg.CreateMap&lt;Order, OrderDto&gt;();
+});
+
+// One enum pair (same API as AutoMapper.Extensions.EnumMapping)
+cfg.CreateMap&lt;OrderStatus, OrderStatusDto&gt;()
+   .ConvertUsingEnumMapping(o =&gt; o
+       .MapByName()
+       .MapValue(OrderStatus.Delivered, OrderStatusDto.Completed));</code></pre>
+
+      <p>Precedence for an enum pair, highest first: <code>ConvertUsing</code> on the pair, <code>ConvertUsingEnumMapping</code>, a global <code>AddTypeConverter</code>, then <code>cfg.EnumMapping</code>. <code>[Flags]</code> enums map bit by bit by name when every source flag name exists in the destination, otherwise by value. Conversions compile to a switch on the underlying value, so there is no reflection or <code>Enum.Parse</code> at map time. <code>ProjectTo</code> always maps enums by value (a cast), which database providers can translate. Enum pairs also map without any <code>CreateMap</code>: <code>mapper.Map&lt;OrderStatus, OrderStatusDto&gt;(status)</code>.</p>
+
       <hr>
 
       <h2>Constructor Mapping</h2>

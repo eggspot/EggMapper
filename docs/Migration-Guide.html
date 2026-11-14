@@ -116,6 +116,7 @@ dotnet add package EggMapper</code></pre>
           <tr><td><code>AddAutoMapper(assemblies)</code></td><td><code>AddEggMapper(assemblies)</code></td><td>Same behavior, different name</td></tr>
           <tr><td><code>IMapper</code> registered as scoped</td><td><code>IMapper</code> registered as transient (configuration is a singleton)</td><td>Each injection carries the current scope's <code>IServiceProvider</code>; the compiled configuration is shared</td></tr>
           <tr><td><code>CreateMap&lt;T,T&gt;()</code> required for clone</td><td>Auto-compiles on first use</td><td>Just call <code>Map&lt;T,T&gt;(obj)</code></td></tr>
+          <tr><td>Enum &rarr; different enum: by name (ignoring case), else by value</td><td>By value by default</td><td>Set <code>cfg.EnumMapping = EnumMappingMode.ByName</code> to keep AutoMapper's behavior; <code>ConvertUsingEnumMapping</code> works as in AutoMapper.Extensions.EnumMapping</td></tr>
           <tr><td>No built-in Patch</td><td><code>mapper.Patch(src, dst)</code></td><td>New feature</td></tr>
           <tr><td>No built-in MapList</td><td><code>mapper.MapList&lt;S,D&gt;(list)</code></td><td>New feature</td></tr>
           <tr><td>No inline validation</td><td><code>.Validate(d =&gt; d.Prop, pred, msg)</code></td><td>New feature</td></tr>
