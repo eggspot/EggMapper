@@ -2,8 +2,16 @@ using System.Reflection;
 
 namespace EggMapper;
 
+/// <summary>
+/// Registers maps inside <c>new MapperConfiguration(cfg =&gt; ...)</c> or <c>services.AddEggMapper(cfg =&gt; ...)</c>.
+/// </summary>
 public interface IMapperConfigurationExpression
 {
+    /// <summary>
+    /// Registers the map from <typeparamref name="TSource"/> to <typeparamref name="TDestination"/>; a later
+    /// <c>CreateMap</c> for the same pair replaces it. Register nested types too: a nested object of a different type
+    /// without its own map is left null.
+    /// </summary>
     IMappingExpression<TSource, TDestination> CreateMap<TSource, TDestination>();
 
     /// <summary>
@@ -15,6 +23,10 @@ public interface IMapperConfigurationExpression
     void AddProfile(Profile profile);
     void AddProfiles(IEnumerable<Assembly> assemblies);
 
+    /// <summary>
+    /// Registers every <see cref="Profile"/> in <paramref name="assemblies"/>. When two profiles map the same pair, the
+    /// first one registered wins.
+    /// </summary>
     void AddMaps(params Assembly[] assemblies);
     void AddMaps(IEnumerable<Assembly> assemblies);
     void AddMaps(params Type[] markerTypes);
