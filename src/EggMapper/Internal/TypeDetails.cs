@@ -34,7 +34,7 @@ internal sealed class TypeDetails
         WritableProperties = writable.ToArray();
         Constructors = type.GetConstructors();
         ParameterlessCtor = type.GetConstructor(Type.EmptyTypes);
-        CanConstructWithoutArguments = ParameterlessCtor != null || type.IsValueType;
+        CanConstructWithoutArguments = ParameterlessCtor != null || (type.IsValueType && Constructors.Length == 0);
 
         ReadableByName = new Dictionary<string, PropertyInfo>(readable.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var p in readable)

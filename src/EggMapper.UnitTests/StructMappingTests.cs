@@ -135,6 +135,67 @@ public class StructMappingTests
         result.Select(p => p.X).Should().Equal(1, 2);
     }
 
+    public readonly struct SmReadonlyDest
+    {
+        public SmReadonlyDest(int x, int y) { X = x; Y = y; }
+        public int X { get; }
+        public int Y { get; }
+    }
+
+    public readonly record struct SmRecordDest(int X, int Y);
+
+    public struct SmUnmatchedCtorDest
+    {
+        public SmUnmatchedCtorDest(string unrelated) { X = -1; Y = -1; }
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+
+    [Fact]
+    public void Map_ReadonlyStructWithOnlyParameterizedConstructor_UsesConstructor()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<SmPointSource, SmReadonlyDest>()).CreateMapper();
+
+        var result = mapper.Map<SmPointSource, SmReadonlyDest>(new SmPointSource { X = 3, Y = 4 });
+
+        result.X.Should().Be(3);
+        result.Y.Should().Be(4);
+    }
+
+    [Fact]
+    public void Map_PositionalRecordStruct_UsesConstructor()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<SmPointClass, SmRecordDest>()).CreateMapper();
+
+        var result = mapper.Map<SmPointClass, SmRecordDest>(new SmPointClass { X = 5, Y = 6 });
+
+        result.Should().Be(new SmRecordDest(5, 6));
+    }
+
+    [Fact]
+    public void Map_StructWithUnmatchedConstructor_UsesDefaultAndSetsProperties()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<SmPointSource, SmUnmatchedCtorDest>()).CreateMapper();
+
+        var result = mapper.Map<SmPointSource, SmUnmatchedCtorDest>(new SmPointSource { X = 7, Y = 8 });
+
+        result.X.Should().Be(7);
+        result.Y.Should().Be(8);
+    }
+
+    [Fact]
+    public void Map_StructDestinationWithForMemberAndIgnore_AppliesMemberConfiguration()
+    {
+        var mapper = new MapperConfiguration(cfg => cfg.CreateMap<SmPointSource, SmPointDest>()
+            .ForMember(d => d.X, o => o.MapFrom(s => s.X * 10))
+            .ForMember(d => d.Y, o => o.Ignore())).CreateMapper();
+
+        var result = mapper.Map<SmPointSource, SmPointDest>(new SmPointSource { X = 2, Y = 9 });
+
+        result.X.Should().Be(20);
+        result.Y.Should().Be(0);
+    }
+
     [Fact]
     public void Map_BoxedStructSource_CopiesProperties()
     {
