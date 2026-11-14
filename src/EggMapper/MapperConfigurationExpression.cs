@@ -26,8 +26,13 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     private void RegisterTypeMap(TypeMap typeMap)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-        if (!_typeMaps.ContainsKey(key))
-            _typeMaps[key] = typeMap;
+        if (_typeMaps.TryGetValue(key, out var existing))
+        {
+            if (existing.ReverseMapOrigin.HasValue && !typeMap.ReverseMapOrigin.HasValue)
+                existing.IgnoredExplicitCreateMap = true;
+            return;
+        }
+        _typeMaps[key] = typeMap;
     }
 
     public void AddProfile<TProfile>() where TProfile : Profile, new()
@@ -167,7 +172,8 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         var reverseTypeMap = new TypeMap
         {
             SourceType = typeof(TDestination),
-            DestinationType = typeof(TSource)
+            DestinationType = typeof(TSource),
+            ReverseMapOrigin = new TypePair(typeof(TSource), typeof(TDestination))
         };
         _registerTypeMap(reverseTypeMap);
         return this;

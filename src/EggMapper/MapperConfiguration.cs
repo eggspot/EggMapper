@@ -681,12 +681,13 @@ public sealed class MapperConfiguration
 
     public void AssertConfigurationIsValid()
     {
-        var errors = new List<string>();
+        var unmappedMaps = new List<UnmappedMap>();
         foreach (var kvp in _typeMaps)
         {
             var typeMap = kvp.Value;
             var destDetails = TypeDetails.Get(typeMap.DestinationType);
             var srcDetails = TypeDetails.Get(typeMap.SourceType);
+            var unmappedMembers = new List<System.Reflection.PropertyInfo>();
 
             foreach (var destProp in destDetails.WritableProperties)
             {
@@ -706,16 +707,24 @@ public sealed class MapperConfiguration
                 srcDetails.ReadableByName.TryGetValue(sourceMemberName, out var srcProp);
 
                 if (srcProp == null && !ReflectionHelper.HasFlattenedSource(destProp.Name, srcDetails))
-                {
-                    errors.Add(
-                        $"Unmapped destination member '{typeMap.DestinationType.Name}.{destProp.Name}' " +
-                        $"in map {typeMap.SourceType.Name} -> {typeMap.DestinationType.Name}");
-                }
+                    unmappedMembers.Add(destProp);
             }
+
+            if (unmappedMembers.Count > 0)
+                unmappedMaps.Add(new UnmappedMap(typeMap, unmappedMembers));
         }
 
-        if (errors.Count > 0)
-            throw new InvalidOperationException(
-                "EggMapper configuration is invalid:\n" + string.Join("\n", errors));
+        if (unmappedMaps.Count > 0)
+            throw new InvalidOperationException(ConfigurationValidationMessage.Build(unmappedMaps));
+    }
+
+    internal string DescribeMissingMap(Type sourceType, Type destinationType)
+    {
+        var message =
+            $"No mapping configured for {TypeNameHelper.Pair(sourceType, destinationType)}. " +
+            $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration";
+        return _typeMaps.ContainsKey(new TypePair(destinationType, sourceType))
+            ? message + $", or add .ReverseMap() to the existing CreateMap<{TypeNameHelper.Readable(destinationType)}, {TypeNameHelper.Readable(sourceType)}>()."
+            : message + ".";
     }
 }

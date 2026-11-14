@@ -79,7 +79,7 @@ Change the package, `using AutoMapper` -> `using EggMapper`, `AddAutoMapper(type
 | Message | Fix |
 |---|---|
 | `No mapping configured for S -> D` | `cfg.CreateMap<S, D>()` (or `.ReverseMap()` on `CreateMap<D, S>()`) |
-| `Unmapped destination member 'D.X'` | `.ForMember(d => d.X, o => o.MapFrom(s => ...))` or `o.Ignore()` |
+| `Unmapped destination member 'D.X'` | paste the message's `Fix:` line; else pick from `Options:` with `.ForMember(d => d.X, o => o.MapFrom(s => ...))` or `o.Ignore()` |
 | `MappingValidationException` | a `Validate` rule failed; message lists each rule |
 | `Circular IncludeBase()` | remove the cycle between `IncludeBase` calls |
 
