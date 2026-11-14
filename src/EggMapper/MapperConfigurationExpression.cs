@@ -9,8 +9,6 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 {
     private readonly Dictionary<TypePair, TypeMap> _typeMaps = new();
     private readonly Dictionary<TypePair, Delegate> _globalConverters = new();
-    // Open generic templates: (srcGenericDef, destGenericDef) → TypeMap with open types.
-    // Compiled on-demand when a closed generic pair is first mapped.
     private readonly Dictionary<(Type, Type), TypeMap> _openGenericTypeMaps = new();
 
     public IMappingExpression<TSource, TDestination> CreateMap<TSource, TDestination>()
@@ -63,9 +61,6 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
             DestinationType = destinationType
         };
 
-        // Open generic template — store separately; compiled on-demand at first Map() call.
-        // Supports: both open (ApiResponse<> → ApiResponseDto<>),
-        //           or one side open (ISequenceIdEntity → Id<>) for interface-to-generic patterns.
         if (sourceType.IsGenericTypeDefinition || destinationType.IsGenericTypeDefinition)
         {
             _openGenericTypeMaps[(sourceType, destinationType)] = typeMap;
@@ -85,6 +80,8 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         AddProfiles(markerTypes.Select(t => t.Assembly).Distinct());
 
     public Func<PropertyInfo, bool>? ShouldMapProperty { get; set; }
+
+    public EnumMappingMode EnumMapping { get; set; }
     public int DefaultMaxDepth { get; set; } = 32;
 
     public void AddTypeConverter<TSource, TDest>(Func<TSource, TDest> converter)
@@ -95,6 +92,8 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
 
     internal IEnumerable<TypeMap> GetTypeMaps() => _typeMaps.Values;
     internal Func<PropertyInfo, bool>? GetShouldMapProperty() => ShouldMapProperty;
+
+    internal EnumMappingMode GetEnumMapping() => EnumMapping;
     internal int GetDefaultMaxDepth() => DefaultMaxDepth;
     internal Dictionary<TypePair, Delegate> GetGlobalConverters() => _globalConverters;
     internal Dictionary<(Type, Type), TypeMap> GetOpenGenericTypeMaps() => _openGenericTypeMaps;
@@ -230,6 +229,8 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         return this;
     }
 
+    internal void SetEnumMapping(Execution.EnumPairMapping mapping) => _typeMap.EnumMapping = mapping;
+
     public IMappingExpression<TSource, TDestination> ConvertUsing(Func<TSource, TDestination> converter)
     {
         _typeMap.ConvertUsingFunc = (src, dest, ctx) => converter((TSource)src)!;
@@ -297,7 +298,6 @@ internal sealed class MappingExpression<TSource, TDestination> : IMappingExpress
         var destDetails = TypeDetails.Get(typeof(TDestination));
         foreach (var destProp in destDetails.WritableProperties)
         {
-            // Skip properties already explicitly configured
             if (_typeMap.PropertyMaps.Any(p => p.DestinationProperty.Name == destProp.Name))
                 continue;
             var propMap = GetOrCreatePropertyMap(destProp);
@@ -452,8 +452,6 @@ internal sealed class PathConfigurationExpression<TSource, TDestination, TMember
     public void Ignore() => _propMap.Ignored = true;
 }
 
-// ── Non-generic mapping expression for CreateMap(Type, Type) ─────────────
-
 internal sealed class NonGenericMappingExpression : IMappingExpression
 {
     private readonly TypeMap _typeMap;
@@ -494,7 +492,6 @@ internal sealed class NonGenericMappingExpression : IMappingExpression
     {
         if (converterType.IsGenericTypeDefinition)
         {
-            // Defer instantiation — will be closed in CloseGenericTypeMap
             _typeMap.OpenGenericConverterType = converterType;
         }
         else

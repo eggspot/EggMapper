@@ -60,7 +60,7 @@ public class MyController(IMapper mapper)
 
 Hot paths can inject a typed mapper for one pair, `IMapper<TSource, TDestination>` (registered by `AddEggMapper`),
 and call `Map(source)`. Maps compile lazily on first use; call `config.CompileMappings()` to compile them all up front
-(same as AutoMapper).
+(same as AutoMapper). Enums of different types map by value by default; set `cfg.EnumMapping = EnumMappingMode.ByName` for AutoMapper's by-name behavior, or configure one pair with `CreateMap<EA,EB>().ConvertUsingEnumMapping(o => o.MapByName())`.
 
 ## Migrating from AutoMapper
 

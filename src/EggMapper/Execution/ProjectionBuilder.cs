@@ -4,11 +4,6 @@ using EggMapper.Internal;
 
 namespace EggMapper.Execution;
 
-/// <summary>
-/// Builds <see cref="Expression{TDelegate}"/> projection trees suitable for LINQ providers
-/// (e.g. EF Core). The tree is never compiled by EggMapper — it is passed directly to
-/// <c>IQueryable.Select()</c> so the provider can translate it to SQL or another query DSL.
-/// </summary>
 internal static class ProjectionBuilder
 {
     internal static Expression<Func<TSrc, TDest>> Build<TSrc, TDest>(MapperConfiguration config)
@@ -39,7 +34,6 @@ internal static class ProjectionBuilder
 
             if (propMap?.MapFromExpression != null)
             {
-                // Inline the stored lambda: replace its parameter with our source expression
                 var replacer = new ParameterReplacer(propMap.MapFromExpression.Parameters[0], srcExpr);
                 valueExpr = replacer.Visit(propMap.MapFromExpression.Body);
                 if (valueExpr!.Type != destProp.PropertyType)
@@ -58,9 +52,9 @@ internal static class ProjectionBuilder
                     var nestedKey = new TypePair(srcProp.PropertyType, destProp.PropertyType);
 
                     if (srcProp.PropertyType != destProp.PropertyType &&
-                        config.TypeMaps.ContainsKey(nestedKey))
+                        config.TypeMaps.ContainsKey(nestedKey) &&
+                        !EnumConversion.IsEnumPair(srcProp.PropertyType, destProp.PropertyType))
                     {
-                        // Recurse for registered nested map
                         valueExpr = BuildExpression(srcProp.PropertyType, destProp.PropertyType,
                             srcAccess, config);
                     }
@@ -72,14 +66,17 @@ internal static class ProjectionBuilder
                     {
                         valueExpr = Expression.Convert(srcAccess, destProp.PropertyType);
                     }
+                    else if (EnumConversion.IsEnumPair(srcProp.PropertyType, destProp.PropertyType))
+                    {
+                        valueExpr = EnumConversion.TryBuild(srcAccess, destProp.PropertyType, null)!;
+                    }
                     else
                     {
-                        continue; // incompatible types — skip
+                        continue;
                     }
                 }
                 else
                 {
-                    // Try flattening: dest.AddressStreet → src.Address.Street
                     valueExpr = TryBuildFlattenedExpr(destProp.Name, destProp.PropertyType,
                         srcExpr, srcDetails);
                     if (valueExpr == null) continue;
@@ -89,26 +86,21 @@ internal static class ProjectionBuilder
             bindings.Add(Expression.Bind(destProp, valueExpr));
         }
 
-        // Parameterless ctor → MemberInitExpression
         if (destDetails.ParameterlessCtor != null)
             return Expression.MemberInit(Expression.New(destDetails.ParameterlessCtor), bindings);
 
-        // Parameterized ctor (records etc.) → NewExpression with member associations
         var best = FindBestCtor(destDetails, srcDetails)
             ?? throw new InvalidOperationException(
                 $"ProjectTo: no suitable constructor found for '{TypeNameHelper.Readable(destType)}'.");
 
         var ctorArgs = BuildCtorArgExpressions(best.Params, srcExpr, srcDetails);
 
-        // Associate each ctor arg with its corresponding property so LINQ providers can
-        // translate the constructor call back to member accesses.
         var members = best.Params
             .Select(p => (MemberInfo?)GetMatchingProperty(destDetails, p))
             .ToArray();
 
         var newExpr = Expression.New(best.Ctor, ctorArgs, members!);
 
-        // Include any remaining writable properties that aren't covered by ctor params
         var ctorParamNames = new HashSet<string>(
             best.Params.Select(p => p.Name ?? ""), StringComparer.OrdinalIgnoreCase);
         var extraBindings = bindings
@@ -191,10 +183,6 @@ internal static class ProjectionBuilder
     }
 }
 
-/// <summary>
-/// Replaces all occurrences of one <see cref="ParameterExpression"/> with another
-/// <see cref="Expression"/> inside an expression tree.
-/// </summary>
 internal sealed class ParameterReplacer : ExpressionVisitor
 {
     private readonly ParameterExpression _toReplace;
