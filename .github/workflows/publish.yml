@@ -129,6 +129,10 @@ jobs:
             --configuration Release --no-build \
             -p:Version=${{ steps.version.outputs.VERSION }} \
             --output ./artifacts
+          dotnet pack src/EggMapper.Analyzers/EggMapper.Analyzers.csproj \
+            --configuration Release --no-build \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./analyzer-artifacts
 
       - name: Upload artifacts
         if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
@@ -138,6 +142,7 @@ jobs:
           path: |
             ./artifacts/*.nupkg
             ./artifacts/*.snupkg
+            ./analyzer-artifacts/*.nupkg
 
       - name: NuGet login (trusted publishing)
         id: nuget_login
@@ -188,3 +193,13 @@ jobs:
               --generate-notes \
               ./artifacts/*.nupkg ./artifacts/*.snupkg
           fi
+
+      - name: Push EggMapper.Analyzers to NuGet.org
+        if: steps.tag_check.outputs.ALREADY_TAGGED == 'false'
+        env:
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push ./analyzer-artifacts/*.nupkg \
+            --api-key "${NUGET_API_KEY}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
