@@ -104,8 +104,17 @@ dotnet add package EggMapper</code></pre>
         <li><code>mapper.Map&lt;TSrc, TDst&gt;(source)</code></li>
         <li><code>mapper.Map&lt;TDst&gt;(objectSource)</code></li>
         <li><code>config.AssertConfigurationIsValid()</code></li>
+        <li>Enum &rarr; different enum types map by name (ignoring case), else by value; <code>CreateMap&lt;EA,EB&gt;().ConvertUsingEnumMapping(...)</code> as in AutoMapper.Extensions.EnumMapping</li>
         <li><code>config.CompileMappings()</code>: as in AutoMapper, maps compile lazily on first use, and this compiles them all up front. Use it at startup or in a test if you want mapping errors to surface before the first request.</li>
       </ul>
+
+      <h3>Upgrading from EggMapper 1.x to 2.0</h3>
+
+      <p>EggMapper 2.0 maps between <strong>different enum types by name</strong> by default, matching AutoMapper (1.x mapped them by numeric value). Results change only for enum pairs whose names and numbers do not line up. To keep the 1.x behavior, add one line to your configuration:</p>
+
+<pre><code class="language-csharp">cfg.EnumMapping = EnumMappingMode.ByValue;</code></pre>
+
+      <p>Nothing else changed in 2.0. <code>ProjectTo</code> still maps enums by value, as AutoMapper's projection does.</p>
 
       <h3>What is different</h3>
 
@@ -116,7 +125,6 @@ dotnet add package EggMapper</code></pre>
           <tr><td><code>AddAutoMapper(assemblies)</code></td><td><code>AddEggMapper(assemblies)</code></td><td>Same behavior, different name</td></tr>
           <tr><td><code>IMapper</code> registered as scoped</td><td><code>IMapper</code> registered as transient (configuration is a singleton)</td><td>Each injection carries the current scope's <code>IServiceProvider</code>; the compiled configuration is shared</td></tr>
           <tr><td><code>CreateMap&lt;T,T&gt;()</code> required for clone</td><td>Auto-compiles on first use</td><td>Just call <code>Map&lt;T,T&gt;(obj)</code></td></tr>
-          <tr><td>Enum &rarr; different enum: by name (ignoring case), else by value</td><td>By value by default</td><td>Set <code>cfg.EnumMapping = EnumMappingMode.ByName</code> to keep AutoMapper's behavior; <code>ConvertUsingEnumMapping</code> works as in AutoMapper.Extensions.EnumMapping</td></tr>
           <tr><td>No built-in Patch</td><td><code>mapper.Patch(src, dst)</code></td><td>New feature</td></tr>
           <tr><td>No built-in MapList</td><td><code>mapper.MapList&lt;S,D&gt;(list)</code></td><td>New feature</td></tr>
           <tr><td>No inline validation</td><td><code>.Validate(d =&gt; d.Prop, pred, msg)</code></td><td>New feature</td></tr>

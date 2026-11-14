@@ -231,7 +231,7 @@ app.MapPatch("/products/{id}", async (int id, UpdateProductRequest req, AppDbCon
           <tr><td><code>AddProfile&lt;TProfile&gt;()</code></td><td><code>void</code></td><td>Register all maps in a <code>Profile</code> subclass</td></tr>
           <tr><td><code>AddProfile(Profile profile)</code></td><td><code>void</code></td><td>Register a pre-constructed <code>Profile</code> instance</td></tr>
           <tr><td><code>AddProfiles(params Assembly[] assemblies)</code></td><td><code>void</code></td><td>Scan assemblies and register all <code>Profile</code> subclasses</td></tr>
-                  <tr><td><code>EnumMapping</code></td><td><code>EnumMappingMode</code></td><td>How a value of one enum type maps to a different enum type: <code>ByValue</code> (default) or <code>ByName</code> (exact name, then ignoring case, else by value). Per pair: <code>CreateMap&lt;EA,EB&gt;().ConvertUsingEnumMapping(o =&gt; o.MapByName())</code></td></tr>
+                  <tr><td><code>EnumMapping</code></td><td><code>EnumMappingMode</code></td><td>How a value of one enum type maps to a different enum type: <code>ByName</code> (default; exact name, then ignoring case, else by value, like AutoMapper) or <code>ByValue</code>. Per pair: <code>CreateMap&lt;EA,EB&gt;().ConvertUsingEnumMapping(o =&gt; o.MapByName())</code></td></tr>
         </tbody>
       </table></div>
 

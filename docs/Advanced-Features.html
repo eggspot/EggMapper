@@ -426,27 +426,27 @@ cfg.CreateMap&lt;BankTransferPayment, BankTransferPaymentDto&gt;()
 
       <h2>Enum Mapping</h2>
 
-      <p>Enums are mapped by value (numeric) by default. Properties with identical enum types are copied directly.</p>
+      <p>Different enum types are mapped <strong>by name</strong> by default, like AutoMapper: the destination member with the same name (exact, then ignoring case), falling back to the numeric value when no name matches. Properties with identical enum types are copied directly. (Before EggMapper 2.0 the default was by value.)</p>
 
       <pre><code class="language-csharp">public enum OrderStatus { Pending, Processing, Shipped, Delivered }
 public enum OrderStatusDto { Pending, Processing, Shipped, Delivered }
 
 cfg.CreateMap&lt;Order, OrderDto&gt;();
-// Order.Status (OrderStatus) -&gt; OrderDto.Status (OrderStatusDto) by numeric value</code></pre>
+// Order.Status (OrderStatus) -&gt; OrderDto.Status (OrderStatusDto) by name</code></pre>
 
       <h3>Enum to string</h3>
 
       <pre><code class="language-csharp">cfg.CreateMap&lt;Order, OrderDto&gt;()
     .ForMember(d =&gt; d.StatusText, o =&gt; o.MapFrom(s =&gt; s.Status.ToString()));</code></pre>
 
-      <h3>Map enums by name</h3>
+      <h3>By name or by value</h3>
 
-      <p>When the two enum types declare the same names in a different order (or with different numbers), map them by name. <code>ByName</code> matches the exact name first, then the name ignoring case; a value whose name has no destination member falls back to its number. This is AutoMapper's default behavior.</p>
+      <p><code>ByName</code> (the default) matches the exact name first, then the name ignoring case; a value whose name has no destination member falls back to its number. Switch every pair to by value, or configure one pair:</p>
 
-      <pre><code class="language-csharp">// Every enum pair in this configuration
+      <pre><code class="language-csharp">// Every enum pair in this configuration (pre-2.0 behavior)
 var config = new MapperConfiguration(cfg =&gt;
 {
-    cfg.EnumMapping = EnumMappingMode.ByName;
+    cfg.EnumMapping = EnumMappingMode.ByValue;
     cfg.CreateMap&lt;Order, OrderDto&gt;();
 });
 
