@@ -43,8 +43,6 @@ public sealed class Mapper : IMapper
     {
         if (source != null)
         {
-            // Ultra-fast path: single volatile field read + null check.
-            // Entry bundles Func+Generation atomically — no torn reads between them.
             var entry = FastCache<TSource, TDestination>.Entry;
             if (entry != null && entry.Generation == _generation)
                 return entry.Func(source, default!);
@@ -52,7 +50,6 @@ public sealed class Mapper : IMapper
             return MapSlow<TSource, TDestination>(source);
         }
 
-        // Null source: check for value type ConvertUsing
         if (typeof(TSource).IsValueType)
         {
             var key = new TypePair(typeof(TSource), typeof(TDestination));
@@ -72,7 +69,6 @@ public sealed class Mapper : IMapper
 
         try
         {
-            // Try ctx-free typed delegate
             if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
             {
                 var typed = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
@@ -80,14 +76,12 @@ public sealed class Mapper : IMapper
                 return typed(source, default!);
             }
 
-            // Fallback: ctx-aware boxed delegate
             if (_config.FrozenMaps.TryGetValue(key, out var del))
             {
                 var ctx = GetContext();
                 return (TDestination)del(source!, null, ctx);
             }
 
-            // Open generic on-demand compilation
             if (_config.TryGetOrCompileOpenGenericMap(key, out var openBoxed, out var openCtxFree))
             {
                 if (openCtxFree != null)
@@ -100,18 +94,13 @@ public sealed class Mapper : IMapper
                 return (TDestination)openBoxed!(source!, null, ctx);
             }
 
-            // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
-            // Delegate to MapInternal which does a base-type walk + collection auto-mapping.
             var runtimeType = source!.GetType();
             if (runtimeType != typeof(TSource))
                 return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), null);
 
-            // Collection auto-mapping: Map<List<A>, List<B>>(list) uses registered element map A→B.
-            // No need for explicit CreateMap<List<A>, List<B>>().
             if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
                 return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null);
 
-            // Nullable<T> boxing fallback: .NET boxes Nullable<T> as T.
             if (typeof(TSource).IsValueType && Nullable.GetUnderlyingType(typeof(TSource)) == null)
             {
                 var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(typeof(TSource)), typeof(TDestination));
@@ -122,7 +111,6 @@ public sealed class Mapper : IMapper
                 }
             }
 
-            // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
             if (_config.TryGetOrCompileSameTypeMap(key, out var sameBoxed, out var sameCtxFree))
             {
                 if (sameCtxFree != null)
@@ -153,8 +141,6 @@ public sealed class Mapper : IMapper
         if (source == null) return destination;
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        // Ctx-free typed delegate: zero boxing, zero ResolutionContext allocation.
-        // The Func<TSrc, TDest, TDest> signature already accepts an existing destination.
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
             return ((Func<TSource, TDestination, TDestination>)ctxFreeDel)(source, destination);
 
@@ -171,12 +157,10 @@ public sealed class Mapper : IMapper
             return (TDestination)openDel!(source, destination, ctx);
         }
 
-        // Runtime-type fallback: EF Core proxies have a runtime type different from TSource.
         var runtimeType = source!.GetType();
         if (runtimeType != typeof(TSource))
             return (TDestination)MapInternal(source, runtimeType, typeof(TDestination), destination);
 
-        // Collection auto-mapping fallback: delegates to MapInternal which detects collection types.
         if (ReflectionHelper.IsCollectionType(typeof(TDestination)) && source is IEnumerable)
             return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), destination);
 
@@ -234,8 +218,6 @@ public sealed class Mapper : IMapper
             var ctx = GetContext(items);
             return (TDestination)openDel!(source, null, ctx);
         }
-        // Fallback to MapInternal which handles base-type walk, interface walk,
-        // and collection auto-mapping — preserving the items dictionary.
         return (TDestination)MapInternal(source, typeof(TSource), typeof(TDestination), null, items);
     }
 
@@ -263,7 +245,6 @@ public sealed class Mapper : IMapper
             return patchDel(source, destination);
         }
 
-        // Runtime-type fallback: walk base types for proxy/derived types.
         var runtimeType = source!.GetType();
         if (runtimeType != typeof(TSource))
         {
@@ -273,8 +254,6 @@ public sealed class Mapper : IMapper
                 var baseRaw = _config.GetOrCompilePatchDelegate(baseKey);
                 if (baseRaw != null)
                 {
-                    // Invoke via dynamic delegate — the patch func is Func<TBase,TDest,TDest>
-                    // but source is a derived type, so it's assignable.
                     try
                     {
                         return (TDestination)baseRaw.DynamicInvoke(source, destination)!;
@@ -297,14 +276,12 @@ public sealed class Mapper : IMapper
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
-        // Ultra-fast path: inlined-loop list delegate (entire collection in one compiled call)
         if (source is List<TSource> directList)
         {
             var listEntry = FastListCache<TSource, TDestination>.Entry;
             if (listEntry != null && listEntry.Generation == _generation)
                 return listEntry.Func(directList);
 
-            // Per-item FastCache fallback for List<T>
             var itemEntry = FastCache<TSource, TDestination>.Entry;
             if (itemEntry != null && itemEntry.Generation == _generation)
             {
@@ -327,7 +304,6 @@ public sealed class Mapper : IMapper
     {
         var key = new TypePair(typeof(TSource), typeof(TDestination));
 
-        // Ctx-free list delegate — entire loop inlined; also populate FastListCache for next call
         if (source is List<TSource> srcList)
         {
             var listDelRaw = _config.GetOrCompileListDelegate(key);
@@ -336,7 +312,6 @@ public sealed class Mapper : IMapper
                 var listDel = (Func<List<TSource>, List<TDestination>>)listDelRaw;
                 FastListCache<TSource, TDestination>.Entry = new FastListCache<TSource, TDestination>.CacheEntry(listDel, _generation);
 
-                // Also warm the per-item FastCache so MapList<> next call uses the fast path
                 if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var itemDelRaw))
                 {
                     var itemDel = (Func<TSource, TDestination, TDestination>)itemDelRaw;
@@ -347,7 +322,6 @@ public sealed class Mapper : IMapper
             }
         }
 
-        // Ctx-free per-item delegate — also populate FastCache for next call
         if (_config.FrozenCtxFreeMaps.TryGetValue(key, out var ctxFreeDel))
         {
             var typedDel = (Func<TSource, TDestination, TDestination>)ctxFreeDel;
@@ -355,7 +329,6 @@ public sealed class Mapper : IMapper
             return MapListWithCtxFreeDelegate(typedDel, source);
         }
 
-        // Ctx-aware boxed delegate — or open generic on-demand compilation
         if (!_config.FrozenMaps.TryGetValue(key, out var del))
         {
             if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out var openCtxFree))
@@ -439,9 +412,6 @@ public sealed class Mapper : IMapper
             return del(source, destination, ctx);
         }
 
-        // Nullable<T> boxing: .NET boxes Nullable<T> as T, stripping the wrapper.
-        // If CreateMap<T?, U>() was registered, the key uses Nullable<T> but source.GetType() returns T.
-        // Try Nullable<sourceType> as fallback.
         if (sourceType.IsValueType && Nullable.GetUnderlyingType(sourceType) == null)
         {
             var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(sourceType), destinationType);
@@ -452,14 +422,12 @@ public sealed class Mapper : IMapper
             }
         }
 
-        // Open generic on-demand compilation
         if (_config.TryGetOrCompileOpenGenericMap(key, out var openDel, out _))
         {
             var ctx = GetContext(items);
             return openDel!(source, destination, ctx);
         }
 
-        // Base-type walk: resolve EF Core proxy / derived types to their registered base mapping.
         for (var baseType = sourceType.BaseType; baseType != null && baseType != typeof(object); baseType = baseType.BaseType)
         {
             var baseKey = new TypePair(baseType, destinationType);
@@ -470,8 +438,6 @@ public sealed class Mapper : IMapper
             }
         }
 
-        // Interface walk: resolve interface-based mappings (e.g., CreateMap<IMyEntity, MyDto>()).
-        // Class hierarchy walk above only covers concrete base classes — interfaces need separate check.
         foreach (var iface in sourceType.GetInterfaces())
         {
             var ifaceKey = new TypePair(iface, destinationType);
@@ -482,9 +448,6 @@ public sealed class Mapper : IMapper
             }
         }
 
-        // Collection auto-mapping: Map<IList<T>>(List<S>) → List<T> using registered element map S→T.
-        // CreateMap<A,B>() automatically enables Map<List<B>>(listOfA) — no explicit collection map needed.
-        // Supports List<>, IList<>, ICollection<>, IEnumerable<>, arrays as source/dest.
         if (ReflectionHelper.IsCollectionType(destinationType) && source is IEnumerable srcEnum)
         {
             var destElemType = ReflectionHelper.GetCollectionElementType(destinationType);
@@ -492,15 +455,11 @@ public sealed class Mapper : IMapper
             if (destElemType != null && srcElemType != null)
             {
                 var elemDel = FindElementDelegate(srcElemType, destElemType);
-                // Fallback for primitive/string/enum or any assignable element types where no
-                // explicit CreateMap is needed: identity copy.
                 bool identityElements = elemDel == null && destElemType.IsAssignableFrom(srcElemType);
 
                 if (elemDel != null || identityElements)
                 {
                     var ctx = GetContext(items);
-                    // For non-nullable value-type elements, IList.Add(null) for List<int> rejects
-                    // null. Substitute the boxed default — matches array semantics.
                     var nullSub = destElemType.IsValueType ? Activator.CreateInstance(destElemType) : null;
 
                     object MapItem(object item)
@@ -510,8 +469,6 @@ public sealed class Mapper : IMapper
                         return elemDel!(item, null, ctx);
                     }
 
-                    // Fast path: pre-size an array when the destination is an array and we
-                    // know the count up-front from an ICollection source.
                     if (destinationType.IsArray && srcEnum is ICollection coll)
                     {
                         var arr = Array.CreateInstance(destElemType, coll.Count);
@@ -528,11 +485,9 @@ public sealed class Mapper : IMapper
                     foreach (var item in srcEnum)
                         resultList.Add(item == null ? nullSub : MapItem(item));
 
-                    // List<T> directly assignable to destination — return as-is.
                     if (destinationType.IsAssignableFrom(resultList.GetType()))
                         return resultList;
 
-                    // Array destination, non-ICollection source — fell through above.
                     if (destinationType.IsArray)
                     {
                         var arr = Array.CreateInstance(destElemType, resultList.Count);
@@ -540,8 +495,6 @@ public sealed class Mapper : IMapper
                         return arr;
                     }
 
-                    // Generic collection with parameterless ctor + Add(T) method (e.g. a custom
-                    // collection like MyList<T> : ICollection<T> with Add).
                     if (destinationType.IsGenericType && !destinationType.IsAbstract)
                     {
                         var emptyCtor = destinationType.GetConstructor(Type.EmptyTypes);
@@ -559,9 +512,6 @@ public sealed class Mapper : IMapper
                         }
                     }
 
-                    // Custom collection wrapper — try a single-arg constructor that accepts the
-                    // mapped list (covers SelectList, MultiSelectList, and similar IEnumerable
-                    // wrappers). Cached lookup, generic interfaces preferred over non-generic.
                     var wrapperCtor = Execution.ExpressionBuilder.FindCollectionWrapperCtor(
                         destinationType, resultList.GetType());
                     if (wrapperCtor != null)
@@ -580,14 +530,12 @@ public sealed class Mapper : IMapper
                         $"single-argument constructor accepting List<T> or any of its interfaces.");
                 }
 
-                // Element mapping not found — give a clear error pointing to the element types
                 throw new InvalidOperationException(
                     $"No mapping configured for collection {TypeNameHelper.Pair(sourceType, destinationType)}. " +
                     $"Register the element mapping: CreateMap<{TypeNameHelper.Readable(srcElemType)}, {TypeNameHelper.Readable(destElemType)}>().");
             }
         }
 
-        // Same-type auto-mapping: T → T without explicit CreateMap<T,T>().
         var sameKey = new TypePair(sourceType, destinationType);
         if (_config.TryGetOrCompileSameTypeMap(sameKey, out var sameBoxed, out _))
         {
@@ -600,24 +548,16 @@ public sealed class Mapper : IMapper
             $"Call CreateMap<{TypeNameHelper.Readable(sourceType)}, {TypeNameHelper.Readable(destinationType)}>() in your mapper configuration.");
     }
 
-    /// <summary>
-    /// Finds a boxed element mapping delegate for srcElemType→destElemType.
-    /// Checks FrozenMaps, then boxed wrappers of FrozenCtxFreeMaps, then open generics,
-    /// then base-type walk and interface walk (for EF Core proxies).
-    /// </summary>
     private Func<object, object?, ResolutionContext, object>? FindElementDelegate(Type srcElemType, Type destElemType)
     {
         var elemKey = new TypePair(srcElemType, destElemType);
 
-        // 1. Direct lookup in FrozenMaps (covers both ctx-aware and boxed ctx-free delegates)
         if (_config.FrozenMaps.TryGetValue(elemKey, out var elemDel))
             return elemDel;
 
-        // 2. Open generic on-demand compilation (e.g., CreateMap(typeof(A<>), typeof(B<>)))
         if (_config.TryGetOrCompileOpenGenericMap(elemKey, out var openDel, out _))
             return openDel;
 
-        // 3. Base-type walk for EF Core proxy / derived element types
         for (var bt = srcElemType.BaseType; bt != null && bt != typeof(object); bt = bt.BaseType)
         {
             var bk = new TypePair(bt, destElemType);
@@ -627,7 +567,6 @@ public sealed class Mapper : IMapper
                 return openDel;
         }
 
-        // 4. Interface walk for interface-based element mappings
         foreach (var iface in srcElemType.GetInterfaces())
         {
             var ik = new TypePair(iface, destElemType);
@@ -637,7 +576,6 @@ public sealed class Mapper : IMapper
                 return openDel;
         }
 
-        // 5. Nullable<T> boxing fallback for collection elements
         if (srcElemType.IsValueType && Nullable.GetUnderlyingType(srcElemType) == null)
         {
             var nullableKey = new TypePair(typeof(Nullable<>).MakeGenericType(srcElemType), destElemType);
@@ -647,23 +585,14 @@ public sealed class Mapper : IMapper
                 return openDel;
         }
 
-        // 6. Same-type auto-mapping for collection elements
         if (_config.TryGetOrCompileSameTypeMap(elemKey, out var sameDel, out _))
             return sameDel;
 
         return null;
     }
 
-    // Generation is tied to MapperConfiguration, not Mapper instances.
-    // All scoped Mapper instances from the same config share a generation,
-    // so FastCache stays valid across request scopes.
     private readonly int _generation;
 
-    /// <summary>
-    /// Lock-free single-slot global cache for Map&lt;S,D&gt;. Zero overhead after first call.
-    /// JIT specializes each (TSource,TDestination) pair into a direct static field read.
-    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
-    /// </summary>
     private static class FastCache<TSource, TDestination>
     {
         public static volatile CacheEntry? Entry;
@@ -674,10 +603,6 @@ public sealed class Mapper : IMapper
         }
     }
 
-    /// <summary>
-    /// Lock-free single-slot global cache for MapList. Zero overhead after first call.
-    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
-    /// </summary>
     private static class FastListCache<TSource, TDestination>
     {
         public static volatile CacheEntry? Entry;
@@ -688,10 +613,6 @@ public sealed class Mapper : IMapper
         }
     }
 
-    /// <summary>
-    /// Lock-free single-slot global cache for Patch&lt;S,D&gt;. Zero overhead after first call.
-    /// Uses a single volatile reference so Func+Generation are always read/written atomically.
-    /// </summary>
     private static class PatchCache<TSource, TDestination>
     {
         public static volatile CacheEntry? Entry;
@@ -703,10 +624,6 @@ public sealed class Mapper : IMapper
     }
 }
 
-/// <summary>
-/// Collects BeforeMap/AfterMap callbacks registered via the call-site opts delegate and
-/// runs them after the core mapping completes.
-/// </summary>
 internal sealed class MappingOperationOptions<TSource, TDestination> : IMappingOperationOptions<TSource, TDestination>
 {
     private List<Action<TSource, TDestination>>? _beforeActions;

@@ -71,6 +71,12 @@ map, the runtime helpers fall through to type conversion.
 - Base-type walk + interface walk in `MapInternal` for EF Core proxy / derived type resolution
 - `MapList<S,D>()` checks `FastListCache<S,D>` → `FrozenCtxFreeListMaps` for fully-inlined collection delegates
 - `IList<T>` sources use index-based `for` loops (avoids enumerator allocation)
+- `FastCache`, `FastListCache` and `PatchCache` are static single-slot caches holding one immutable entry (delegate +
+  configuration `Generation`) behind a single volatile reference, so the delegate and generation are always read
+  together. The generation belongs to `MapperConfiguration`, not `Mapper`: every transient/scoped `Mapper` built from
+  the same configuration shares the cache, and a second configuration simply misses and repopulates it.
+- Only context-free delegates are cached in the typed caches; maps that need a `ResolutionContext` get it per call
+  from `GetContext()`, which carries the calling `Mapper`'s `IServiceProvider` and `Items`.
 
 ### Key Performance Techniques
 
