@@ -171,7 +171,7 @@ internal static class ConstructorInitializers
 
         var result = new ConstructorBody();
         var stack = new List<StackSlot>();
-        ConstructorInfo? pendingFreshCtor = null;
+        var freshConstructors = new Stack<ConstructorInfo>();
         var position = 0;
 
         while (position < il.Length)
@@ -203,10 +203,18 @@ internal static class ConstructorInitializers
                     stack.Add(StackSlot.Value);
                     break;
                 case 0x72:
-                case 0x7E:
                     position += 4;
                     stack.Add(StackSlot.Value);
                     break;
+                case 0x7E:
+                {
+                    var staticField = ResolveField(ctor, BitConverter.ToInt32(il, position));
+                    position += 4;
+                    if (staticField == null || !staticField.IsStatic) return null;
+                    if (!isDestinationConstructor && !staticField.IsInitOnly) return null;
+                    stack.Add(StackSlot.Value);
+                    break;
+                }
                 case 0x25:
                     if (stack.Count == 0 || stack[stack.Count - 1] != StackSlot.Value) return null;
                     stack.Add(StackSlot.Value);
@@ -230,7 +238,7 @@ internal static class ConstructorInitializers
                     if (parameterCount == 0 && !targetType.IsValueType && IsSideEffectFreeToConstruct(targetType, depth + 1))
                     {
                         stack.Add(StackSlot.FreshInstance);
-                        pendingFreshCtor = target;
+                        freshConstructors.Push(target);
                     }
                     else if (isDestinationConstructor)
                     {
@@ -253,7 +261,7 @@ internal static class ConstructorInitializers
                     if (receiver != StackSlot.This || value == StackSlot.This) return null;
                     result.FieldStoreCounts[field] = result.FieldStoreCounts.TryGetValue(field, out var count) ? count + 1 : 1;
                     if (value == StackSlot.FreshInstance)
-                        result.FreshFieldStores[field] = pendingFreshCtor!;
+                        result.FreshFieldStores[field] = freshConstructors.Pop();
                     break;
                 }
                 case 0x28:

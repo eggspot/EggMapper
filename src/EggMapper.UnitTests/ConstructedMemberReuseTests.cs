@@ -121,6 +121,66 @@ public class ConstructedMemberReuseTests
         public RuChild Child { get; init; } = new();
     }
 
+    public static class RuCounter
+    {
+        public static int Value;
+        public static int Next() => ++Value;
+    }
+
+    public class RuSequencedChild
+    {
+        public int Seq { get; set; } = RuCounter.Value;
+        public string City { get; set; } = "";
+    }
+
+    public class RuSequencedDest
+    {
+        public RuSequencedChild Child { get; set; } = new();
+        public int Id { get; set; } = RuCounter.Next();
+    }
+
+    public class RuTimestampedDest
+    {
+        public DateTime Created { get; set; } = DateTime.UtcNow;
+        public RuChild Child { get; set; } = new();
+    }
+
+    public class RuInterfaceListDest
+    {
+        public IList<RuChild> Items { get; set; } = new List<RuChild>();
+    }
+
+    public struct RuPoint
+    {
+        public int X { get; set; }
+    }
+
+    public class RuStructMemberDest
+    {
+        public RuPoint Point { get; set; } = new();
+        public RuChild Child { get; set; } = new();
+    }
+
+    public class RuGenericBase<T>
+    {
+        public List<T> Values { get; set; } = new();
+    }
+
+    public class RuDerivedFromGenericBase : RuGenericBase<int>
+    {
+        public RuChild Child { get; set; } = new();
+    }
+
+    public class RuHiddenBase
+    {
+        public RuChild Child { get; set; } = new();
+    }
+
+    public class RuHidingDest : RuHiddenBase
+    {
+        public new RuChild Child { get; set; } = new();
+    }
+
     private static IReadOnlyDictionary<System.Reflection.PropertyInfo, Type> Analyze<T>()
         => ConstructorInitializers.GetPropertiesInitializedWithNewInstance(typeof(T));
 
@@ -191,6 +251,79 @@ public class ConstructedMemberReuseTests
     public void Analyze_NominalRecordWithInitOnlyMember_ReturnsMember()
     {
         AnalyzedNames<RuRecordDest>().Should().Contain("Child");
+    }
+
+    [Fact]
+    public void Analyze_MemberConstructorReadingMutableStatic_ReturnsNothing()
+    {
+        AnalyzedNames<RuSequencedDest>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Map_MemberConstructorReadingMutableStatic_SeesValueAfterDestinationConstructor()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<RuChildSource, RuSequencedChild>();
+            cfg.CreateMap<RuSource, RuSequencedDest>();
+        }).CreateMapper();
+        RuCounter.Value = 0;
+
+        var result = mapper.Map<RuSource, RuSequencedDest>(Source(1));
+
+        result.Child.Seq.Should().Be(1);
+    }
+
+    [Fact]
+    public void Analyze_DestinationWithStaticCallInitializer_ReturnsMember()
+    {
+        AnalyzedNames<RuTimestampedDest>().Should().Contain("Child");
+    }
+
+    [Fact]
+    public void Analyze_InterfacePropertyInitializedWithList_ReturnsMemberWithListType()
+    {
+        Analyze<RuInterfaceListDest>().Single().Value.Should().Be(typeof(List<RuChild>));
+    }
+
+    [Fact]
+    public void Analyze_StructMember_IsNeverReturned()
+    {
+        AnalyzedNames<RuStructMemberDest>().Should().NotContain("Point").And.Contain("Child");
+    }
+
+    [Fact]
+    public void Analyze_GenericBaseWithInitializers_ReturnsOwnMemberOnly()
+    {
+        AnalyzedNames<RuDerivedFromGenericBase>().Should().BeEquivalentTo("Child");
+    }
+
+    [Fact]
+    public void Map_HiddenNewProperty_MapsTheDestinationTypesProperty()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<RuChildSource, RuChild>();
+            cfg.CreateMap<RuSource, RuHidingDest>();
+        }).CreateMapper();
+
+        var result = mapper.Map<RuSource, RuHidingDest>(Source(4));
+
+        result.Child.City.Should().Be("c4");
+    }
+
+    [Fact]
+    public void Map_InterfaceListMember_MapsItems()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.CreateMap<RuChildSource, RuChild>();
+            cfg.CreateMap<RuSource, RuInterfaceListDest>();
+        }).CreateMapper();
+
+        var result = mapper.Map<RuSource, RuInterfaceListDest>(Source(2));
+
+        result.Items.Select(i => i.City).Should().Equal("a", "b");
     }
 
     private static MapperConfiguration ReuseConfiguration() => new(cfg =>

@@ -518,9 +518,12 @@ internal static class ExpressionBuilder
         public void RecordOn(TypeMap typeMap)
         {
             if (_reused.Count == 0) return;
-            var recorded = typeMap.ReusedConstructorMembers ??= new List<string>();
-            foreach (var name in _reused)
-                if (!recorded.Contains(name)) recorded.Add(name);
+            lock (typeMap)
+            {
+                var merged = new HashSet<string>(typeMap.ReusedConstructorMembers ?? Array.Empty<string>(), StringComparer.Ordinal);
+                merged.UnionWith(_reused);
+                typeMap.ReusedConstructorMembers = merged.ToArray();
+            }
         }
     }
 

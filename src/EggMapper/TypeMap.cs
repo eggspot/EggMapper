@@ -23,7 +23,7 @@ internal sealed class TypeMap
     public Type? OpenGenericConverterType { get; set; }
     public Func<System.Reflection.PropertyInfo, bool>? ShouldMapProperty { get; set; }
     public LambdaExpression? MappingExpression { get; set; }
-    public List<string>? ReusedConstructorMembers { get; set; }
+    public string[]? ReusedConstructorMembers { get; set; }
 
     public List<(Func<object, bool> Predicate, string Message)>? ValidationRules { get; set; }
 }
