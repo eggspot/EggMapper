@@ -109,6 +109,24 @@ public class NestedMapConfigurationTests
         result.Items.Single().Value.Should().Be("ELEMENT");
     }
 
+    public class Pair { public string Kept { get; set; } = ""; public string Skipped { get; set; } = ""; }
+    public class PairDto { public string Kept { get; set; } = ""; public string Skipped { get; set; } = ""; }
+
+    [Fact]
+    public void MapList_ShouldMapPropertyExcludesMember_LeavesItUnmapped()
+    {
+        var mapper = new MapperConfiguration(cfg =>
+        {
+            cfg.ShouldMapProperty = p => p.Name != nameof(PairDto.Skipped);
+            cfg.CreateMap<Pair, PairDto>();
+        }).CreateMapper();
+
+        var result = mapper.MapList<Pair, PairDto>(new List<Pair> { new() { Kept = "k", Skipped = "s" } });
+
+        result.Single().Kept.Should().Be("k");
+        result.Single().Skipped.Should().BeEmpty();
+    }
+
     [Fact]
     public void Map_ChildPairWithoutSpecialConfiguration_StillMapsByName()
     {
