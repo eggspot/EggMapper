@@ -308,9 +308,9 @@ See [Migration Guide](https://eggspot.github.io/EggMapper/Migration-Guide.html) 
 
 ## Using EggMapper with AI coding assistants
 
-[`llms.txt`](https://eggspot.github.io/EggMapper/llms.txt) (about 1,100 tokens) and
+[`llms.txt`](https://eggspot.github.io/EggMapper/llms.txt) (about 1,200 tokens) and
 [`llms-full.txt`](https://eggspot.github.io/EggMapper/llms-full.txt) give AI assistants the whole API, the differences
-from AutoMapper and the fix for each error. Every code block in them is compiled against the library by the unit tests.
+from AutoMapper and the fix for each error. Every runtime API example in them is compiled against the library by the unit tests.
 Paste this into `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/eggmapper.mdc` or `.github/copilot-instructions.md`:
 
 ```markdown
@@ -322,7 +322,7 @@ Paste this into `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/eggmapper.mdc` or `.git
 - Keep one MapperConfiguration (singleton); never create one per request.
 - ProjectTo needs both type arguments: query.ProjectTo<TSource, TDestination>(config).
 - Configure members with ForMember(d => d.X, o => o.MapFrom(s => ...)) or o.Ignore().
-- Not available: ForCtorParam, ForSourceMember, IncludeMembers, Include<,>, As<>, mapper.ConfigurationProvider.
+- Not available: ForCtorParam, ForSourceMember, IncludeMembers, Include<,>, As<>, nested ForPath (d => d.A.B), mapper.ConfigurationProvider.
 - Keep one test that calls config.CompileMappings() and config.AssertConfigurationIsValid().
 - On a mapping error, apply the CreateMap or ForMember the message names instead of guessing.
 ```

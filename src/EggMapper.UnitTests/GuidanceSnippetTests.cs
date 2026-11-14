@@ -100,6 +100,22 @@ public class GuidanceSnippetTests
         errors.Should().BeEmpty($"every ```csharp compile block in {file} must compile against EggMapper");
     }
 
+    [Theory]
+    [InlineData("llms.txt")]
+    [InlineData("llms-full.txt")]
+    public void GuidanceCSharpFences_AreTaggedCompileOrNeedsGenerator(string file)
+    {
+        var text = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Guidance", file));
+        var untagged = Regex.Matches(text, @"^```(csharp|cs|c#)([^\r\n]*)", RegexOptions.Multiline | RegexOptions.IgnoreCase)
+            .Cast<Match>()
+            .Select(m => m.Value)
+            .Where(fence => !fence.EndsWith(" compile", StringComparison.Ordinal)
+                            && !fence.EndsWith(" needs-generator", StringComparison.Ordinal))
+            .ToList();
+
+        untagged.Should().BeEmpty($"every C# fence in {file} is either compiled (```csharp compile) or marked ```csharp needs-generator");
+    }
+
     [Fact]
     public void LlmsTxt_HasCompilableSnippets()
     {

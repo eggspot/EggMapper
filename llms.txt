@@ -25,7 +25,7 @@ DI: `services.AddEggMapper(typeof(OrderProfile).Assembly)` registers `MapperConf
 | `mapper.Map<D>(obj)` | Runtime source type (AutoMapper style) |
 | `mapper.Map(src, existing)` | Map into an existing object |
 | `mapper.MapList<S, D>(items)` | List mapping, one compiled loop |
-| `mapper.Patch(src, existing)` | Copy members, skipping null source values |
+| `mapper.Patch(src, existing)` | Copy same-name members whose source value is not null (needs `CreateMap`) |
 | `IMapper<S, D>.Map(src)` | Inject on hot paths (no generic virtual call) |
 | `query.ProjectTo<S, D>(config)` | IQueryable/EF projection; BOTH type args |
 | `config.CompileMappings()` | Compile all maps now |
@@ -49,7 +49,7 @@ public class OrderProfile : Profile
 }
 ```
 
-Also: `ForPath`, `IncludeBase<SB, DB>()`, `MaxDepth(n)`, `ConvertUsing(s => ...)`, `ConstructUsing`, `BeforeMap`/`AfterMap`, `AddTypeConverter<S, D>(...)`, `cfg.AddMaps(assembly)`, `cfg.ShouldMapProperty`. Conventions: same names (case-insensitive), flattening (`Customer.Name` -> `CustomerName`), records/constructors, collections and nested maps, `Map<T, T>` without `CreateMap`, enums by name (`cfg.EnumMapping`).
+Also: `ForPath` (top-level members only), `IncludeBase<SB, DB>()`, `MaxDepth(n)`, `ConvertUsing(s => ...)`, `ConstructUsing`, `BeforeMap`/`AfterMap`, `AddTypeConverter<S, D>(...)`, `cfg.AddMaps(assembly)`, `cfg.ShouldMapProperty`. Conventions: same names (case-insensitive), flattening (`Customer.Name` -> `CustomerName`), records/constructors, collections and nested maps, `Map<T, T>` without `CreateMap` (shallow copy; classes with a parameterless constructor), enums by name (`cfg.EnumMapping`).
 
 ## Validation test (add once)
 
@@ -61,17 +61,18 @@ config.AssertConfigurationIsValid();
 
 ## From AutoMapper
 
-Change the package, `using AutoMapper` -> `using EggMapper`, `AddAutoMapper` -> `AddEggMapper`. Differences:
+Change the package, `using AutoMapper` -> `using EggMapper`, `AddAutoMapper(typeof(X))` -> `AddEggMapper(typeof(X).Assembly)`. Differences:
 
 | AutoMapper | EggMapper |
 |---|---|
 | `ProjectTo<D>(cfg)` | `ProjectTo<S, D>(cfg)` |
 | `mapper.ConfigurationProvider` | keep the `MapperConfiguration` instance |
 | `ForCtorParam`, `ForSourceMember`, `IncludeMembers`, `Include<,>`/`As<>` (polymorphic) | not supported; use `ForMember`/`ConstructUsing`, map derived types explicitly |
-| `IValueResolver<S, D, M>` | `IMemberValueResolver` via `MapFrom<TResolver, TMember>(s => ...)` |
+| `IValueResolver<S, D, M>` | `IMemberValueResolver<object, object, TSourceMember, M>` via `MapFrom<TResolver, TSourceMember>(s => ...)`; needs the DI mapper |
+| `ForPath(d => d.A.B, ...)` | not supported; give the nested object its own `CreateMap` |
 | `ReverseMap()` inverting `MapFrom`/unflattening | `ReverseMap()` maps by convention only; configure the reverse with its own `CreateMap` |
 
-`IncludeAllDerived()` shares base configuration with derived maps; it does not pick a derived map at run time. `ProjectTo` skips members it cannot translate (child collections, converters).
+`IncludeAllDerived()` shares base configuration with derived maps; it does not pick a derived map at run time. `ProjectTo` ignores child collections, resolvers, `Condition`, `NullSubstitute` and nested `ConvertUsing`.
 
 ## Errors -> fix
 

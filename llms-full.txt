@@ -34,6 +34,12 @@ public class PersonDto
     public string Secret { get; set; } = "";
 }
 public record PersonSummary(int Id, string FirstName);
+public class PersonUpdate
+{
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Nickname { get; set; }
+}
 
 public class PersonProfile : Profile
 {
@@ -44,6 +50,9 @@ public class PersonProfile : Profile
             .ForMember(d => d.Nickname, o => o.NullSubstitute("none"))
             .ForMember(d => d.Secret, o => o.Ignore());
         CreateMap<Person, PersonSummary>();
+        CreateMap<PersonUpdate, Person>()
+            .ForMember(d => d.Id, o => o.Ignore())
+            .ForMember(d => d.Address, o => o.Ignore());
     }
 }
 ```
@@ -59,22 +68,50 @@ PersonDto dto = mapper.Map<Person, PersonDto>(person);
 PersonDto viaObject = mapper.Map<PersonDto>(person);
 mapper.Map(person, dto);
 List<PersonDto> many = mapper.MapList<Person, PersonDto>(new List<Person> { person });
-mapper.Patch(new Person { FirstName = "Grace" }, dto);
+mapper.Patch(new PersonUpdate { Nickname = "Ace" }, person);
 Person copy = mapper.Map<Person, Person>(person);
 IMapper<Person, PersonDto> typed = config.CreateMapper<Person, PersonDto>();
 PersonDto fast = typed.Map(person);
 ```
 
-`Map<T, T>` works without a `CreateMap`: it creates a new object and copies members; nested objects keep the same
-references. `Patch` skips source members whose value is null (reference types and
-`Nullable<T>`); non-nullable value types are always copied.
+`Patch` needs a `CreateMap` and copies same-name members (and `MapFrom("Name")`) whose source value is not null; give
+the patch type nullable members, because non-nullable value types are always copied. It skips expression `MapFrom`,
+`Condition`, `NullSubstitute`, resolvers, flattened members, nested objects and collections.
+
+`Map<T, T>` works without a `CreateMap` for classes with a parameterless constructor (records and other
+constructor-only types need `CreateMap<T, T>()`). The copy is shallow: nested objects keep their references, and
+collections become new lists holding the same elements.
 
 ## Member options
 
 `ForMember(d => d.X, o => ...)`: `MapFrom(s => expr)`, `MapFrom("SourceName")`, `Ignore()`, `Condition(s => bool)`,
 `PreCondition(s => bool)`, `NullSubstitute(value)`, `UseValue(value)`, `UseDestinationValue()`,
-`MapFrom<TResolver, TSourceMember>(s => s.Member)` (DI resolver). `ForPath(d => d.A.B, o => o.MapFrom(...))` sets a
-nested destination member. `ForAllOtherMembers(o => o.Ignore())` ignores everything not configured.
+`MapFrom<TResolver, TSourceMember>(s => s.Member)` (resolver below). `ForPath(d => d.X, ...)` accepts only a top-level
+destination member; nested paths (`d => d.A.B`) throw. `ForAllOtherMembers(o => o.Ignore())` ignores everything not
+configured.
+
+```csharp compile
+public class CustomerDto { public string Name { get; set; } = ""; }
+
+public class UpperCaseResolver : IMemberValueResolver<object, object, string, string>
+{
+    public string Resolve(object source, object destination, string sourceMember, string destMember, ResolutionContext context)
+        => sourceMember.ToUpperInvariant();
+}
+
+public class CustomerProfile : Profile
+{
+    public CustomerProfile()
+    {
+        CreateMap<Customer, CustomerDto>()
+            .ForMember(d => d.Name, o => o.MapFrom<UpperCaseResolver, string>(s => s.Name));
+    }
+}
+```
+
+Resolvers implement `IMemberValueResolver<object, object, TSourceMember, TDestMember>` (source and destination arrive
+as `object`). They need a mapper from DI (`services.AddEggMapper`); constructor dependencies come from the container,
+and the resolver itself does not have to be registered.
 
 ## Map-level options
 
@@ -124,12 +161,12 @@ var config = new MapperConfiguration(cfg => cfg.CreateMap<Product, ProductDto>()
 IQueryable<ProductDto> query = products.ProjectTo<Product, ProductDto>(config);
 ```
 
-Translatable members only: same-name, flattened, nested registered maps, `MapFrom` expressions. Child collections,
-converters and resolvers are skipped.
+Translated: same-name, flattened, nested registered maps (by convention), `MapFrom` expressions, enums by value.
+Ignored: child collections, resolvers, `Condition`, `NullSubstitute`, and `ConvertUsing` on nested maps.
 
 ## Compile-time tiers (separate packages)
 
-```csharp
+```csharp needs-generator
 [MapTo(typeof(OrderDto))]          // EggMapper.Generator: generates order.ToOrderDto()
 public class Order { /* ... */ }
 
@@ -140,21 +177,20 @@ public partial class OrderMapper
 }
 ```
 
-Analyzer EGG1003 suggests `[MapTo]` for `CreateMap` calls without customization; EGG1002 flags configurations never
-validated.
-
 ## Differences from AutoMapper
 
 | AutoMapper | EggMapper |
 |---|---|
 | `ProjectTo<D>(cfg)` | `ProjectTo<S, D>(cfg)` |
+| `services.AddAutoMapper(typeof(X))` | `services.AddEggMapper(typeof(X).Assembly)` |
 | `mapper.ConfigurationProvider` | keep the `MapperConfiguration` instance |
+| `ForPath(d => d.A.B, ...)` | not supported; map the nested object with its own `CreateMap` |
 | `ForCtorParam` | constructor parameters match source members by name; else `ConstructUsing` |
 | `ForSourceMember`, `IncludeMembers` | not supported; use `ForMember` with `MapFrom` |
 | `Include<,>`, `As<>`, polymorphic dispatch | not supported; `IncludeAllDerived()` only shares base configuration |
-| `IValueResolver<S, D, M>` | `IMemberValueResolver<S, D, TSourceMember, M>` with `MapFrom<TResolver, TSourceMember>` |
+| `IValueResolver<S, D, M>` | `IMemberValueResolver<object, object, TSourceMember, M>` with `MapFrom<TResolver, TSourceMember>` |
 | `ReverseMap()` inverting `MapFrom` / unflattening | convention-only reverse map; configure it with its own `CreateMap` |
-| AutoMapper licence (commercial from v15) | MIT OR Apache-2.0 |
+| AutoMapper licence (RPL-1.5 or commercial from v15) | MIT OR Apache-2.0 |
 
 ## Errors and fixes
 
@@ -165,6 +201,8 @@ validated.
 | `MappingValidationException` | a `Validate` rule failed; the message lists every failed rule |
 | `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
 | `Circular IncludeBase() reference` | remove the cycle between `IncludeBase` calls |
+| `IMemberValueResolver requires DI` | map with the `IMapper` from `services.AddEggMapper(...)`, not `config.CreateMapper()` |
+| `Property 'X' not found or not writable on 'D'` | `ForPath` got a nested path; configure the nested map instead |
 
 ## Performance
 

@@ -66,12 +66,12 @@
       <div class="table-wrap"><table>
         <thead><tr><th>File</th><th>Size</th><th>Use</th></tr></thead>
         <tbody>
-          <tr><td><a href="llms.txt"><code>llms.txt</code></a></td><td>about 1,100 tokens</td><td>Quick start, API card, configuration, AutoMapper differences, errors and their fixes</td></tr>
-          <tr><td><a href="llms-full.txt"><code>llms-full.txt</code></a></td><td>about 2,000 tokens</td><td>Full reference: every member and map option, enums, DI, projection, compile-time tiers</td></tr>
+          <tr><td><a href="llms.txt"><code>llms.txt</code></a></td><td>about 1,200 tokens</td><td>Quick start, API card, configuration, AutoMapper differences, errors and their fixes</td></tr>
+          <tr><td><a href="llms-full.txt"><code>llms-full.txt</code></a></td><td>about 2,500 tokens</td><td>Full reference: every member and map option, enums, DI, projection, compile-time tiers</td></tr>
         </tbody>
       </table></div>
 
-      <p>Every code block in both files is compiled against the current EggMapper API by the unit tests, so the guidance cannot drift from the library.</p>
+      <p>Every runtime API example in both files is compiled against the current EggMapper API by the unit tests, so API names and signatures in the guidance cannot drift from the library.</p>
 
       <hr>
 
@@ -87,7 +87,7 @@
 - Keep one MapperConfiguration (singleton); never create one per request.
 - ProjectTo needs both type arguments: query.ProjectTo&lt;TSource, TDestination&gt;(config).
 - Configure members with ForMember(d =&gt; d.X, o =&gt; o.MapFrom(s =&gt; ...)) or o.Ignore().
-- Not available: ForCtorParam, ForSourceMember, IncludeMembers, Include&lt;,&gt;, As&lt;&gt;, mapper.ConfigurationProvider.
+- Not available: ForCtorParam, ForSourceMember, IncludeMembers, Include&lt;,&gt;, As&lt;&gt;, nested ForPath (d =&gt; d.A.B), mapper.ConfigurationProvider.
 - Keep one test that calls config.CompileMappings() and config.AssertConfigurationIsValid().
 - On a mapping error, apply the CreateMap or ForMember the message names instead of guessing.</code></pre>
 
