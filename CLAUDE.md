@@ -94,6 +94,8 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 | Mapperly 4.x | Source generator (compile-time) | `Riok.Mapperly` |
 | AgileMapper 1.x | Runtime | `AgileObjects.AgileMapper` |
 
+Competitors are referenced only by `EggMapper.Benchmarks` (`IsPackable=false`), so they are never shipped in an EggMapper package. AutoMapper 16.x is licensed under RPL 1.5, which is acceptable only because it stays a benchmark-only dependency. Keep competitor versions free of known vulnerabilities, since Dependabot reports them against this repo.
+
 ## Development Loops
 
 ### Loop 1 — Correctness
