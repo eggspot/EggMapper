@@ -12,6 +12,9 @@ internal sealed class TypeDetails
 
     public ConstructorInfo? ParameterlessCtor { get; }
     public bool CanConstructWithoutArguments { get; }
+    private IReadOnlyDictionary<PropertyInfo, Type>? _propertiesInitializedWithNewInstance;
+    public IReadOnlyDictionary<PropertyInfo, Type> PropertiesInitializedWithNewInstance
+        => _propertiesInitializedWithNewInstance ??= ConstructorInitializers.GetPropertiesInitializedWithNewInstance(Type);
     public Dictionary<string, PropertyInfo> ReadableByName { get; }
 
     private static readonly ConcurrentDictionary<Type, TypeDetails> Cache = new();
