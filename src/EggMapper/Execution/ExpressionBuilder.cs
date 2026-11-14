@@ -75,11 +75,16 @@ internal static class ExpressionBuilder
         var objParam = Expression.Parameter(typeof(object), "obj");
         var valParam = Expression.Parameter(typeof(object), "val");
         var declaringType = prop.DeclaringType!;
-        var cast = Expression.Convert(objParam, declaringType);
+        Expression instance = declaringType.IsValueType
+            ? Expression.Unbox(objParam, declaringType)
+            : Expression.Convert(objParam, declaringType);
         var valCast = Expression.Convert(valParam, prop.PropertyType);
-        var call = Expression.Call(cast, setter, valCast);
+        var call = Expression.Call(instance, setter, valCast);
         return Expression.Lambda<Action<object, object?>>(call, objParam, valParam).Compile();
     }
+
+    private static NewExpression NewWithoutArguments(Type type, ConstructorInfo? parameterlessCtor)
+        => parameterlessCtor != null ? Expression.New(parameterlessCtor) : Expression.New(type);
 
     private static Func<object, object> BuildFactory(TypeMap typeMap)
     {
@@ -90,10 +95,10 @@ internal static class ExpressionBuilder
         var destDetails = TypeDetails.Get(destType);
         var defaultCtor = destDetails.ParameterlessCtor;
 
-        if (defaultCtor != null)
+        if (destDetails.CanConstructWithoutArguments)
         {
             var srcParam = Expression.Parameter(typeof(object), "_");
-            var newExpr = Expression.New(defaultCtor);
+            var newExpr = NewWithoutArguments(destType, defaultCtor);
             var boxed = Expression.Convert(newExpr, typeof(object));
             return Expression.Lambda<Func<object, object>>(boxed, srcParam).Compile();
         }
@@ -176,11 +181,11 @@ internal static class ExpressionBuilder
         var destDetailsCf = TypeDetails.Get(destType);
         var defaultCtor = destDetailsCf.ParameterlessCtor;
         (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorCf = null;
-        if (defaultCtor == null && typeMap.CustomConstructor == null)
+        if (!destDetailsCf.CanConstructWithoutArguments && typeMap.CustomConstructor == null)
         {
             var srcDetailsCf = TypeDetails.Get(srcType);
             bestCtorCf = FindBestConstructor(destDetailsCf, srcDetailsCf);
-            if (bestCtorCf == null) return null;
+            if (bestCtorCf == null && !destType.IsValueType) return null;
         }
 
         var srcDetails  = TypeDetails.Get(srcType);
@@ -207,7 +212,7 @@ internal static class ExpressionBuilder
             newDestExpr = Expression.New(bestCtorCf.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorCf.Value.Params, srcParam, srcDetails));
         else
-            newDestExpr = Expression.New(defaultCtor!);
+            newDestExpr = NewWithoutArguments(destType, defaultCtor);
 
         // Value types can never be null so always construct fresh.
         Expression initDest = destType.IsValueType
@@ -337,11 +342,11 @@ internal static class ExpressionBuilder
         var destElemDetails = TypeDetails.Get(destElem);
         var destCtor = destElemDetails.ParameterlessCtor;
         (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorList = null;
-        if (destCtor == null && elemTypeMap.CustomConstructor == null)
+        if (!destElemDetails.CanConstructWithoutArguments && elemTypeMap.CustomConstructor == null)
         {
             var srcElemDetails = TypeDetails.Get(srcElem);
             bestCtorList = FindBestConstructor(destElemDetails, srcElemDetails);
-            if (bestCtorList == null) return null;
+            if (bestCtorList == null && !destElem.IsValueType) return null;
         }
 
         var srcDetails = TypeDetails.Get(srcElem);
@@ -362,7 +367,7 @@ internal static class ExpressionBuilder
             newDestExpr = Expression.New(bestCtorList.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorList.Value.Params, elemSrcParam, srcDetails));
         else
-            newDestExpr = Expression.New(destCtor!);
+            newDestExpr = NewWithoutArguments(destElem, destCtor);
         elemStmts.Add(Expression.Assign(elemDestVar, newDestExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -691,11 +696,11 @@ internal static class ExpressionBuilder
         var childDestDetailsCfn = TypeDetails.Get(destType);
         var childDestCtor = childDestDetailsCfn.ParameterlessCtor;
         (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorCfn = null;
-        if (childDestCtor == null && childTypeMap.CustomConstructor == null)
+        if (!childDestDetailsCfn.CanConstructWithoutArguments && childTypeMap.CustomConstructor == null)
         {
             var childSrcDetailsCfn = TypeDetails.Get(srcType);
             bestCtorCfn = FindBestConstructor(childDestDetailsCfn, childSrcDetailsCfn);
-            if (bestCtorCfn == null) return null;
+            if (bestCtorCfn == null && !destType.IsValueType) return null;
         }
 
         var childSrcDetails = TypeDetails.Get(srcType);
@@ -718,7 +723,7 @@ internal static class ExpressionBuilder
             newExpr = Expression.New(bestCtorCfn.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorCfn.Value.Params, childSrcVar, childSrcDetails));
         else
-            newExpr = Expression.New(childDestCtor!);
+            newExpr = NewWithoutArguments(destType, childDestCtor);
         innerStmts.Add(Expression.Assign(childDestVar, newExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -830,16 +835,18 @@ internal static class ExpressionBuilder
             var elemDestVar = Expression.Variable(destElem, "ed");
             var elemStmts = new List<Expression>();
             Expression newElemExpr;
-            if (elemCtor != null)
-                newElemExpr = Expression.New(elemCtor);
+            if (TypeDetails.Get(destElem).CanConstructWithoutArguments)
+                newElemExpr = NewWithoutArguments(destElem, elemCtor);
             else
             {
                 var srcElemDetails2 = TypeDetails.Get(srcElem);
                 var destElemDetails2 = TypeDetails.Get(destElem);
                 var bestCtorCol = FindBestConstructor(destElemDetails2, srcElemDetails2);
-                if (bestCtorCol == null) return null;
-                newElemExpr = Expression.New(bestCtorCol.Value.Ctor,
-                    BuildCtorArgExpressions(bestCtorCol.Value.Params, elemSrcParam, srcElemDetails2));
+                if (bestCtorCol == null && !destElem.IsValueType) return null;
+                newElemExpr = bestCtorCol == null
+                    ? Expression.New(destElem)
+                    : Expression.New(bestCtorCol.Value.Ctor,
+                        BuildCtorArgExpressions(bestCtorCol.Value.Params, elemSrcParam, srcElemDetails2));
             }
             elemStmts.Add(Expression.Assign(elemDestVar, newElemExpr));
 
@@ -994,11 +1001,11 @@ internal static class ExpressionBuilder
         var destDetailsT = TypeDetails.Get(destType);
         var defaultCtor = destDetailsT.ParameterlessCtor;
         (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorT = null;
-        if (defaultCtor == null && typeMap.CustomConstructor == null)
+        if (!destDetailsT.CanConstructWithoutArguments && typeMap.CustomConstructor == null)
         {
             var srcDetailsT = TypeDetails.Get(srcType);
             bestCtorT = FindBestConstructor(destDetailsT, srcDetailsT);
-            if (bestCtorT == null) return false;
+            if (bestCtorT == null && !destType.IsValueType) return false;
         }
 
         var srcDetails  = TypeDetails.Get(srcType);
@@ -1027,7 +1034,7 @@ internal static class ExpressionBuilder
             newDestExpr = Expression.New(bestCtorT.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorT.Value.Params, sVar, srcDetails));
         else
-            newDestExpr = Expression.New(defaultCtor!);
+            newDestExpr = NewWithoutArguments(destType, defaultCtor);
 
         stmts.Add(Expression.Assign(dVar,
             Expression.Condition(
@@ -1335,11 +1342,11 @@ internal static class ExpressionBuilder
         var childDestDetailsTn = TypeDetails.Get(destType);
         var childDestCtor = childDestDetailsTn.ParameterlessCtor;
         (ConstructorInfo Ctor, ParameterInfo[] Params)? bestCtorTn = null;
-        if (childDestCtor == null && childTypeMap.CustomConstructor == null)
+        if (!childDestDetailsTn.CanConstructWithoutArguments && childTypeMap.CustomConstructor == null)
         {
             var childSrcDetailsTn = TypeDetails.Get(srcType);
             bestCtorTn = FindBestConstructor(childDestDetailsTn, childSrcDetailsTn);
-            if (bestCtorTn == null) return null;
+            if (bestCtorTn == null && !destType.IsValueType) return null;
         }
 
         var childSrcDetails = TypeDetails.Get(srcType);
@@ -1363,7 +1370,7 @@ internal static class ExpressionBuilder
             newChildExpr = Expression.New(bestCtorTn.Value.Ctor,
                 BuildCtorArgExpressions(bestCtorTn.Value.Params, childSrcVar, childSrcDetails));
         else
-            newChildExpr = Expression.New(childDestCtor!);
+            newChildExpr = NewWithoutArguments(destType, childDestCtor);
         innerStmts.Add(Expression.Assign(childDestVar, newChildExpr));
 
         var processedProps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
