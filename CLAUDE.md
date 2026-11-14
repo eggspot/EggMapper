@@ -145,6 +145,11 @@ Fully automatic tag-based versioning — every push to `main` triggers a release
 
 No manual version editing needed. No commits pushed back to main. Just use conventional commit prefixes.
 
+Publishing credentials: the publish workflow uses NuGet Trusted Publishing (GitHub OIDC exchanged for a 1-hour API
+key via `NuGet/login`) when the repository variable `NUGET_USER` holds the nuget.org username (profile name, not
+email) of the account that created the trusted-publishing policy for the `eggspot` organization. If the variable is
+missing or the login fails, it falls back to the `NUGET_API_KEY` repository secret.
+
 ## Working Style
 
 - **NEVER push directly to `main`** — always create a feature branch and open a PR
