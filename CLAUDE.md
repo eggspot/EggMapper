@@ -55,6 +55,14 @@ cd src/EggMapper.Benchmarks && dotnet run -c Release -f net10.0 -- --filter *Fla
 4. `TryBuildCtxFreeListDelegate()` compiles `Func<IList<TSource>, List<TDestination>>` — entire collection loop + element mapping as a single expression tree
 5. Compiled delegates stored in `FrozenMaps`, `FrozenCtxFreeMaps`, and `FrozenCtxFreeListMaps`
 
+Path eligibility (`ExpressionBuilder`): a map falls back from the context-free / typed paths to the flexible path
+when it has validation rules (`Validate`), a constructor that needs the `ResolutionContext`, member conditions
+(`Condition`, `PreCondition`), `NullSubstitute`, `UseDestinationValue`, value resolvers, `BeforeMap`/`AfterMap`,
+`MaxDepth` or `IncludeBase`. Collection elements are inlined only when their element pair has a registered map.
+Constructor matching (records, parameterized constructors) requires at least one parameter matched to a source
+member. `UseDestinationValue` leaves the existing destination value in place. When a nested value has no registered
+map, the runtime helpers fall through to type conversion.
+
 ### Runtime (Map Time)
 
 - `Mapper.Map<S,D>()` checks `FastCache<S,D>` first (static generic class — zero dict lookup after warm-up)
