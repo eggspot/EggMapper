@@ -33,5 +33,16 @@ namespace EggMapper.Analyzers
             description: "EggMapper.Generator generates reflection-free extension methods " +
                          "from simple [MapTo] attribute declarations, catching mapping errors at build time.",
             helpLinkUri: HelpLinkBase + "EGG1003.html");
+
+        public static readonly DiagnosticDescriptor UnmappedDestinationMember = new DiagnosticDescriptor(
+            id: "EGG1004",
+            title: "Unmapped destination member",
+            messageFormat: "Destination member '{0}.{1}' has no source member in CreateMap<{2}, {3}>(). {4}.",
+            category: Category,
+            defaultSeverity: DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            description: "AssertConfigurationIsValid would report this member at run time. Map it with " +
+                         "ForMember(d => d.X, o => o.MapFrom(s => ...)), skip it with o.Ignore(), or add a matching source member.",
+            helpLinkUri: HelpLinkBase + "EGG1004.html");
     }
 }

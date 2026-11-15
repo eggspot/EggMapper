@@ -42,9 +42,12 @@ dotnet add package EggMapper
 
 DI support (`AddEggMapper`) is included in the main package — no separate package needed.
 
-Optional build-time checks: `dotnet add package EggMapper.Analyzers` warns when a `MapperConfiguration` is never
-validated ([EGG1002](https://eggspot.github.io/EggMapper/diagnostics/EGG1002.html)) and suggests compile-time `[MapTo]`
-for maps without customization ([EGG1003](https://eggspot.github.io/EggMapper/diagnostics/EGG1003.html)).
+Optional build-time checks: `dotnet add package EggMapper.Analyzers` reports every destination member of a
+`CreateMap` that has no source member while you build, with the `ForMember` fix in the message
+([EGG1004](https://eggspot.github.io/EggMapper/diagnostics/EGG1004.html)). It also warns when a `MapperConfiguration`
+is never validated ([EGG1002](https://eggspot.github.io/EggMapper/diagnostics/EGG1002.html)) and suggests
+compile-time `[MapTo]` for maps without customization
+([EGG1003](https://eggspot.github.io/EggMapper/diagnostics/EGG1003.html)).
 
 ## Quick Start
 
@@ -288,6 +291,7 @@ dotnet run --configuration Release -f net10.0 -- --filter * --exporters json mar
 - ✅ Patch / partial mapping via `mapper.Patch<S,D>(src, dest)`
 - ✅ Inline validation rules via `.Validate()` (collects all failures before throwing)
 - ✅ IQueryable projection via `ProjectTo<S,D>(config)` for EF Core / LINQ providers
+- ✅ Unmapped destination members reported at build time with the fix (EGG1004, `EggMapper.Analyzers`)
 <!-- FEATURES_END -->
 
 ## Mapping Tiers
@@ -328,6 +332,7 @@ Paste this into `CLAUDE.md`, `AGENTS.md`, `.cursor/rules/eggmapper.mdc` or `.git
 - Configure members with ForMember(d => d.X, o => o.MapFrom(s => ...)) or o.Ignore().
 - Not available: ForCtorParam, ForSourceMember, IncludeMembers, Include<,>, As<>, nested ForPath (d => d.A.B), mapper.ConfigurationProvider.
 - Keep one test that calls config.CompileMappings() and config.AssertConfigurationIsValid().
+- Reference EggMapper.Analyzers: EGG1004 build warnings name the ForMember fix for each unmapped member; apply them.
 - On a mapping error, apply the CreateMap or ForMember the message names instead of guessing.
 ```
 

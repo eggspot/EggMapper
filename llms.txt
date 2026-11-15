@@ -51,7 +51,10 @@ public class OrderProfile : Profile
 
 Also: `ForPath` (top-level members only), `IncludeBase<SB, DB>()`, `MaxDepth(n)`, `ConvertUsing(s => ...)`, `ConstructUsing`, `BeforeMap`/`AfterMap`, `AddTypeConverter<S, D>(...)`, `cfg.AddMaps(assembly)`, `cfg.ShouldMapProperty`. Conventions: same names (case-insensitive), flattening (`Customer.Name` -> `CustomerName`), records/constructors, collections and nested maps, `Map<T, T>` without `CreateMap` (shallow copy; classes with a parameterless constructor), enums by name (`cfg.EnumMapping`).
 
-## Validation test (add once)
+## Validation (add once)
+
+`dotnet add package EggMapper.Analyzers`: each unmapped destination member of a `CreateMap` is a build warning
+(EGG1004) whose message holds the `ForMember` fix. Plus one test:
 
 ```csharp compile
 var config = new MapperConfiguration(cfg => cfg.AddMaps(typeof(OrderProfile).Assembly));

@@ -9,6 +9,8 @@ file class ValidSource { public string Name { get; set; } = ""; public int Age {
 file class ValidDest { public string Name { get; set; } = ""; public int Age { get; set; } }
 file class InvalidDest { public string Name { get; set; } = ""; public string Unmatched { get; set; } = ""; }
 file class PartialSource { public string Name { get; set; } = ""; }
+file class ConvertSource { public int Id { get; set; } }
+file class ConvertTarget { public string Value { get; set; } = ""; }
 
 file class TheBase { public string TheName { get; set; } = ""; }
 file class BaseDto { public string Name { get; set; } = ""; }
@@ -126,6 +128,17 @@ public class ConfigurationValidationTests
         });
 
         var act = () => config.AssertConfigurationIsValid();
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void AssertConfigurationIsValid_MapWithConvertUsing_DoesNotCheckMembers()
+    {
+        var config = new MapperConfiguration(cfg =>
+            cfg.CreateMap<ConvertSource, ConvertTarget>().ConvertUsing(s => new ConvertTarget { Value = s.Id.ToString() }));
+
+        var act = () => config.AssertConfigurationIsValid();
+
         act.Should().NotThrow();
     }
 }

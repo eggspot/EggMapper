@@ -12,6 +12,7 @@ net462, net8.0-net11.0. License MIT OR Apache-2.0. Short version: llms.txt.
 - Add one test calling `CompileMappings()` and `AssertConfigurationIsValid()`.
 - `ProjectTo<S, D>(config)` needs both type arguments.
 - Read error messages: they name the missing `CreateMap` or member.
+- Reference `EggMapper.Analyzers`: EGG1004 turns each unmapped destination member into a build warning with the fix.
 
 ## Configuration and mapping
 
@@ -199,6 +200,7 @@ public partial class OrderMapper
 | Message | Fix |
 |---|---|
 | `No mapping configured for S -> D` | `cfg.CreateMap<S, D>()`; for a list, the element map; the message names `.ReverseMap()` when `CreateMap<D, S>()` exists |
+| `EGG1004: Destination member 'D.X' has no source member in CreateMap<S, D>()` | paste the `Fix:` from the warning; else `ForMember(d => d.X, o => o.MapFrom(s => ...))` or `o.Ignore()` |
 | `Unmapped destination member 'D.X' in map S -> D` | paste the message's `Fix:` line (given for a confident match); else pick a source member from `Options:` or `o.Ignore()` |
 | `MappingValidationException` | a `Validate` rule failed; the message lists every failed rule |
 | `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
