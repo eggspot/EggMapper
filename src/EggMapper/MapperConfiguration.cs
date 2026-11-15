@@ -681,7 +681,7 @@ public sealed class MapperConfiguration
 
     public void AssertConfigurationIsValid()
     {
-        var unmappedMaps = new List<UnmappedMap>();
+        var invalidMaps = new List<InvalidMap>();
         foreach (var kvp in _typeMaps)
         {
             var typeMap = kvp.Value;
@@ -710,12 +710,12 @@ public sealed class MapperConfiguration
                     unmappedMembers.Add(destProp);
             }
 
-            if (unmappedMembers.Count > 0)
-                unmappedMaps.Add(new UnmappedMap(typeMap, unmappedMembers));
+            if (unmappedMembers.Count > 0 || typeMap.AlsoDefinedIn?.Count > 0)
+                invalidMaps.Add(new InvalidMap(typeMap, unmappedMembers));
         }
 
-        if (unmappedMaps.Count > 0)
-            throw new InvalidOperationException(ConfigurationValidationMessage.Build(unmappedMaps));
+        if (invalidMaps.Count > 0)
+            throw new InvalidOperationException(ConfigurationValidationMessage.Build(invalidMaps));
     }
 
     internal string DescribeMissingMap(Type sourceType, Type destinationType)

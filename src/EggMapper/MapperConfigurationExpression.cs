@@ -18,22 +18,52 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
             SourceType = typeof(TSource),
             DestinationType = typeof(TDestination)
         };
-        var key = new TypePair(typeof(TSource), typeof(TDestination));
-        _typeMaps[key] = typeMap;
+        ReplaceWithRootMap(typeMap);
         return new MappingExpression<TSource, TDestination>(typeMap, RegisterTypeMap);
+    }
+
+    private void ReplaceWithRootMap(TypeMap typeMap)
+    {
+        var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
+        if (_typeMaps.TryGetValue(key, out var existing)
+            && !existing.ReverseMapOrigin.HasValue
+            && existing.DefinedInProfile != null)
+        {
+            RecordDuplicateDefinition(typeMap, existing);
+        }
+        _typeMaps[key] = typeMap;
     }
 
     private void RegisterTypeMap(TypeMap typeMap)
     {
         var key = new TypePair(typeMap.SourceType, typeMap.DestinationType);
-        if (_typeMaps.TryGetValue(key, out var existing))
+        if (!_typeMaps.TryGetValue(key, out var existing))
         {
-            if (existing.ReverseMapOrigin.HasValue && !typeMap.ReverseMapOrigin.HasValue)
-                existing.IgnoredExplicitCreateMap = true;
+            _typeMaps[key] = typeMap;
             return;
         }
-        _typeMaps[key] = typeMap;
+
+        if (typeMap.ReverseMapOrigin.HasValue) return;
+
+        if (existing.ReverseMapOrigin.HasValue)
+        {
+            _typeMaps[key] = typeMap;
+            return;
+        }
+
+        RecordDuplicateDefinition(existing, typeMap);
     }
+
+    private static void RecordDuplicateDefinition(TypeMap kept, TypeMap dropped)
+    {
+        if (kept.DefinedInProfile == dropped.DefinedInProfile) return;
+        var definer = DefinerName(dropped.DefinedInProfile);
+        kept.AlsoDefinedIn ??= new List<string>();
+        if (!kept.AlsoDefinedIn.Contains(definer))
+            kept.AlsoDefinedIn.Add(definer);
+    }
+
+    internal static string DefinerName(Type? profileType) => profileType?.Name ?? "the root configuration";
 
     public void AddProfile<TProfile>() where TProfile : Profile, new()
         => AddProfile(new TProfile());
@@ -41,7 +71,10 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
     public void AddProfile(Profile profile)
     {
         foreach (var typeMap in profile.GetTypeMaps())
+        {
+            typeMap.DefinedInProfile = profile.GetType();
             RegisterTypeMap(typeMap);
+        }
     }
 
     public void AddProfiles(IEnumerable<Assembly> assemblies)
@@ -72,8 +105,7 @@ internal sealed class MapperConfigurationExpression : IMapperConfigurationExpres
         }
         else
         {
-            var key = new TypePair(sourceType, destinationType);
-            _typeMaps[key] = typeMap;
+            ReplaceWithRootMap(typeMap);
         }
 
         return new NonGenericMappingExpression(typeMap, RegisterTypeMap);

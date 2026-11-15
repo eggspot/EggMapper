@@ -172,16 +172,17 @@ public class ConfigurationErrorMessageTests
     }
 
     [Fact]
-    public void AssertConfigurationIsValid_ReverseMapBlocksExplicitMapFromLaterProfile_SaysTheExplicitMapWasIgnored()
+    public void AssertConfigurationIsValid_ExplicitMapInLaterProfileAfterReverseMap_UsesTheExplicitMap()
     {
-        var message = ValidationMessage(cfg =>
+        var config = new MapperConfiguration(cfg =>
         {
             cfg.AddProfile<ForwardProfile>();
             cfg.AddProfile<ExplicitReverseProfile>();
         });
 
-        message.Should().Contain("A CreateMap<Narrow, Wide>() in a profile was ignored because this ReverseMap() registered the pair first; remove .ReverseMap() from CreateMap<Wide, Narrow>() to use it.");
-        message.Should().NotContain("Configure this direction");
+        var act = () => config.AssertConfigurationIsValid();
+
+        act.Should().NotThrow();
     }
 
     [Fact]

@@ -3,9 +3,9 @@ using System.Text;
 
 namespace EggMapper.Internal;
 
-internal sealed class UnmappedMap
+internal sealed class InvalidMap
 {
-    public UnmappedMap(TypeMap typeMap, List<PropertyInfo> members)
+    public InvalidMap(TypeMap typeMap, List<PropertyInfo> members)
     {
         TypeMap = typeMap;
         Members = members;
@@ -21,25 +21,30 @@ internal static class ConfigurationValidationMessage
     internal const int MaxMaps = 20;
     private const int MaxClosestMembers = 3;
 
-    internal static string Build(IReadOnlyList<UnmappedMap> unmappedMaps)
+    internal static string Build(IReadOnlyList<InvalidMap> invalidMaps)
     {
-        var totalMembers = unmappedMaps.Sum(m => m.Members.Count);
-        var headers = PairHeaders(unmappedMaps);
-        var ordered = unmappedMaps
+        var mapsWithUnmappedMembers = invalidMaps.Count(m => m.Members.Count > 0);
+        var totalMembers = invalidMaps.Sum(m => m.Members.Count);
+        var duplicatedMaps = invalidMaps.Count(m => m.TypeMap.AlsoDefinedIn?.Count > 0);
+        var headers = PairHeaders(invalidMaps);
+        var ordered = invalidMaps
             .Select((map, index) => (Map: map, Header: headers[index]))
             .OrderBy(x => x.Header, StringComparer.Ordinal)
             .ToList();
 
+        var problems = new List<string>();
+        if (totalMembers > 0)
+            problems.Add($"{Count(totalMembers, "unmapped destination member")} in {Count(mapsWithUnmappedMembers, "map")}");
+        if (duplicatedMaps > 0)
+            problems.Add($"{Count(duplicatedMaps, "map")} configured in more than one place");
+
         var sb = new StringBuilder();
-        sb.Append("EggMapper configuration is invalid: ")
-          .Append(Count(totalMembers, "unmapped destination member"))
-          .Append(" in ")
-          .Append(Count(unmappedMaps.Count, "map"))
-          .Append('.');
+        sb.Append("EggMapper configuration is invalid: ").Append(string.Join("; ", problems)).Append('.');
 
         foreach (var (map, header) in ordered.Take(MaxMaps))
         {
             sb.Append('\n').Append('\n').Append(header);
+            AppendDuplicateDefinitions(sb, map.TypeMap);
             AppendReverseMapNotes(sb, map.TypeMap);
             var sourceDetails = TypeDetails.Get(map.TypeMap.SourceType);
             foreach (var member in map.Members.Take(MaxMembersPerMap))
@@ -80,24 +85,35 @@ internal static class ConfigurationValidationMessage
           .Append(", o => o.MapFrom(s => ...)) or ").Append(ignore);
     }
 
+    private static void AppendDuplicateDefinitions(StringBuilder sb, TypeMap typeMap)
+    {
+        if (typeMap.AlsoDefinedIn is not { Count: > 0 } others) return;
+
+        var createMap = $"CreateMap<{TypeNameHelper.Readable(typeMap.SourceType)}, {TypeNameHelper.Readable(typeMap.DestinationType)}>()";
+        var used = MapperConfigurationExpression.DefinerName(typeMap.DefinedInProfile);
+        var all = new List<string> { used };
+        all.AddRange(others);
+        sb.Append("\n  ").Append(createMap).Append(" is configured in ").Append(JoinNames(all))
+          .Append("; only the map in ").Append(used)
+          .Append(" is used. Keep one, or move the other's ForMember calls into it.");
+    }
+
+    private static string JoinNames(List<string> names) =>
+        names.Count == 2
+            ? names[0] + " and " + names[1]
+            : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[names.Count - 1];
+
     private static void AppendReverseMapNotes(StringBuilder sb, TypeMap typeMap)
     {
         if (typeMap.ReverseMapOrigin is not { } origin) return;
 
         var forward = $"CreateMap<{TypeNameHelper.Readable(origin.SourceType)}, {TypeNameHelper.Readable(origin.DestinationType)}>()";
         var reverse = $"CreateMap<{TypeNameHelper.Readable(typeMap.SourceType)}, {TypeNameHelper.Readable(typeMap.DestinationType)}>()";
-        sb.Append("\n  Created by .ReverseMap() on ").Append(forward).Append(", which maps by name only.");
-        if (typeMap.IgnoredExplicitCreateMap)
-        {
-            sb.Append("\n  A ").Append(reverse)
-              .Append(" in a profile was ignored because this ReverseMap() registered the pair first; remove .ReverseMap() from ")
-              .Append(forward).Append(" to use it.");
-            return;
-        }
-        sb.Append(" Configure this direction with its own ").Append(reverse).Append('.');
+        sb.Append("\n  Created by .ReverseMap() on ").Append(forward)
+          .Append(", which maps by name only. Configure this direction with its own ").Append(reverse).Append('.');
     }
 
-    private static List<string> PairHeaders(IReadOnlyList<UnmappedMap> unmappedMaps)
+    private static List<string> PairHeaders(IReadOnlyList<InvalidMap> unmappedMaps)
     {
         var shortHeaders = unmappedMaps
             .Select(m => TypeNameHelper.Pair(m.TypeMap.SourceType, m.TypeMap.DestinationType))

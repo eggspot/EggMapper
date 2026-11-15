@@ -203,6 +203,7 @@ public partial class OrderMapper
 | `MappingValidationException` | a `Validate` rule failed; the message lists every failed rule |
 | `MappingException` wrapping another error | the inner exception names the cause; check `MapFrom` expressions |
 | `Circular IncludeBase() reference` | remove the cycle between `IncludeBase` calls |
+| `CreateMap<S, D>() is configured in P1 and P2` | keep one map for the pair; move the other's `ForMember` calls into it |
 | `IMemberValueResolver requires DI` | map with the `IMapper` from `services.AddEggMapper(...)`, not `config.CreateMapper()` |
 | `Property 'X' not found or not writable on 'D'` | `ForPath` got a nested path (configure the nested map instead) or a read-only member |
 

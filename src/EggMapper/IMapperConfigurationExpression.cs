@@ -25,7 +25,8 @@ public interface IMapperConfigurationExpression
 
     /// <summary>
     /// Registers every <see cref="Profile"/> in <paramref name="assemblies"/>. When two profiles map the same pair, the
-    /// first one registered wins.
+    /// first one registered wins and <c>AssertConfigurationIsValid</c> reports the duplicate. An explicit
+    /// <c>CreateMap</c> always wins over a map created by <c>ReverseMap()</c>.
     /// </summary>
     void AddMaps(params Assembly[] assemblies);
     void AddMaps(IEnumerable<Assembly> assemblies);
