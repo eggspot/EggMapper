@@ -67,7 +67,7 @@
 
       <p>A destination member of a <code>CreateMap&lt;TSource, TDestination&gt;()</code> has no source member: no source property with the same name (case-insensitive), no flattened path such as <code>Customer.Name</code> for <code>CustomerName</code>, and no <code>ForMember</code> that maps or ignores it. <code>AssertConfigurationIsValid()</code> would report the same member at run time; EGG1004 reports it while you build, with the fix in the message.</p>
 
-      <p>Runtime mappers with AutoMapper's API (AutoMapper, Mapster, AgileMapper) find these members only at run time. With EGG1004 an unfinished map shows up in <code>dotnet build</code> and in the IDE, which is where AI coding assistants and people notice it first.</p>
+      <p>AutoMapper, Mapster and AgileMapper report these members only at run time, in configuration validation or on the first map. With EGG1004 an unfinished map shows up in <code>dotnet build</code> and in the IDE, which is where AI coding assistants and people notice it first.</p>
 
       <h2>Example (triggers warning)</h2>
 
