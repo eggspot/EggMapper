@@ -16,10 +16,12 @@
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+    <ProjectReference Include="..\EggMapper.Analyzers\EggMapper.Analyzers.csproj" />
     <None Include="..\..\llms.txt" Link="Guidance\llms.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\llms-full.txt" Link="Guidance\llms-full.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net10.0'">
     <Compile Remove="GuidanceSnippetTests.cs" />
+    <Compile Remove="UnmappedDestinationMemberAnalyzerTests.cs" />
   </ItemGroup>
 </Project>

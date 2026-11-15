@@ -688,8 +688,12 @@ public sealed class MapperConfiguration
             var destDetails = TypeDetails.Get(typeMap.DestinationType);
             var srcDetails = TypeDetails.Get(typeMap.SourceType);
             var unmappedMembers = new List<System.Reflection.PropertyInfo>();
+            var converterBuildsDestination = typeMap.ConvertUsingFunc != null || typeMap.OpenGenericConverterType != null;
+            var membersToCheck = converterBuildsDestination
+                ? Array.Empty<System.Reflection.PropertyInfo>()
+                : destDetails.WritableProperties;
 
-            foreach (var destProp in destDetails.WritableProperties)
+            foreach (var destProp in membersToCheck)
             {
                 if (ShouldMapProperty != null && !ShouldMapProperty(destProp)) continue;
 

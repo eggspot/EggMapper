@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EGG1004 — Unmapped destination member — EggMapper</title>
+  <meta name="description" content="EGG1004: a destination member of CreateMap has no source member — EggMapper Analyzers warning with the fix in the message.">
+  <link rel="icon" href="../favicon.ico">
+  <link rel="stylesheet" href="../assets/css/eggspot.css">
+  <link rel="stylesheet" href="../assets/css/prism-eggspot.css">
+</head>
+<body>
+<header class="site-header">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>
+  </button>
+  <a class="header-logo" href="../index.html">
+    <img src="../assets/images/logo.png" alt="EggMapper">
+    <span class="header-logo-text">Egg<span>Mapper</span></span>
+  </a>
+  <div class="header-spacer"></div>
+  <nav class="header-links">
+    <a class="header-link" href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a class="header-link" href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </nav>
+</header>
+<div class="sidebar-overlay" id="overlay"></div>
+<div class="page-layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="nav-section-label">EggMapper</div>
+    <a class="nav-link" href="../index.html">Home</a>
+    <a class="nav-link" href="../quick-start.html">Quick Start</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Guide</div>
+    <a class="nav-link nav-link-sub" href="../Getting-Started.html">Getting Started</a>
+    <a class="nav-link nav-link-sub" href="../Configuration.html">Configuration</a>
+    <a class="nav-link nav-link-sub" href="../Profiles.html">Profiles</a>
+    <a class="nav-link nav-link-sub" href="../Dependency-Injection.html">Dependency Injection</a>
+    <a class="nav-link nav-link-sub" href="../Advanced-Features.html">Advanced Features</a>
+    <a class="nav-link nav-link-sub" href="../Performance.html">Performance</a>
+    <a class="nav-link nav-link-sub" href="../AI-Assistants.html">AI Assistants</a>
+    <div class="nav-divider"></div>
+    <a class="nav-link" href="../API-Reference.html">API Reference</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Migration</div>
+    <a class="nav-link nav-link-sub" href="../vs-automapper.html">vs AutoMapper</a>
+    <a class="nav-link nav-link-sub" href="../Migration-Guide.html">Migration Guide</a>
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Code Generation</div>
+    <a class="nav-link nav-link-sub" href="../Attribute-Mapper.html">Attribute Mapper</a>
+    <a class="nav-link nav-link-sub" href="../Class-Mapper.html">Class Mapper</a>
+  </nav>
+  <main class="main-content">
+    <div class="content-wrapper">
+      <h1>EGG1004 — Unmapped destination member</h1>
+
+      <div class="table-wrap"><table>
+        <thead><tr><th>Property</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Severity</strong></td><td>Warning</td></tr>
+          <tr><td><strong>Package</strong></td><td><code>EggMapper.Analyzers</code></td></tr>
+          <tr><td><strong>Category</strong></td><td>EggMapper</td></tr>
+        </tbody>
+      </table></div>
+
+      <h2>Description</h2>
+
+      <p>A destination member of a <code>CreateMap&lt;TSource, TDestination&gt;()</code> has no source member: no source property with the same name (case-insensitive), no flattened path such as <code>Customer.Name</code> for <code>CustomerName</code>, and no <code>ForMember</code> that maps or ignores it. <code>AssertConfigurationIsValid()</code> would report the same member at run time; EGG1004 reports it while you build, with the fix in the message.</p>
+
+      <p>Runtime mappers with AutoMapper's API (AutoMapper, Mapster, AgileMapper) find these members only at run time. With EGG1004 an unfinished map shows up in <code>dotnet build</code> and in the IDE, which is where AI coding assistants and people notice it first.</p>
+
+      <h2>Example (triggers warning)</h2>
+
+      <pre><code class="language-csharp">public class Order    { public string CustmerName { get; set; } public decimal Subtotal { get; set; } }
+public class OrderDto { public string CustomerName { get; set; } public decimal Total { get; set; } }
+
+public class OrderProfile : Profile
+{
+    public OrderProfile() =&gt; CreateMap&lt;Order, OrderDto&gt;();
+}</code></pre>
+
+      <pre><code>warning EGG1004: Destination member 'OrderDto.CustomerName' has no source member in CreateMap&lt;Order, OrderDto&gt;().
+  Fix: .ForMember(d =&gt; d.CustomerName, o =&gt; o.MapFrom(s =&gt; s.CustmerName)) or .ForMember(d =&gt; d.CustomerName, o =&gt; o.Ignore()).
+warning EGG1004: Destination member 'OrderDto.Total' has no source member in CreateMap&lt;Order, OrderDto&gt;().
+  Configure: .ForMember(d =&gt; d.Total, o =&gt; o.MapFrom(s =&gt; ...)) or .ForMember(d =&gt; d.Total, o =&gt; o.Ignore()).</code></pre>
+
+      <p>A <code>Fix:</code> is given only for a confident match (a one-letter typo of a same-type member, singular/plural, or a single nested member with the same name). Otherwise the closest source members are listed as <code>Options:</code>.</p>
+
+      <h2>How to fix</h2>
+
+      <p>Paste the <code>Fix:</code> line onto the <code>CreateMap</code> chain, map the member with <code>ForMember(d =&gt; d.X, o =&gt; o.MapFrom(s =&gt; ...))</code>, ignore it with <code>o.Ignore()</code>, or add a matching source property.</p>
+
+      <h2>When EGG1004 stays silent</h2>
+
+      <p>EGG1004 only reports what it can prove from the code, so it stays silent when a map is configured in ways it cannot read:</p>
+      <ul>
+        <li>the map is stored in a variable or passed to another method before it is configured;</li>
+        <li>the chain calls <code>ConvertUsing</code>, <code>ConvertUsingEnumMapping</code>, <code>ForAllMembers</code>, <code>ForAllOtherMembers</code>, <code>IncludeBase</code> or your own extension method;</li>
+        <li>a <code>ForMember</code> options argument is not an inline lambda;</li>
+        <li>the project sets <code>ShouldMapProperty</code> or uses <code>IncludeAllDerived</code> anywhere;</li>
+        <li>the reverse direction of <code>ReverseMap()</code> (keep the validation test for it).</li>
+      </ul>
+      <p>Keep one test that calls <code>config.CompileMappings()</code> and <code>config.AssertConfigurationIsValid()</code>: it covers every case.</p>
+
+      <h2>How to change the severity</h2>
+
+      <p>In <code>.editorconfig</code>, make unmapped members fail the build, or turn the check off:</p>
+
+      <pre><code>dotnet_diagnostic.EGG1004.severity = error
+dotnet_diagnostic.EGG1004.severity = none</code></pre>
+    </div>
+  </main>
+</div>
+<footer class="site-footer">
+  <span>EggMapper &mdash; MIT OR Apache-2.0 licensed &copy; <a href="https://eggspot.app">Eggspot</a>.</span>
+  <div class="footer-links">
+    <a href="https://github.com/eggspot/EggMapper" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://www.nuget.org/packages/EggMapper" target="_blank" rel="noopener">NuGet</a>
+  </div>
+</footer>
+<script src="../assets/js/nav.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</body>
+</html>
