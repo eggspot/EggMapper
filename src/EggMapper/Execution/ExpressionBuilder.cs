@@ -2739,11 +2739,12 @@ internal static class ExpressionBuilder
         var result = TryInvokeConversionOperator(value, valueType, underlying);
         if (result != null) return result;
 
+        Exception? changeTypeFailure = null;
         try
         {
             return Convert.ChangeType(value, underlying);
         }
-        catch { }
+        catch (Exception e) { changeTypeFailure = e; }
 
         var ctor = underlying.GetConstructor(new[] { valueType });
         if (ctor != null)
@@ -2772,6 +2773,22 @@ internal static class ExpressionBuilder
             }
         }
 
+        if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
+            throw UnconvertibleValue(value, valueType, targetType, changeTypeFailure);
         return null;
+    }
+
+    private const int MaxValueLengthInMessage = 50;
+
+    private static InvalidCastException UnconvertibleValue(object value, Type valueType, Type targetType, Exception? cause)
+    {
+        var text = value.ToString() ?? "";
+        if (text.Length > MaxValueLengthInMessage) text = text.Substring(0, MaxValueLengthInMessage) + "...";
+        var source = TypeNameHelper.Readable(valueType);
+        var target = TypeNameHelper.Readable(targetType);
+        return new InvalidCastException(
+            $"Cannot convert {source} value '{text}' to {target}. Map the member with " +
+            $".ForMember(d => d.X, o => o.MapFrom(s => ...)) or register cfg.AddTypeConverter<{source}, {target}>(...).",
+            cause);
     }
 }
